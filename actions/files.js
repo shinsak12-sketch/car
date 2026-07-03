@@ -12,15 +12,25 @@ export async function uploadFiles(formData) {
   }
   const memo = formData.get('memo')?.toString() || '';
   const files = formData.getAll('files');
+  let failed = 0;
   for (const file of files) {
     if (file && typeof file === 'object' && typeof file.arrayBuffer === 'function' && file.size > 0) {
-      const { url, pathname } = await uploadFile(file);
-      await sql`INSERT INTO files (url, pathname, original, mimetype, size, memo, uploader_id)
-        VALUES (${url}, ${pathname}, ${file.name}, ${file.type}, ${file.size}, ${memo}, ${user.id})`;
+      try {
+        const { url, pathname } = await uploadFile(file);
+        await sql`INSERT INTO files (url, pathname, original, mimetype, size, memo, uploader_id)
+          VALUES (${url}, ${pathname}, ${file.name}, ${file.type}, ${file.size}, ${memo}, ${user.id})`;
+      } catch (e) {
+        failed++;
+        console.error('[files] 업로드 실패:', e?.message);
+      }
     }
   }
   revalidatePath('/files');
   revalidatePath('/');
+  if (failed > 0) {
+    // 업로드가 전부/일부 실패해도 500 대신 안내 페이지로
+    throw new Error('파일 업로드에 실패했습니다. Blob 저장소 연결(토큰)을 확인하세요.');
+  }
 }
 
 export async function deleteFileRecord(id) {

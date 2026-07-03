@@ -16,9 +16,14 @@ async function saveFiles(formData, timelineId, userId) {
   const photos = formData.getAll('photos');
   for (const file of photos) {
     if (file && typeof file === 'object' && typeof file.arrayBuffer === 'function' && file.size > 0) {
-      const { url, pathname } = await uploadFile(file);
-      await sql`INSERT INTO files (url, pathname, original, mimetype, size, timeline_id, uploader_id)
-        VALUES (${url}, ${pathname}, ${file.name}, ${file.type}, ${file.size}, ${timelineId}, ${userId})`;
+      try {
+        const { url, pathname } = await uploadFile(file);
+        await sql`INSERT INTO files (url, pathname, original, mimetype, size, timeline_id, uploader_id)
+          VALUES (${url}, ${pathname}, ${file.name}, ${file.type}, ${file.size}, ${timelineId}, ${userId})`;
+      } catch (e) {
+        // 사진 업로드가 실패해도 일지 본문은 저장되도록 건너뜀 (앱이 죽지 않게)
+        console.error('[timeline] 사진 업로드 실패:', e?.message);
+      }
     }
   }
 }
