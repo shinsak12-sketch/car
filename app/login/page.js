@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import ShieldLogo from '@/components/ShieldLogo';
 import { ORG_NAME } from '@/lib/constants';
 
 export default function LoginPage() {
@@ -38,7 +39,7 @@ export default function LoginPage() {
   return (
     <div className="login-wrap">
       <div className="login-card">
-        <div className="login-logo">🛡️</div>
+        <div className="login-logo"><ShieldLogo size={54} /></div>
         <h1>{ORG_NAME}</h1>
         <p className="login-sub">분쟁 대응 관리 · 로그인</p>
         {error && <div className="flash error">{error}</div>}

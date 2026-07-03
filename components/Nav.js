@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import ShieldLogo from '@/components/ShieldLogo';
 
 export default function Nav({ user, orgName }) {
   const path = usePathname() || '/';
@@ -10,7 +11,7 @@ export default function Nav({ user, orgName }) {
   return (
     <header className="topbar">
       <div className="topbar-inner">
-        <Link href="/" className="brand">🛡️ <span>{orgName}</span></Link>
+        <Link href="/" className="brand"><ShieldLogo size={22} /> <span>{orgName}</span></Link>
         <nav className="mainnav">
           <Link href="/" className={is('/') ? 'active' : ''}>상황판</Link>
           <Link href="/timeline" className={is('/timeline') ? 'active' : ''}>상황 일지</Link>

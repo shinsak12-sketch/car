@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import ShieldLogo from '@/components/ShieldLogo';
 import { ORG_NAME } from '@/lib/constants';
 
 export default function RequestPage() {
@@ -40,7 +41,7 @@ export default function RequestPage() {
   return (
     <div className="login-wrap">
       <div className="login-card">
-        <div className="login-logo">🛡️</div>
+        <div className="login-logo"><ShieldLogo size={54} /></div>
         <h1>{ORG_NAME}</h1>
         <p className="login-sub">접속 권한 요청</p>
 

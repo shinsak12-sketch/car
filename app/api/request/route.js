@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { sql } from '@/lib/db';
+import { sql, exec } from '@/lib/db';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,6 +28,11 @@ export async function POST(request) {
   }
 
   try {
+    // status 컬럼이 없던 기존 DB 대비 (idempotent — 있으면 무시)
+    try {
+      await exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'");
+    } catch {}
+
     const exists = await sql`SELECT 1 FROM users WHERE username = ${username}`;
     if (exists.length) {
       return Response.json({ ok: false, error: '이미 사용 중인 아이디입니다. 다른 아이디를 써주세요.' }, { status: 409 });
