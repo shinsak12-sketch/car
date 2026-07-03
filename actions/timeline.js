@@ -2,7 +2,7 @@
 
 import { sql } from '@/lib/db';
 import { requireUser } from '@/lib/auth';
-import { uploadFile, deleteFile, blobConfigured } from '@/lib/blob';
+import { deleteFile } from '@/lib/blob';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { TIMELINE_CATEGORIES } from '@/lib/constants';
@@ -11,50 +11,43 @@ function cat(v) {
   return TIMELINE_CATEGORIES.includes(v) ? v : '기타';
 }
 
-async function saveFiles(formData, timelineId, userId) {
-  if (!blobConfigured()) return;
-  const photos = formData.getAll('photos');
-  for (const file of photos) {
-    if (file && typeof file === 'object' && typeof file.arrayBuffer === 'function' && file.size > 0) {
-      try {
-        const { url, pathname } = await uploadFile(file);
-        await sql`INSERT INTO files (url, pathname, original, mimetype, size, timeline_id, uploader_id)
-          VALUES (${url}, ${pathname}, ${file.name}, ${file.type}, ${file.size}, ${timelineId}, ${userId})`;
-      } catch (e) {
-        // 사진 업로드가 실패해도 일지 본문은 저장되도록 건너뜀 (앱이 죽지 않게)
-        console.error('[timeline] 사진 업로드 실패:', e?.message);
-      }
+// 파일은 클라이언트에서 이미 Blob 에 업로드됨 → 여기선 메타데이터만 DB 에 저장
+async function saveFileRows(files, timelineId, userId) {
+  for (const f of files || []) {
+    if (f && f.url && f.pathname) {
+      await sql`INSERT INTO files (url, pathname, original, mimetype, size, timeline_id, uploader_id)
+        VALUES (${f.url}, ${f.pathname}, ${f.name || '파일'}, ${f.type || ''}, ${Number(f.size) || 0}, ${timelineId}, ${userId})`;
     }
   }
 }
 
-export async function createTimeline(formData) {
+export async function createTimeline(data) {
   const user = await requireUser();
-  const title = (formData.get('title')?.toString().trim()) || '(제목 없음)';
-  const body = formData.get('body')?.toString() || '';
-  const category = cat(formData.get('category')?.toString());
-  const occurred_at = formData.get('occurred_at')?.toString() || new Date().toISOString();
+  const title = (data.title?.toString().trim()) || '(제목 없음)';
+  const body = data.body?.toString() || '';
+  const category = cat(data.category?.toString());
+  const occurred_at = data.occurred_at?.toString() || new Date().toISOString();
 
   const rows = await sql`INSERT INTO timeline (title, body, category, occurred_at, author_id)
     VALUES (${title}, ${body}, ${category}, ${occurred_at}, ${user.id}) RETURNING id`;
   const id = rows[0].id;
-  await saveFiles(formData, id, user.id);
+  await saveFileRows(data.files, id, user.id);
 
   revalidatePath('/timeline');
   revalidatePath('/');
   redirect('/timeline/' + id);
 }
 
-export async function updateTimeline(id, formData) {
+export async function updateTimeline(id, data) {
   const user = await requireUser();
-  const title = (formData.get('title')?.toString().trim()) || '(제목 없음)';
-  const body = formData.get('body')?.toString() || '';
-  const category = cat(formData.get('category')?.toString());
-  const occurred_at = formData.get('occurred_at')?.toString() || new Date().toISOString();
+  const title = (data.title?.toString().trim()) || '(제목 없음)';
+  const body = data.body?.toString() || '';
+  const category = cat(data.category?.toString());
+  const occurred_at = data.occurred_at?.toString() || new Date().toISOString();
 
   await sql`UPDATE timeline SET title=${title}, body=${body}, category=${category}, occurred_at=${occurred_at}
     WHERE id=${id}`;
-  await saveFiles(formData, id, user.id);
+  await saveFileRows(data.files, id, user.id);
 
   revalidatePath('/timeline');
   revalidatePath('/timeline/' + id);

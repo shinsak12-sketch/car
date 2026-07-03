@@ -2,6 +2,7 @@
 
 import { sql } from '@/lib/db';
 import { requireUser } from '@/lib/auth';
+import { ensureSchema } from '@/lib/ensureSchema';
 import { revalidatePath } from 'next/cache';
 import { CONTACT_CATEGORIES } from '@/lib/constants';
 
@@ -10,14 +11,15 @@ function cat(v) {
 }
 
 export async function createContact(formData) {
-  await requireUser();
+  const user = await requireUser();
+  await ensureSchema();
   const name = formData.get('name')?.toString().trim();
   if (!name) return;
-  await sql`INSERT INTO contacts (name, org, role, phone, email, category, memo, notify)
+  await sql`INSERT INTO contacts (name, org, role, phone, email, category, memo, notify, author_id)
     VALUES (${name}, ${formData.get('org')?.toString() || ''}, ${formData.get('role')?.toString() || ''},
             ${formData.get('phone')?.toString() || ''}, ${formData.get('email')?.toString() || ''},
             ${cat(formData.get('category')?.toString())}, ${formData.get('memo')?.toString() || ''},
-            ${formData.get('notify') ? true : false})`;
+            ${formData.get('notify') ? true : false}, ${user.id})`;
   revalidatePath('/contacts');
   revalidatePath('/');
 }

@@ -157,7 +157,13 @@ textarea{resize:vertical}
 .filterbar input[type=search]{max-width:200px}
 .chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
 .chip-f{padding:6px 12px;border-radius:20px;background:var(--card);border:1px solid var(--line);font-size:.82rem;font-weight:500}
-.chip-f.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.chip-f.on{background:#00854A;color:#fff;border-color:#00854A}
+/* 가로 스크롤 필터 칩 + 전체폭 검색 */
+.chips-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px;scrollbar-width:none}
+.chips-scroll::-webkit-scrollbar{display:none}
+.chips-scroll .chip-f{flex:0 0 auto;white-space:nowrap;padding:8px 15px}
+.search-row{display:flex;gap:8px;margin-bottom:16px}
+.search-row input[type=search]{flex:1;min-width:0}
 .timeline{position:relative;padding-left:8px}
 .tl-item{display:flex;gap:14px;margin-bottom:6px}
 .tl-time{width:130px;flex:none;font-size:.78rem;color:var(--muted);text-align:right;padding-top:14px}
@@ -195,6 +201,7 @@ textarea{resize:vertical}
 .kb-card-desc{font-size:.82rem;color:#4b5563;margin-bottom:6px;white-space:pre-wrap}
 .kb-card-meta{display:flex;gap:8px;flex-wrap:wrap;font-size:.76rem;color:var(--muted);margin-bottom:8px;align-items:center}
 .kb-card-actions{display:flex;gap:6px;justify-content:space-between}
+.kb-card-by{font-size:.72rem;color:var(--muted);margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
 
 /* ── 연락처 ── */
 .contact-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
@@ -205,6 +212,7 @@ textarea{resize:vertical}
 .contact-phone{display:inline-block;color:var(--primary);font-weight:600;margin:6px 0}
 .contact-email{font-size:.82rem;color:var(--muted)}
 .contact-memo{font-size:.82rem;background:#f8fafc;border-radius:6px;padding:6px 8px;margin:8px 0;color:#475569}
+.contact-by{font-size:.72rem;color:var(--muted);margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
 .contact-actions{display:flex;gap:6px;margin-top:8px}
 .edit-form{display:flex;flex-direction:column;gap:7px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 .notify-dot{font-size:.9rem}
@@ -280,18 +288,20 @@ textarea{resize:vertical}
   .bn-item{
     flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
     background:none;border:none;font-family:inherit;font-size:.68rem;font-weight:600;
-    color:var(--muted);padding:6px 2px;cursor:pointer;text-decoration:none;
+    color:#9aa3af;padding:7px 2px;cursor:pointer;text-decoration:none;
   }
-  .bn-item.on{color:var(--primary)}
-  .bn-ico{font-size:1.35rem;line-height:1}
-  .bn-alert{
+  .bn-item svg{width:24px;height:24px}
+  .bn-item.on{color:#00854A}
+  .bn-home{
     flex:0 0 auto;display:flex;align-items:center;justify-content:center;
-    width:58px;height:58px;margin-top:-22px;border-radius:50%;
-    background:var(--danger);box-shadow:0 4px 14px rgba(220,38,38,.45);
-    border:4px solid #fff;
+    width:60px;height:60px;margin-top:-24px;border-radius:50%;
+    background:#00854A;color:#fff;box-shadow:0 5px 16px rgba(0,133,74,.45);
+    border:4px solid #fff;text-decoration:none;
   }
-  .bn-alert-ico{font-size:1.5rem}
-  .bn-alert:active{transform:scale(.94)}
+  .bn-home svg{width:28px;height:28px}
+  .bn-home.on{background:#00733f}
+  .bn-home:active{transform:scale(.94)}
+  .sheet-item.alert{color:var(--danger);font-weight:700}
 
   /* 하단 바 만큼 본문 여백 */
   body.has-bottomnav{padding-bottom:74px}

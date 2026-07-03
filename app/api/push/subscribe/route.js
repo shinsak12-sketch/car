@@ -1,5 +1,6 @@
 import { sql } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { ensureSchema } from '@/lib/ensureSchema';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,7 @@ export async function POST(request) {
   }
 
   try {
+    await ensureSchema();
     await sql`INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_id, user_name)
       VALUES (${sub.endpoint}, ${sub.keys.p256dh}, ${sub.keys.auth}, ${user.id}, ${user.name})
       ON CONFLICT (endpoint) DO UPDATE SET user_id = ${user.id}, user_name = ${user.name}`;

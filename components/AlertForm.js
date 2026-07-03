@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
+import { useRouter } from 'next/navigation';
 
 function SubmitBtn() {
   const { pending } = useFormStatus();
@@ -17,7 +18,32 @@ export default function AlertForm({ allContacts, notifyIds, subscribers = [], sm
   const listRef = useRef(null);
   const notifySet = new Set(notifyIds);
   const [showSms, setShowSms] = useState(false);
+  const [justSent, setJustSent] = useState(false);
   const deviceTotal = subscribers.reduce((n, s) => n + (s.devices || 0), 0);
+  const router = useRouter();
+  const refreshedFor = useRef(null);
+
+  // 발송 성공 → 발송 이력 새로고침. router.refresh 가 폼을 리마운트하며 결과 상태를 지우므로,
+  // 확인 메시지는 sessionStorage 로 넘겨 새로고침 후에도 표시.
+  useEffect(() => {
+    if (state?.result && refreshedFor.current !== state) {
+      refreshedFor.current = state;
+      try { sessionStorage.setItem('car_alert_sent', '1'); } catch {}
+      router.refresh();
+    }
+  }, [state, router]);
+
+  // 리마운트 후: 방금 보냈으면 확인 배너 표시
+  useEffect(() => {
+    let stored = null;
+    try { stored = sessionStorage.getItem('car_alert_sent'); } catch {}
+    if (stored) {
+      try { sessionStorage.removeItem('car_alert_sent'); } catch {}
+      setJustSent(true);
+      const t = setTimeout(() => setJustSent(false), 6000);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   function setAll(pred) {
     const boxes = listRef.current?.querySelectorAll('.rcpt') || [];
@@ -29,7 +55,9 @@ export default function AlertForm({ allContacts, notifyIds, subscribers = [], sm
   return (
     <>
       {state?.error && <div className="flash error">{state.error}</div>}
-      {state?.result && <ResultCard result={state.result} />}
+      {justSent && (
+        <div className="flash ok">✅ 비상 알림을 보냈습니다. 아래 <b>발송 이력</b> 맨 위에서 확인하세요.</div>
+      )}
 
       {/* 실제로 이 알림을 받을 사람 = 앱 알림을 켠 기기 */}
       <div className="sub-box">
@@ -88,40 +116,5 @@ export default function AlertForm({ allContacts, notifyIds, subscribers = [], sm
         <div className="form-actions"><SubmitBtn /></div>
       </form>
     </>
-  );
-}
-
-function ResultCard({ result }) {
-  const push = result.push;
-  const hasSms = result.results.length > 0;
-  const label =
-    result.status === 'sent' ? '✅ 발송 완료' : result.status === 'recorded' ? '📝 문자 기록 모드' : '⚠️ 발송 실패';
-  return (
-    <div className="result-card">
-      <div className="result-summary">
-        {push && push.total > 0 ? '✅ 발송 완료' : label}
-        {push && push.total > 0 && <span className="result-cnt">🔔 휴대폰 알림 {push.sent}/{push.total}명</span>}
-        {hasSms && <span className="result-cnt">✉️ 문자 {result.successCnt}/{result.results.length}명</span>}
-      </div>
-      <div className="result-msg">{result.message}</div>
-      {push && push.total === 0 && !hasSms && (
-        <div className="result-note">알림을 켠 기기가 아직 없습니다. 팀원들이 각자 휴대폰에서 “비상 알림 받기”를 켜야 합니다.</div>
-      )}
-      {result.note && <div className="result-note">{result.note}</div>}
-      {hasSms && (
-        <table className="result-table">
-          <thead><tr><th>이름</th><th>번호</th><th>결과</th></tr></thead>
-          <tbody>
-            {result.results.map((r, i) => (
-              <tr key={i}>
-                <td>{r.name}</td>
-                <td>{r.phone}</td>
-                <td className={r.ok ? 'ok' : 'ng'}>{r.ok ? '성공' : '실패'}{r.info && <small> ({r.info})</small>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
   );
 }

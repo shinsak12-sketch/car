@@ -3,6 +3,7 @@
 import { sql } from '@/lib/db';
 import { requireUser } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { TASK_STATUSES, TASK_PRIORITIES } from '@/lib/constants';
 
 function pri(v) {
@@ -26,6 +27,7 @@ export async function createTask(formData) {
     VALUES (${title}, ${description}, ${priority}, ${assignee}, ${due}, ${user.id})`;
   revalidatePath('/tasks');
   revalidatePath('/');
+  redirect('/tasks');
 }
 
 export async function setTaskStatus(id, status) {

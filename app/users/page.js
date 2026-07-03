@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { sql } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { createUser, resetPassword, toggleActive, setRole, approveUser, rejectUser } from '@/actions/users';
+import { createUser, resetPassword, toggleActive, setRole, approveUser, rejectUser, updateProfile } from '@/actions/users';
 import { fmtDateTime } from '@/lib/format';
 import AddUserForm from '@/components/AddUserForm';
 import UsersTable from '@/components/UsersTable';
@@ -30,6 +30,7 @@ export default async function UsersPage() {
     toggle: toggleActive.bind(null, u.id),
     reset: resetPassword.bind(null, u.id),
     setRoleAction: setRole.bind(null, u.id),
+    profile: updateProfile.bind(null, u.id),
   }));
 
   return (

@@ -1,8 +1,8 @@
 import { sql } from '@/lib/db';
 import { blobConfigured } from '@/lib/blob';
 import { fmtSize, fmtDateTime } from '@/lib/format';
-import { uploadFiles, deleteFileRecord } from '@/actions/files';
-import ToggleForm from '@/components/ToggleForm';
+import { saveUploadedFiles, deleteFileRecord } from '@/actions/files';
+import FilesUploader from '@/components/FilesUploader';
 import ConfirmButton from '@/components/ConfirmButton';
 
 export const dynamic = 'force-dynamic';
@@ -24,17 +24,7 @@ export default async function FilesPage() {
     <>
       <div className="page-head">
         <h1>증거 · 자료함</h1>
-        {configured && (
-          <ToggleForm label="＋ 파일 올리기">
-            <form action={uploadFiles} encType="multipart/form-data" className="form-card">
-              <label>파일 선택 (여러 개 가능 · 사진/동영상/공문 등)
-                <input type="file" name="files" multiple required />
-              </label>
-              <label>메모<input type="text" name="memo" placeholder="예: 3일차 정문 앞 채증 사진" /></label>
-              <div className="form-actions"><button className="btn-primary">업로드</button></div>
-            </form>
-          </ToggleForm>
-        )}
+        {configured && <FilesUploader action={saveUploadedFiles} />}
       </div>
 
       {!configured && (

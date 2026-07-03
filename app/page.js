@@ -60,7 +60,7 @@ export default async function Dashboard() {
         <section className="card">
           <div className="card-head">
             <h2>최근 상황 일지</h2>
-            <Link href="/timeline/new" className="btn-sm">＋ 기록</Link>
+            <Link href="/timeline" className="btn-sm">전체 보기</Link>
           </div>
           {recentTimeline.length === 0 ? (
             <p className="empty">아직 기록이 없습니다. 상황이 생기면 바로 남겨두세요.</p>

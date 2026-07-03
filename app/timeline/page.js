@@ -47,14 +47,15 @@ export default async function TimelinePage({ searchParams }) {
         <Link href="/timeline/new" className="btn-primary">＋ 새 기록</Link>
       </div>
 
-      <form className="filterbar" method="get" action="/timeline">
-        <div className="chips">
-          <Link href="/timeline" className={`chip-f ${!category ? 'on' : ''}`}>전체</Link>
-          {TIMELINE_CATEGORIES.map((c) => (
-            <Link key={c} href={`/timeline?category=${encodeURIComponent(c)}`} className={`chip-f ${category === c ? 'on' : ''}`}>{c}</Link>
-          ))}
-        </div>
-        <input type="search" name="q" defaultValue={q} placeholder="검색어" />
+      <div className="chips-scroll">
+        <Link href="/timeline" className={`chip-f ${!category ? 'on' : ''}`}>전체</Link>
+        {TIMELINE_CATEGORIES.map((c) => (
+          <Link key={c} href={`/timeline?category=${encodeURIComponent(c)}`} className={`chip-f ${category === c ? 'on' : ''}`}>{c}</Link>
+        ))}
+      </div>
+      <form className="search-row" method="get" action="/timeline">
+        {category && <input type="hidden" name="category" value={category} />}
+        <input type="search" name="q" defaultValue={q} placeholder="제목·내용 검색" />
         <button className="btn-sm">검색</button>
       </form>
 

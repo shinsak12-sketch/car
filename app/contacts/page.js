@@ -14,24 +14,25 @@ export default async function ContactsPage({ searchParams }) {
 
   let items;
   if (category && q) {
-    items = await sql`SELECT * FROM contacts
-      WHERE category = ${category}
-        AND (name ILIKE ${pat} OR org ILIKE ${pat} OR phone ILIKE ${pat} OR memo ILIKE ${pat})
-      ORDER BY CASE category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
-               WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, name`;
+    items = await sql`SELECT c.*, au.name AS author_name FROM contacts c LEFT JOIN users au ON au.id = c.author_id
+      WHERE c.category = ${category}
+        AND (c.name ILIKE ${pat} OR c.org ILIKE ${pat} OR c.phone ILIKE ${pat} OR c.memo ILIKE ${pat})
+      ORDER BY CASE c.category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
+               WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, c.name`;
   } else if (category) {
-    items = await sql`SELECT * FROM contacts WHERE category = ${category}
-      ORDER BY CASE category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
-               WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, name`;
+    items = await sql`SELECT c.*, au.name AS author_name FROM contacts c LEFT JOIN users au ON au.id = c.author_id
+      WHERE c.category = ${category}
+      ORDER BY CASE c.category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
+               WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, c.name`;
   } else if (q) {
-    items = await sql`SELECT * FROM contacts
-      WHERE (name ILIKE ${pat} OR org ILIKE ${pat} OR phone ILIKE ${pat} OR memo ILIKE ${pat})
-      ORDER BY CASE category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
-               WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, name`;
+    items = await sql`SELECT c.*, au.name AS author_name FROM contacts c LEFT JOIN users au ON au.id = c.author_id
+      WHERE (c.name ILIKE ${pat} OR c.org ILIKE ${pat} OR c.phone ILIKE ${pat} OR c.memo ILIKE ${pat})
+      ORDER BY CASE c.category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
+               WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, c.name`;
   } else {
-    items = await sql`SELECT * FROM contacts
-      ORDER BY CASE category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
-               WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, name`;
+    items = await sql`SELECT c.*, au.name AS author_name FROM contacts c LEFT JOIN users au ON au.id = c.author_id
+      ORDER BY CASE c.category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
+               WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, c.name`;
   }
 
   return (
@@ -59,13 +60,14 @@ export default async function ContactsPage({ searchParams }) {
         </ToggleForm>
       </div>
 
-      <form className="filterbar" method="get" action="/contacts">
-        <div className="chips">
-          <Link href="/contacts" className={`chip-f ${!category ? 'on' : ''}`}>전체</Link>
-          {CONTACT_CATEGORIES.map((c) => (
-            <Link key={c} href={`/contacts?category=${encodeURIComponent(c)}`} className={`chip-f ${category === c ? 'on' : ''}`}>{c}</Link>
-          ))}
-        </div>
+      <div className="chips-scroll">
+        <Link href="/contacts" className={`chip-f ${!category ? 'on' : ''}`}>전체</Link>
+        {CONTACT_CATEGORIES.map((c) => (
+          <Link key={c} href={`/contacts?category=${encodeURIComponent(c)}`} className={`chip-f ${category === c ? 'on' : ''}`}>{c}</Link>
+        ))}
+      </div>
+      <form className="search-row" method="get" action="/contacts">
+        {category && <input type="hidden" name="category" value={category} />}
         <input type="search" name="q" defaultValue={q} placeholder="이름·기관·번호 검색" />
         <button className="btn-sm">검색</button>
       </form>
