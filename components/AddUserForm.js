@@ -14,6 +14,7 @@ export default function AddUserForm({ action }) {
           <div className="grid2">
             <label>아이디<input type="text" name="username" required /></label>
             <label>이름<input type="text" name="name" required /></label>
+            <label>소속<input type="text" name="affiliation" placeholder="예: 총무팀" /></label>
             <label>직책<input type="text" name="position" placeholder="예: 팀장 / 대응조장" /></label>
             <label>전화번호<input type="tel" name="phone" placeholder="010-0000-0000" /></label>
             <label>임시 비밀번호<input type="text" name="password" required /></label>

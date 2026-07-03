@@ -4,6 +4,13 @@ import { sql } from '@/lib/db';
 import { requireUser } from '@/lib/auth';
 import { send } from '@/lib/notify';
 import { sendPushToAll } from '@/lib/push';
+import { revalidatePath } from 'next/cache';
+
+export async function deleteAlert(id) {
+  await requireUser();
+  await sql`DELETE FROM alerts WHERE id = ${id}`;
+  revalidatePath('/alerts');
+}
 
 // useFormState 시그니처: (prevState, formData) => newState
 export async function sendAlert(prevState, formData) {

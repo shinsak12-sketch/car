@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { sql } from '@/lib/db';
 import { TIMELINE_CATEGORIES, catClass } from '@/lib/constants';
-import { fmtDateTime } from '@/lib/format';
+import { fmtDateTime, userLabel } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,28 +13,28 @@ export default async function TimelinePage({ searchParams }) {
   let items;
   if (category && q) {
     items = await sql`
-      SELECT t.*, u.name AS author_name,
+      SELECT t.*, u.name AS author_name, u.position AS author_position, u.affiliation AS author_affiliation,
         (SELECT COUNT(*) FROM files f WHERE f.timeline_id = t.id)::int AS file_count
       FROM timeline t LEFT JOIN users u ON u.id = t.author_id
       WHERE t.category = ${category} AND (t.title ILIKE ${pat} OR t.body ILIKE ${pat})
       ORDER BY t.occurred_at DESC, t.id DESC`;
   } else if (category) {
     items = await sql`
-      SELECT t.*, u.name AS author_name,
+      SELECT t.*, u.name AS author_name, u.position AS author_position, u.affiliation AS author_affiliation,
         (SELECT COUNT(*) FROM files f WHERE f.timeline_id = t.id)::int AS file_count
       FROM timeline t LEFT JOIN users u ON u.id = t.author_id
       WHERE t.category = ${category}
       ORDER BY t.occurred_at DESC, t.id DESC`;
   } else if (q) {
     items = await sql`
-      SELECT t.*, u.name AS author_name,
+      SELECT t.*, u.name AS author_name, u.position AS author_position, u.affiliation AS author_affiliation,
         (SELECT COUNT(*) FROM files f WHERE f.timeline_id = t.id)::int AS file_count
       FROM timeline t LEFT JOIN users u ON u.id = t.author_id
       WHERE (t.title ILIKE ${pat} OR t.body ILIKE ${pat})
       ORDER BY t.occurred_at DESC, t.id DESC`;
   } else {
     items = await sql`
-      SELECT t.*, u.name AS author_name,
+      SELECT t.*, u.name AS author_name, u.position AS author_position, u.affiliation AS author_affiliation,
         (SELECT COUNT(*) FROM files f WHERE f.timeline_id = t.id)::int AS file_count
       FROM timeline t LEFT JOIN users u ON u.id = t.author_id
       ORDER BY t.occurred_at DESC, t.id DESC`;
@@ -75,7 +75,7 @@ export default async function TimelinePage({ searchParams }) {
                     <strong>{t.title}</strong>
                   </div>
                   {t.body && <p className="tl-excerpt">{t.body.length > 120 ? t.body.slice(0, 120) + '…' : t.body}</p>}
-                  <div className="tl-meta">{t.author_name || '-'}{t.file_count > 0 && ` · 📎 ${t.file_count}개`}</div>
+                  <div className="tl-meta">{userLabel(t.author_name, t.author_position, t.author_affiliation)}{t.file_count > 0 && ` · 📎 ${t.file_count}개`}</div>
                 </Link>
               </div>
             </div>

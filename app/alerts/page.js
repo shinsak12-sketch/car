@@ -2,9 +2,10 @@ import { sql } from '@/lib/db';
 import { providerInfo } from '@/lib/notify';
 import { countSubscriptions, listSubscribers } from '@/lib/push';
 import { fmtDateTime } from '@/lib/format';
-import { sendAlert } from '@/actions/alerts';
+import { sendAlert, deleteAlert } from '@/actions/alerts';
 import AlertForm from '@/components/AlertForm';
 import EnableNotifications from '@/components/EnableNotifications';
+import ConfirmButton from '@/components/ConfirmButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +48,9 @@ export default async function AlertsPage() {
                   <span className="ah-time">{fmtDateTime(a.created_at)}</span>
                   <span className="ah-by">{a.sender_name || '-'}</span>
                   <span className="ah-count">{a.success_cnt}/{a.recipient_cnt}명</span>
+                  <form action={deleteAlert.bind(null, a.id)} className="inline">
+                    <ConfirmButton message="이 발송 이력을 삭제할까요?" className="mini del">삭제</ConfirmButton>
+                  </form>
                 </div>
                 <div className="ah-msg">{a.message}</div>
                 {rcpts.length > 0 && (

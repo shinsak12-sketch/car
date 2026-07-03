@@ -14,23 +14,23 @@ export default async function ContactsPage({ searchParams }) {
 
   let items;
   if (category && q) {
-    items = await sql`SELECT c.*, au.name AS author_name FROM contacts c LEFT JOIN users au ON au.id = c.author_id
+    items = await sql`SELECT c.*, au.name AS author_name, au.position AS author_position, au.affiliation AS author_affiliation FROM contacts c LEFT JOIN users au ON au.id = c.author_id
       WHERE c.category = ${category}
         AND (c.name ILIKE ${pat} OR c.org ILIKE ${pat} OR c.phone ILIKE ${pat} OR c.memo ILIKE ${pat})
       ORDER BY CASE c.category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
                WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, c.name`;
   } else if (category) {
-    items = await sql`SELECT c.*, au.name AS author_name FROM contacts c LEFT JOIN users au ON au.id = c.author_id
+    items = await sql`SELECT c.*, au.name AS author_name, au.position AS author_position, au.affiliation AS author_affiliation FROM contacts c LEFT JOIN users au ON au.id = c.author_id
       WHERE c.category = ${category}
       ORDER BY CASE c.category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
                WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, c.name`;
   } else if (q) {
-    items = await sql`SELECT c.*, au.name AS author_name FROM contacts c LEFT JOIN users au ON au.id = c.author_id
+    items = await sql`SELECT c.*, au.name AS author_name, au.position AS author_position, au.affiliation AS author_affiliation FROM contacts c LEFT JOIN users au ON au.id = c.author_id
       WHERE (c.name ILIKE ${pat} OR c.org ILIKE ${pat} OR c.phone ILIKE ${pat} OR c.memo ILIKE ${pat})
       ORDER BY CASE c.category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
                WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, c.name`;
   } else {
-    items = await sql`SELECT c.*, au.name AS author_name FROM contacts c LEFT JOIN users au ON au.id = c.author_id
+    items = await sql`SELECT c.*, au.name AS author_name, au.position AS author_position, au.affiliation AS author_affiliation FROM contacts c LEFT JOIN users au ON au.id = c.author_id
       ORDER BY CASE c.category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
                WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, c.name`;
   }

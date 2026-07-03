@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { contactCatClass, CONTACT_CATEGORIES } from '@/lib/constants';
-import { fmtDateTime } from '@/lib/format';
+import { fmtDateTime, userLabel } from '@/lib/format';
 import ConfirmButton from '@/components/ConfirmButton';
 
 export default function ContactCard({ c, updateAction, deleteAction }) {
@@ -20,7 +20,7 @@ export default function ContactCard({ c, updateAction, deleteAction }) {
       {c.email && <div className="contact-email">✉ {c.email}</div>}
       {c.memo && <div className="contact-memo">{c.memo}</div>}
       {(c.author_name || c.created_at) && (
-        <div className="contact-by">등록: {c.author_name || '-'}{c.created_at && ` · ${fmtDateTime(c.created_at)}`}</div>
+        <div className="contact-by">등록: {userLabel(c.author_name, c.author_position, c.author_affiliation)}{c.created_at && ` · ${fmtDateTime(c.created_at)}`}</div>
       )}
 
       <div className="contact-actions">

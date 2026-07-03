@@ -20,14 +20,15 @@ export async function createUser(prevState, formData) {
   const password = formData.get('password')?.toString();
   const phone = formData.get('phone')?.toString() || '';
   const position = formData.get('position')?.toString() || '';
+  const affiliation = formData.get('affiliation')?.toString() || '';
   const role = formData.get('role')?.toString() === 'admin' ? 'admin' : 'member';
   if (!username || !name || !password) return { error: '아이디·이름·비밀번호는 필수입니다.' };
 
   const exists = await sql`SELECT 1 FROM users WHERE username = ${username}`;
   if (exists.length) return { error: '이미 있는 아이디입니다.' };
 
-  await sql`INSERT INTO users (username, name, phone, position, password, role)
-    VALUES (${username}, ${name}, ${phone}, ${position}, ${bcrypt.hashSync(password, 10)}, ${role})`;
+  await sql`INSERT INTO users (username, name, phone, position, affiliation, password, role)
+    VALUES (${username}, ${name}, ${phone}, ${position}, ${affiliation}, ${bcrypt.hashSync(password, 10)}, ${role})`;
   revalidatePath('/users');
   return { ok: '추가되었습니다.' };
 }
@@ -38,9 +39,10 @@ export async function updateProfile(id, formData) {
   await ensureSchema();
   const name = formData.get('name')?.toString().trim();
   const position = formData.get('position')?.toString() || '';
+  const affiliation = formData.get('affiliation')?.toString() || '';
   const phone = formData.get('phone')?.toString() || '';
   if (!name) return;
-  await sql`UPDATE users SET name = ${name}, position = ${position}, phone = ${phone} WHERE id = ${id}`;
+  await sql`UPDATE users SET name = ${name}, position = ${position}, affiliation = ${affiliation}, phone = ${phone} WHERE id = ${id}`;
   revalidatePath('/users');
 }
 

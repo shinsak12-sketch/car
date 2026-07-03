@@ -16,6 +16,7 @@ export async function POST(request) {
   const username = (body.username || '').trim();
   const name = (body.name || '').trim();
   const phone = (body.phone || '').trim();
+  const affiliation = (body.affiliation || '').trim();
   const password = body.password || '';
 
   if (!username || !name || !password) {
@@ -34,8 +35,8 @@ export async function POST(request) {
     if (exists.length) {
       return Response.json({ ok: false, error: '이미 사용 중인 아이디입니다. 다른 아이디를 써주세요.' }, { status: 409 });
     }
-    await sql`INSERT INTO users (username, name, phone, password, role, active, status)
-      VALUES (${username}, ${name}, ${phone}, ${bcrypt.hashSync(password, 10)}, 'member', true, 'pending')`;
+    await sql`INSERT INTO users (username, name, phone, affiliation, password, role, active, status)
+      VALUES (${username}, ${name}, ${phone}, ${affiliation}, ${bcrypt.hashSync(password, 10)}, 'member', true, 'pending')`;
     return Response.json({ ok: true });
   } catch (e) {
     return Response.json({ ok: false, error: 'DB 오류: ' + e.message }, { status: 500 });

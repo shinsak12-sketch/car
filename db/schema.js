@@ -84,6 +84,8 @@ CREATE INDEX IF NOT EXISTS idx_files_timeline ON files (timeline_id);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 -- 직책 (관리자가 부여)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS position TEXT DEFAULT '';
+-- 소속 (가입 시 입력)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS affiliation TEXT DEFAULT '';
 -- 연락처 작성자 기록
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS author_id INTEGER;
 `;

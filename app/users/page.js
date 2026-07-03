@@ -49,6 +49,7 @@ export default async function UsersPage() {
               <div className="req-item" key={u.id}>
                 <div className="req-info">
                   <strong>{u.name}</strong> <span className="req-id">@{u.username}</span>
+                  {u.affiliation && <span className="req-phone"> · {u.affiliation}</span>}
                   {u.phone && <span className="req-phone"> · 📞 {u.phone}</span>}
                   <div className="req-time">신청 {fmtDateTime(u.created_at)}</div>
                 </div>

@@ -24,6 +24,7 @@ function UserRow({ u, toggle, reset, setRoleAction, profile, currentUserId }) {
           <form action={profile} className="edit-form" style={{ padding: '4px 0' }}>
             <div className="grid2">
               <label>이름<input type="text" name="name" defaultValue={u.name} required /></label>
+              <label>소속<input type="text" name="affiliation" defaultValue={u.affiliation || ''} placeholder="예: 총무팀" /></label>
               <label>직책<input type="text" name="position" defaultValue={u.position || ''} placeholder="예: 팀장" /></label>
               <label>전화<input type="tel" name="phone" defaultValue={u.phone || ''} /></label>
             </div>
@@ -41,7 +42,7 @@ function UserRow({ u, toggle, reset, setRoleAction, profile, currentUserId }) {
     <tr className={u.active ? '' : 'row-off'}>
       <td>{u.username}</td>
       <td>{u.name}</td>
-      <td>{u.position || '-'}</td>
+      <td>{[u.affiliation, u.position].filter(Boolean).join(' · ') || '-'}</td>
       <td><RoleCell user={u} currentUserId={currentUserId} setRoleAction={setRoleAction} /></td>
       <td>{u.active ? '활성' : '비활성'}</td>
       <td className="row-actions">
@@ -68,7 +69,7 @@ export default function UsersTable({ rows, currentUserId }) {
     <div className="table-wrap">
       <table className="data-table">
         <thead>
-          <tr><th>아이디</th><th>이름</th><th>직책</th><th>권한</th><th>상태</th><th>관리</th></tr>
+          <tr><th>아이디</th><th>이름</th><th>소속·직책</th><th>권한</th><th>상태</th><th>관리</th></tr>
         </thead>
         <tbody>
           {rows.map((r) => (

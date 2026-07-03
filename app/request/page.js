@@ -23,6 +23,7 @@ export default function RequestPage() {
           name: f.get('name'),
           username: f.get('username'),
           phone: f.get('phone'),
+          affiliation: f.get('affiliation'),
           password: f.get('password'),
         }),
       });
@@ -58,6 +59,9 @@ export default function RequestPage() {
             <form onSubmit={onSubmit} className="login-form">
               <label>이름
                 <input type="text" name="name" autoFocus required placeholder="실명 또는 팀 내 호칭" />
+              </label>
+              <label>소속
+                <input type="text" name="affiliation" placeholder="예: 총무팀 / 관리사무소" />
               </label>
               <label>아이디
                 <input type="text" name="username" required placeholder="영문/숫자 3~20자" autoComplete="username" />

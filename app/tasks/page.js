@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { sql } from '@/lib/db';
-import { fmtDate, fmtDateTime } from '@/lib/format';
+import { fmtDate, fmtDateTime, userLabel } from '@/lib/format';
 import { TASK_STATUS_LABEL, PRIORITY_LABEL } from '@/lib/constants';
 import { setTaskStatus, deleteTask } from '@/actions/tasks';
 import ConfirmButton from '@/components/ConfirmButton';
@@ -9,7 +9,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function TasksPage() {
   const rows = await sql`
-    SELECT t.*, u.name AS assignee_name, a.name AS author_name
+    SELECT t.*, u.name AS assignee_name,
+      a.name AS author_name, a.position AS author_position, a.affiliation AS author_affiliation
     FROM tasks t
     LEFT JOIN users u ON u.id = t.assignee_id
     LEFT JOIN users a ON a.id = t.author_id
@@ -40,7 +41,7 @@ export default async function TasksPage() {
                   {t.due_date && <span>📅 {fmtDate(t.due_date)}</span>}
                   <span className={`pri-tag pri-${t.priority}`}>{PRIORITY_LABEL[t.priority]}</span>
                 </div>
-                <div className="kb-card-by">작성 {t.author_name || '-'} · {fmtDateTime(t.created_at)}</div>
+                <div className="kb-card-by">작성 {userLabel(t.author_name, t.author_position, t.author_affiliation)} · {fmtDateTime(t.created_at)}</div>
                 <div className="kb-card-actions">
                   <div className="inline" style={{ display: 'flex', gap: 6 }}>
                     {st !== 'todo' && <form action={setTaskStatus.bind(null, t.id, 'todo')} className="inline"><button className="mini">← 할일</button></form>}
