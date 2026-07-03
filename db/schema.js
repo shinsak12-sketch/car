@@ -88,6 +88,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS position TEXT DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS affiliation TEXT DEFAULT '';
 -- 연락처 작성자 기록
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS author_id INTEGER;
+-- 자료(파일) 발생일자 (업로드 시 선택)
+ALTER TABLE files ADD COLUMN IF NOT EXISTS occurred_at TIMESTAMPTZ;
 `;
 
 // 세미콜론 기준으로 개별 실행 문장 배열 반환 (neon http는 문장을 하나씩 실행)

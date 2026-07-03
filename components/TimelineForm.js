@@ -5,13 +5,15 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { TIMELINE_CATEGORIES } from '@/lib/constants';
 import { toLocalInput } from '@/lib/format';
+import { compressImage } from '@/lib/imageCompress';
 
-const MAX_MB = 4; // Vercel 서버 업로드 한도(약 4.5MB) 고려
+const MAX_NONIMG_MB = 4; // 이미지가 아닌 파일 서버 업로드 한도
 
 export default function TimelineForm({ item, action, blobReady = true }) {
   const occ = toLocalInput(item?.occurred_at);
   const cancelHref = item ? `/timeline/${item.id}` : '/timeline';
   const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
 
@@ -20,17 +22,29 @@ export default function TimelineForm({ item, action, blobReady = true }) {
     setError('');
     const form = e.currentTarget;
     const fd = new FormData(form);
+    const raw = fd.getAll('photos').filter((f) => f && typeof f === 'object' && f.size > 0);
 
-    // 큰 파일 사전 안내 (서버 업로드 한도)
-    const big = fd.getAll('photos').filter((f) => f && f.size > MAX_MB * 1024 * 1024);
-    if (big.length) {
-      setError(`사진이 너무 큽니다 (${MAX_MB}MB 이하만 가능). 카메라 화질을 낮추거나 캡처본으로 올려주세요. — ${big[0].name}`);
+    const bigNonImg = raw.find((f) => !f.type?.startsWith('image/') && f.size > MAX_NONIMG_MB * 1024 * 1024);
+    if (bigNonImg) {
+      setError(`이미지가 아닌 파일은 ${MAX_NONIMG_MB}MB 이하만 가능합니다: ${bigNonImg.name}`);
       return;
     }
 
     setBusy(true);
     try {
-      const res = await action(fd);
+      // 텍스트 필드 + (압축된) 사진으로 새 FormData 구성
+      const out = new FormData();
+      out.set('title', fd.get('title') || '');
+      out.set('body', fd.get('body') || '');
+      out.set('category', fd.get('category') || '');
+      out.set('occurred_at', fd.get('occurred_at') || '');
+      for (let i = 0; i < raw.length; i++) {
+        setBusyLabel(`사진 최적화 중… (${i + 1}/${raw.length})`);
+        const c = await compressImage(raw[i]);
+        out.append('photos', c, c.name);
+      }
+      setBusyLabel('저장 중…');
+      const res = await action(out);
       if (res?.ok) {
         if (res.warn) {
           setError(res.warn);
@@ -73,7 +87,7 @@ export default function TimelineForm({ item, action, blobReady = true }) {
       </label>
       {blobReady ? (
         <label>
-          사진 · 파일 첨부 (여러 개 가능 · 장당 {MAX_MB}MB 이하)
+          사진 · 파일 첨부 (여러 개 가능 · 큰 사진은 자동 최적화)
           <input type="file" name="photos" multiple accept="image/*,.pdf,.doc,.docx,.hwp" />
         </label>
       ) : (
@@ -83,7 +97,7 @@ export default function TimelineForm({ item, action, blobReady = true }) {
       )}
       <div className="form-actions">
         <button type="submit" className="btn-primary" disabled={busy}>
-          {busy ? '저장 중…' : '저장'}
+          {busy ? (busyLabel || '저장 중…') : '저장'}
         </button>
         <Link href={cancelHref} className="btn-ghost" style={{ color: 'var(--muted)', borderColor: 'var(--line)' }}>취소</Link>
       </div>

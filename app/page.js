@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Dashboard() {
   // 여러 쿼리를 병렬로 (각 쿼리는 Neon 으로의 개별 HTTP 왕복이라 병렬화가 속도에 큰 영향)
-  const [recentTimeline, openTasks, statsRows, lastAlertRows] = await Promise.all([
+  const [recentTimeline, openTasks, statsRows, lastAlertRows, recentFiles] = await Promise.all([
     sql`
       SELECT t.*, u.name AS author_name,
         (SELECT COUNT(*) FROM files f WHERE f.timeline_id = t.id)::int AS file_count
@@ -28,6 +28,9 @@ export default async function Dashboard() {
       (SELECT COUNT(*) FROM contacts WHERE notify = true)::int AS notify_targets`,
     sql`SELECT a.*, u.name AS sender_name FROM alerts a LEFT JOIN users u ON u.id = a.sender_id
         ORDER BY a.id DESC LIMIT 1`,
+    sql`SELECT f.id, f.url, f.mimetype, f.memo, f.occurred_at, f.created_at
+        FROM files f
+        ORDER BY COALESCE(f.occurred_at, f.created_at) DESC, f.id DESC LIMIT 8`,
   ]);
   const s = statsRows[0];
   const lastAlert = lastAlertRows[0];
@@ -106,6 +109,29 @@ export default async function Dashboard() {
           )}
         </section>
       </div>
+
+      <section className="card">
+        <div className="card-head">
+          <h2>최근 자료</h2>
+          <Link href="/files" className="btn-sm">전체 보기</Link>
+        </div>
+        {recentFiles.length === 0 ? (
+          <p className="empty">등록된 자료가 없습니다. 사진·공문 등 증거를 올려두세요.</p>
+        ) : (
+          <div className="thumb-row">
+            {recentFiles.map((f) => (
+              <Link key={f.id} href="/files" className="thumb" title={f.memo || ''}>
+                {f.mimetype && f.mimetype.startsWith('image/') ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={f.url} alt={f.memo || '증거 사진'} loading="lazy" />
+                ) : (
+                  <span className="thumb-icon">📄</span>
+                )}
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
     </>
   );
 }

@@ -1,15 +1,10 @@
 import { sql } from '@/lib/db';
 import { blobConfigured } from '@/lib/blob';
-import { fmtSize, fmtDateTime, userLabel } from '@/lib/format';
-import { uploadFiles, deleteFileRecord } from '@/actions/files';
+import { uploadFiles, updateFile, deleteFileRecord } from '@/actions/files';
 import FilesUploader from '@/components/FilesUploader';
-import ConfirmButton from '@/components/ConfirmButton';
+import FileCard from '@/components/FileCard';
 
 export const dynamic = 'force-dynamic';
-
-function isImg(m) {
-  return m && m.startsWith('image/');
-}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -17,27 +12,27 @@ export default async function FilesPage({ searchParams }) {
   const from = DATE_RE.test(searchParams?.from) ? searchParams.from : '';
   const to = DATE_RE.test(searchParams?.to) ? searchParams.to : '';
 
-  // created_at 을 KST 날짜로 비교하여 기간 필터
+  // 발생일자(없으면 등록일)를 KST 날짜로 비교하여 기간 필터
   let items;
   if (from && to) {
     items = await sql`SELECT f.*, u.name AS uploader_name, u.position AS uploader_position, u.affiliation AS uploader_affiliation, t.title AS timeline_title
       FROM files f LEFT JOIN users u ON u.id=f.uploader_id LEFT JOIN timeline t ON t.id=f.timeline_id
-      WHERE (f.created_at AT TIME ZONE 'Asia/Seoul')::date BETWEEN ${from}::date AND ${to}::date
-      ORDER BY f.id DESC`;
+      WHERE (COALESCE(f.occurred_at, f.created_at) AT TIME ZONE 'Asia/Seoul')::date BETWEEN ${from}::date AND ${to}::date
+      ORDER BY COALESCE(f.occurred_at, f.created_at) DESC, f.id DESC`;
   } else if (from) {
     items = await sql`SELECT f.*, u.name AS uploader_name, u.position AS uploader_position, u.affiliation AS uploader_affiliation, t.title AS timeline_title
       FROM files f LEFT JOIN users u ON u.id=f.uploader_id LEFT JOIN timeline t ON t.id=f.timeline_id
-      WHERE (f.created_at AT TIME ZONE 'Asia/Seoul')::date >= ${from}::date
-      ORDER BY f.id DESC`;
+      WHERE (COALESCE(f.occurred_at, f.created_at) AT TIME ZONE 'Asia/Seoul')::date >= ${from}::date
+      ORDER BY COALESCE(f.occurred_at, f.created_at) DESC, f.id DESC`;
   } else if (to) {
     items = await sql`SELECT f.*, u.name AS uploader_name, u.position AS uploader_position, u.affiliation AS uploader_affiliation, t.title AS timeline_title
       FROM files f LEFT JOIN users u ON u.id=f.uploader_id LEFT JOIN timeline t ON t.id=f.timeline_id
-      WHERE (f.created_at AT TIME ZONE 'Asia/Seoul')::date <= ${to}::date
-      ORDER BY f.id DESC`;
+      WHERE (COALESCE(f.occurred_at, f.created_at) AT TIME ZONE 'Asia/Seoul')::date <= ${to}::date
+      ORDER BY COALESCE(f.occurred_at, f.created_at) DESC, f.id DESC`;
   } else {
     items = await sql`SELECT f.*, u.name AS uploader_name, u.position AS uploader_position, u.affiliation AS uploader_affiliation, t.title AS timeline_title
       FROM files f LEFT JOIN users u ON u.id=f.uploader_id LEFT JOIN timeline t ON t.id=f.timeline_id
-      ORDER BY f.id DESC`;
+      ORDER BY COALESCE(f.occurred_at, f.created_at) DESC, f.id DESC`;
   }
   const configured = blobConfigured();
 
@@ -67,32 +62,12 @@ export default async function FilesPage({ searchParams }) {
       ) : (
         <div className="file-grid">
           {items.map((f) => (
-            <div className="file-card" key={f.id}>
-              <a href={f.url} target="_blank" rel="noreferrer" className="file-thumb">
-                {isImg(f.mimetype) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={f.url} alt={f.memo || '증거 사진'} loading="lazy" />
-                ) : (
-                  <span className="file-icon">📄</span>
-                )}
-              </a>
-              <div className="file-info">
-                {f.memo ? (
-                  <div className="file-name">{f.memo}</div>
-                ) : (
-                  <div className="file-name">{isImg(f.mimetype) ? '📷 사진' : '📄 파일'}</div>
-                )}
-                <div className="file-meta">등록: {userLabel(f.uploader_name, f.uploader_position, f.uploader_affiliation)}</div>
-                <div className="file-meta">{fmtSize(f.size)} · {fmtDateTime(f.created_at).slice(5)}</div>
-                {f.timeline_title && <div className="file-link">🔗 {f.timeline_title}</div>}
-                <div className="file-actions">
-                  <a href={f.url} target="_blank" rel="noreferrer" className="mini">열기</a>
-                  <form action={deleteFileRecord.bind(null, f.id)} className="inline">
-                    <ConfirmButton message="삭제할까요?">삭제</ConfirmButton>
-                  </form>
-                </div>
-              </div>
-            </div>
+            <FileCard
+              key={f.id}
+              f={f}
+              updateAction={updateFile.bind(null, f.id)}
+              deleteAction={deleteFileRecord.bind(null, f.id)}
+            />
           ))}
         </div>
       )}

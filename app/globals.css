@@ -234,6 +234,12 @@ textarea{resize:vertical}
 .file-link{font-size:.74rem;color:var(--primary);margin-top:4px}
 .file-actions{display:flex;gap:6px;margin-top:8px}
 
+/* ── 대시보드 최근 자료 썸네일 ── */
+.thumb-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.thumb{flex:0 0 auto;width:72px;height:72px;border-radius:10px;border:1px solid var(--line);background:#f8fafc;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb-icon{font-size:1.7rem}
+
 /* ── 비상 알림 ── */
 .recipients{border:1px solid var(--line);border-radius:10px;padding:12px;background:#f8fafc}
 .recipients-head{margin-bottom:8px}
