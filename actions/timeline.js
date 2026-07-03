@@ -6,6 +6,7 @@ import { uploadFile, deleteFile, blobConfigured } from '@/lib/blob';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { TIMELINE_CATEGORIES } from '@/lib/constants';
+import { localInputToTimestamp } from '@/lib/format';
 
 function cat(v) {
   return TIMELINE_CATEGORIES.includes(v) ? v : '기타';
@@ -28,7 +29,7 @@ export async function createTimeline(formData) {
   const title = (formData.get('title')?.toString().trim()) || '(제목 없음)';
   const body = formData.get('body')?.toString() || '';
   const category = cat(formData.get('category')?.toString());
-  const occurred_at = formData.get('occurred_at')?.toString() || new Date().toISOString();
+  const occurred_at = localInputToTimestamp(formData.get('occurred_at')?.toString());
 
   const rows = await sql`INSERT INTO timeline (title, body, category, occurred_at, author_id)
     VALUES (${title}, ${body}, ${category}, ${occurred_at}, ${user.id}) RETURNING id`;
@@ -50,7 +51,7 @@ export async function updateTimeline(id, formData) {
   const title = (formData.get('title')?.toString().trim()) || '(제목 없음)';
   const body = formData.get('body')?.toString() || '';
   const category = cat(formData.get('category')?.toString());
-  const occurred_at = formData.get('occurred_at')?.toString() || new Date().toISOString();
+  const occurred_at = localInputToTimestamp(formData.get('occurred_at')?.toString());
 
   await sql`UPDATE timeline SET title=${title}, body=${body}, category=${category}, occurred_at=${occurred_at}
     WHERE id=${id}`;
