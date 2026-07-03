@@ -2,20 +2,32 @@
 
 import { sql } from '@/lib/db';
 import { requireUser } from '@/lib/auth';
-import { deleteFile } from '@/lib/blob';
+import { uploadFile, deleteFile, blobConfigured } from '@/lib/blob';
 import { revalidatePath } from 'next/cache';
 
-// 파일은 클라이언트에서 이미 Blob 에 업로드됨 → 메타데이터만 저장
-export async function saveUploadedFiles(memo, files) {
+// 반환: {ok:true, count} 또는 {error}
+export async function uploadFiles(formData) {
   const user = await requireUser();
-  for (const f of files || []) {
-    if (f && f.url && f.pathname) {
+  if (!blobConfigured()) return { error: 'Blob 저장소가 연결되지 않았습니다.' };
+
+  const memo = formData.get('memo')?.toString() || '';
+  const files = formData.getAll('files').filter((f) => f && typeof f === 'object' && f.size > 0);
+  if (!files.length) return { error: '파일을 선택하세요.' };
+
+  let count = 0;
+  try {
+    for (const file of files) {
+      const { url, pathname } = await uploadFile(file);
       await sql`INSERT INTO files (url, pathname, original, mimetype, size, memo, uploader_id)
-        VALUES (${f.url}, ${f.pathname}, ${f.name || '파일'}, ${f.type || ''}, ${Number(f.size) || 0}, ${memo || ''}, ${user.id})`;
+        VALUES (${url}, ${pathname}, ${file.name || '파일'}, ${file.type || ''}, ${file.size || 0}, ${memo}, ${user.id})`;
+      count++;
     }
+  } catch (e) {
+    return { error: '업로드 실패: ' + (e?.message || e), count };
   }
   revalidatePath('/files');
   revalidatePath('/');
+  return { ok: true, count };
 }
 
 export async function deleteFileRecord(id) {

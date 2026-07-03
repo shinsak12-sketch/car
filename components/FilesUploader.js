@@ -2,50 +2,44 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { upload } from '@vercel/blob/client';
+
+const MAX_MB = 4;
 
 export default function FilesUploader({ action }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [progress, setProgress] = useState('');
   const router = useRouter();
 
   async function onSubmit(e) {
     e.preventDefault();
+    setError('');
     const form = e.currentTarget;
     const fd = new FormData(form);
-    const memo = fd.get('memo')?.toString() || '';
-    const files = fd.getAll('files').filter((f) => f && typeof f === 'object' && f.size > 0);
+    const files = fd.getAll('files').filter((f) => f && f.size > 0);
     if (!files.length) {
       setError('파일을 선택하세요.');
       return;
     }
+    const big = files.filter((f) => f.size > MAX_MB * 1024 * 1024);
+    if (big.length) {
+      setError(`파일이 너무 큽니다 (${MAX_MB}MB 이하만 가능): ${big[0].name}`);
+      return;
+    }
     setBusy(true);
-    setError('');
     try {
-      const uploaded = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        setProgress(`업로드 중… (${i + 1}/${files.length})`);
-        const blob = await Promise.race([
-          upload(file.name, file, { access: 'public', handleUploadUrl: '/api/blob/upload' }),
-          new Promise((_, rej) =>
-            setTimeout(() => rej(new Error('업로드가 응답하지 않습니다. 잠시 후 다시 시도하세요.')), 120000)
-          ),
-        ]);
-        uploaded.push({ url: blob.url, pathname: blob.pathname, name: file.name, type: file.type, size: file.size });
+      const res = await action(fd);
+      if (res?.ok) {
+        form.reset();
+        setOpen(false);
+        router.refresh();
+      } else {
+        setError(res?.error || '업로드에 실패했습니다.');
       }
-      setProgress('저장 중…');
-      await action(memo, uploaded);
-      form.reset();
-      setOpen(false);
-      router.refresh();
     } catch (err) {
       setError('업로드 실패: ' + (err?.message || err));
     } finally {
       setBusy(false);
-      setProgress('');
     }
   }
 
@@ -55,12 +49,12 @@ export default function FilesUploader({ action }) {
       {open && (
         <form onSubmit={onSubmit} className="form-card">
           {error && <div className="flash error">{error}</div>}
-          <label>파일 선택 (여러 개 가능 · 사진/동영상/공문 등)
-            <input type="file" name="files" multiple required />
+          <label>파일 선택 (여러 개 가능 · 장당 {MAX_MB}MB 이하)
+            <input type="file" name="files" multiple required accept="image/*,.pdf,.doc,.docx,.hwp" />
           </label>
           <label>메모<input type="text" name="memo" placeholder="예: 3일차 정문 앞 채증 사진" /></label>
           <div className="form-actions">
-            <button className="btn-primary" disabled={busy}>{busy ? (progress || '업로드 중…') : '업로드'}</button>
+            <button className="btn-primary" disabled={busy}>{busy ? '업로드 중…' : '업로드'}</button>
           </div>
         </form>
       )}

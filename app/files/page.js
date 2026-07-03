@@ -1,7 +1,7 @@
 import { sql } from '@/lib/db';
 import { blobConfigured } from '@/lib/blob';
 import { fmtSize, fmtDateTime } from '@/lib/format';
-import { saveUploadedFiles, deleteFileRecord } from '@/actions/files';
+import { uploadFiles, deleteFileRecord } from '@/actions/files';
 import FilesUploader from '@/components/FilesUploader';
 import ConfirmButton from '@/components/ConfirmButton';
 
@@ -24,7 +24,7 @@ export default async function FilesPage() {
     <>
       <div className="page-head">
         <h1>증거 · 자료함</h1>
-        {configured && <FilesUploader action={saveUploadedFiles} />}
+        {configured && <FilesUploader action={uploadFiles} />}
       </div>
 
       {!configured && (

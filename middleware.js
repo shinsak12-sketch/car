@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
-const PUBLIC_PATHS = ['/login', '/api/login', '/api/setup', '/request', '/api/request', '/api/blob/upload'];
+const PUBLIC_PATHS = ['/login', '/api/login', '/api/setup', '/request', '/api/request'];
 
 async function isValid(token) {
   if (!token || !process.env.SESSION_SECRET) return false;

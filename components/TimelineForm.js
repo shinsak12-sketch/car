@@ -2,55 +2,49 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { upload } from '@vercel/blob/client';
+import { useRouter } from 'next/navigation';
 import { TIMELINE_CATEGORIES } from '@/lib/constants';
 import { toLocalInput } from '@/lib/format';
 
-// item 이 있으면 수정, 없으면 새 작성. action 은 서버 액션.
-// 사진/파일은 브라우저에서 Vercel Blob 으로 직접 업로드 후 URL 을 서버로 전달.
+const MAX_MB = 4; // Vercel 서버 업로드 한도(약 4.5MB) 고려
+
 export default function TimelineForm({ item, action, blobReady = true }) {
   const occ = toLocalInput(item?.occurred_at);
   const cancelHref = item ? `/timeline/${item.id}` : '/timeline';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [progress, setProgress] = useState('');
+  const router = useRouter();
 
   async function onSubmit(e) {
     e.preventDefault();
+    setError('');
     const form = e.currentTarget;
     const fd = new FormData(form);
-    const files = fd.getAll('photos').filter((f) => f && typeof f === 'object' && f.size > 0);
+
+    // 큰 파일 사전 안내 (서버 업로드 한도)
+    const big = fd.getAll('photos').filter((f) => f && f.size > MAX_MB * 1024 * 1024);
+    if (big.length) {
+      setError(`사진이 너무 큽니다 (${MAX_MB}MB 이하만 가능). 카메라 화질을 낮추거나 캡처본으로 올려주세요. — ${big[0].name}`);
+      return;
+    }
 
     setBusy(true);
-    setError('');
     try {
-      const uploaded = [];
-      if (blobReady && files.length) {
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          setProgress(`사진 업로드 중… (${i + 1}/${files.length})`);
-          const blob = await Promise.race([
-            upload(file.name, file, { access: 'public', handleUploadUrl: '/api/blob/upload' }),
-            new Promise((_, rej) =>
-              setTimeout(() => rej(new Error('업로드가 응답하지 않습니다. 잠시 후 다시 시도하거나 파일 크기를 줄여보세요.')), 120000)
-            ),
-          ]);
-          uploaded.push({ url: blob.url, pathname: blob.pathname, name: file.name, type: file.type, size: file.size });
+      const res = await action(fd);
+      if (res?.ok) {
+        if (res.warn) {
+          setError(res.warn);
+          setBusy(false);
+          return;
         }
+        router.push('/timeline/' + res.id);
+      } else {
+        setError(res?.error || '저장에 실패했습니다.');
+        setBusy(false);
       }
-      setProgress('저장 중…');
-      await action({
-        title: fd.get('title'),
-        body: fd.get('body'),
-        category: fd.get('category'),
-        occurred_at: fd.get('occurred_at'),
-        files: uploaded,
-      });
-      // 서버 액션이 상세 페이지로 리다이렉트함
     } catch (err) {
       setError('저장 실패: ' + (err?.message || err));
       setBusy(false);
-      setProgress('');
     }
   }
 
@@ -79,8 +73,8 @@ export default function TimelineForm({ item, action, blobReady = true }) {
       </label>
       {blobReady ? (
         <label>
-          사진 · 파일 첨부 (여러 개 가능)
-          <input type="file" name="photos" multiple accept="image/*,video/*,.pdf,.doc,.docx,.hwp" />
+          사진 · 파일 첨부 (여러 개 가능 · 장당 {MAX_MB}MB 이하)
+          <input type="file" name="photos" multiple accept="image/*,.pdf,.doc,.docx,.hwp" />
         </label>
       ) : (
         <div className="flash warn" style={{ margin: 0 }}>
@@ -89,7 +83,7 @@ export default function TimelineForm({ item, action, blobReady = true }) {
       )}
       <div className="form-actions">
         <button type="submit" className="btn-primary" disabled={busy}>
-          {busy ? (progress || '저장 중…') : '저장'}
+          {busy ? '저장 중…' : '저장'}
         </button>
         <Link href={cancelHref} className="btn-ghost" style={{ color: 'var(--muted)', borderColor: 'var(--line)' }}>취소</Link>
       </div>
