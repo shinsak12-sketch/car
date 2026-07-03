@@ -1,26 +1,25 @@
 {
   "name": "dispute-response-manager",
-  "version": "1.0.0",
-  "description": "분쟁 대응 관리 프로그램 - 집회/분쟁 상황 대응을 위한 협업 웹 앱",
-  "main": "server.js",
-  "type": "commonjs",
+  "version": "2.0.0",
+  "private": true,
+  "description": "분쟁 대응 관리 프로그램 - 집회/분쟁 상황 대응 협업 웹 앱 (Next.js + Neon + Vercel Blob)",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "init-db": "node scripts/init-db.js",
-    "create-admin": "node scripts/create-admin.js"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "setup": "node scripts/setup.mjs"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=18.18"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "@vercel/blob": "^0.27.0",
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.3.0",
-    "better-sqlite3-session-store": "^0.1.0",
-    "dotenv": "^16.4.5",
-    "ejs": "^3.1.10",
-    "express": "^4.21.0",
-    "express-session": "^1.18.0",
-    "multer": "^2.0.1"
+    "jose": "^5.9.6",
+    "next": "^14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }

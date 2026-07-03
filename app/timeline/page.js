@@ -1,0 +1,71 @@
+import Link from 'next/link';
+import { query } from '@/lib/db';
+import { TIMELINE_CATEGORIES, catClass } from '@/lib/constants';
+import { fmtDateTime } from '@/lib/format';
+
+export const dynamic = 'force-dynamic';
+
+export default async function TimelinePage({ searchParams }) {
+  const category = TIMELINE_CATEGORIES.includes(searchParams?.category) ? searchParams.category : '';
+  const q = (searchParams?.q || '').trim();
+
+  const where = [];
+  const params = [];
+  if (category) {
+    params.push(category);
+    where.push(`t.category = $${params.length}`);
+  }
+  if (q) {
+    params.push(`%${q}%`);
+    where.push(`(t.title ILIKE $${params.length} OR t.body ILIKE $${params.length})`);
+  }
+  const sqlText = `
+    SELECT t.*, u.name AS author_name,
+      (SELECT COUNT(*) FROM files f WHERE f.timeline_id = t.id)::int AS file_count
+    FROM timeline t LEFT JOIN users u ON u.id = t.author_id
+    ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+    ORDER BY t.occurred_at DESC, t.id DESC`;
+  const items = await query(sqlText, params);
+
+  return (
+    <>
+      <div className="page-head">
+        <h1>상황 일지</h1>
+        <Link href="/timeline/new" className="btn-primary">＋ 새 기록</Link>
+      </div>
+
+      <form className="filterbar" method="get" action="/timeline">
+        <div className="chips">
+          <Link href="/timeline" className={`chip-f ${!category ? 'on' : ''}`}>전체</Link>
+          {TIMELINE_CATEGORIES.map((c) => (
+            <Link key={c} href={`/timeline?category=${encodeURIComponent(c)}`} className={`chip-f ${category === c ? 'on' : ''}`}>{c}</Link>
+          ))}
+        </div>
+        <input type="search" name="q" defaultValue={q} placeholder="검색어" />
+        <button className="btn-sm">검색</button>
+      </form>
+
+      {items.length === 0 ? (
+        <p className="empty big">기록이 없습니다. 상황이 발생하면 <Link href="/timeline/new">새 기록</Link>으로 바로 남겨두세요.</p>
+      ) : (
+        <div className="timeline">
+          {items.map((t) => (
+            <div className="tl-item" key={t.id}>
+              <div className="tl-time">{fmtDateTime(t.occurred_at)}</div>
+              <div className="tl-body">
+                <Link href={`/timeline/${t.id}`} className="tl-card">
+                  <div className="tl-card-head">
+                    <span className={catClass(t.category)}>{t.category}</span>
+                    <strong>{t.title}</strong>
+                  </div>
+                  {t.body && <p className="tl-excerpt">{t.body.length > 120 ? t.body.slice(0, 120) + '…' : t.body}</p>}
+                  <div className="tl-meta">{t.author_name || '-'}{t.file_count > 0 && ` · 📎 ${t.file_count}개`}</div>
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
