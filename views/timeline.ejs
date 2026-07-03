@@ -1,0 +1,41 @@
+<%- include('partials/head') %>
+<% function catClass(c){ return 'cat cat-'+({['집회']:'assembly','소음':'noise','충돌':'clash','접촉':'contact','경찰':'police'}[c]||'etc'); } %>
+
+<div class="page-head">
+  <h1>상황 일지</h1>
+  <a href="/timeline/new" class="btn-primary">＋ 새 기록</a>
+</div>
+
+<form class="filterbar" method="get" action="/timeline">
+  <div class="chips">
+    <a href="/timeline" class="chip-f <%= !category ? 'on':'' %>">전체</a>
+    <% categories.forEach(function(c){ %>
+      <a href="/timeline?category=<%= encodeURIComponent(c) %>" class="chip-f <%= category===c?'on':'' %>"><%= c %></a>
+    <% }) %>
+  </div>
+  <input type="search" name="q" value="<%= q %>" placeholder="검색어" />
+  <button class="btn-sm">검색</button>
+</form>
+
+<% if (items.length === 0) { %>
+  <p class="empty big">기록이 없습니다. 상황이 발생하면 <a href="/timeline/new">새 기록</a>으로 바로 남겨두세요.</p>
+<% } else { %>
+<div class="timeline">
+  <% items.forEach(function(t){ %>
+    <div class="tl-item">
+      <div class="tl-time"><%= t.occurred_at.replace('T',' ') %></div>
+      <div class="tl-body">
+        <a href="/timeline/<%= t.id %>" class="tl-card">
+          <div class="tl-card-head">
+            <span class="<%= catClass(t.category) %>"><%= t.category %></span>
+            <strong><%= t.title %></strong>
+          </div>
+          <% if (t.body) { %><p class="tl-excerpt"><%= t.body.length>120 ? t.body.slice(0,120)+'…' : t.body %></p><% } %>
+          <div class="tl-meta"><%= t.author_name || '-' %><% if (t.file_count>0){ %> · 📎 <%= t.file_count %>개<% } %></div>
+        </a>
+      </div>
+    </div>
+  <% }) %>
+</div>
+<% } %>
+<%- include('partials/foot') %>

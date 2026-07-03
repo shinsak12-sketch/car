@@ -1,0 +1,40 @@
+<%- include('partials/head') %>
+<% function catClass(c){ return 'cat cat-'+({['집회']:'assembly','소음':'noise','충돌':'clash','접촉':'contact','경찰':'police'}[c]||'etc'); } %>
+<% function isImg(m){ return m && m.startsWith('image/'); } %>
+
+<div class="page-head">
+  <a href="/timeline" class="back">← 목록</a>
+  <div class="head-actions">
+    <a href="/timeline/<%= item.id %>/edit" class="btn-sm">수정</a>
+    <form action="/timeline/<%= item.id %>/delete" method="post" class="inline" onsubmit="return confirm('이 기록을 삭제할까요?')">
+      <button class="btn-sm btn-danger-ghost">삭제</button>
+    </form>
+  </div>
+</div>
+
+<article class="detail">
+  <div class="detail-top">
+    <span class="<%= catClass(item.category) %>"><%= item.category %></span>
+    <span class="detail-time"><%= item.occurred_at.replace('T',' ') %></span>
+  </div>
+  <h1 class="detail-title"><%= item.title %></h1>
+  <div class="detail-author">작성: <%= item.author_name || '-' %> · 등록 <%= item.created_at %></div>
+  <% if (item.body) { %><div class="detail-body"><%= item.body %></div><% } %>
+
+  <% if (files.length) { %>
+    <h3 class="attach-head">첨부 자료 (<%= files.length %>)</h3>
+    <div class="attach-grid">
+      <% files.forEach(function(f){ %>
+        <div class="attach">
+          <% if (isImg(f.mimetype)) { %>
+            <a href="/files/<%= f.id %>/raw?inline=1" target="_blank"><img src="/files/<%= f.id %>/raw?inline=1" alt="" loading="lazy" /></a>
+          <% } else { %>
+            <a href="/files/<%= f.id %>/raw" class="attach-file">📄 <%= f.original %></a>
+          <% } %>
+          <div class="attach-name"><%= f.original %></div>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+</article>
+<%- include('partials/foot') %>

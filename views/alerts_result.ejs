@@ -1,0 +1,32 @@
+<%- include('partials/head') %>
+<div class="page-head"><h1>발송 결과</h1></div>
+
+<% if (error) { %>
+  <div class="flash error"><%= error %></div>
+  <a href="/alerts" class="btn-primary">← 다시 시도</a>
+<% } else { %>
+  <div class="result-card">
+    <div class="result-summary <%= result.status %>">
+      <% if (result.status === 'sent') { %>✅ 발송 완료<% } else if (result.status === 'recorded') { %>📝 기록 완료 (기록 모드)<% } else { %>⚠️ 발송 실패<% } %>
+      <span class="result-cnt"><%= result.successCnt %>/<%= result.results.length %>명</span>
+    </div>
+
+    <div class="result-msg"><%= result.message %></div>
+    <% if (result.note) { %><div class="result-note"><%= result.note %></div><% } %>
+
+    <table class="result-table">
+      <thead><tr><th>이름</th><th>번호</th><th>결과</th></tr></thead>
+      <tbody>
+        <% result.results.forEach(function(r){ %>
+          <tr>
+            <td><%= r.name %></td>
+            <td><%= r.phone %></td>
+            <td class="<%= r.ok?'ok':'ng' %>"><%= r.ok?'성공':'실패' %><% if (r.info){ %> <small>(<%= r.info %>)</small><% } %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <a href="/alerts" class="btn-primary">← 비상 알림으로</a>
+<% } %>
+<%- include('partials/foot') %>

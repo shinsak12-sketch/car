@@ -1,0 +1,49 @@
+<%- include('partials/head') %>
+<% function isImg(m){ return m && m.startsWith('image/'); } %>
+<% function fmtSize(n){ if(!n) return ''; if(n<1024) return n+'B'; if(n<1048576) return (n/1024).toFixed(0)+'KB'; return (n/1048576).toFixed(1)+'MB'; } %>
+
+<div class="page-head">
+  <h1>증거 · 자료함</h1>
+  <button class="btn-primary" onclick="document.getElementById('fileForm').classList.toggle('show')">＋ 파일 올리기</button>
+</div>
+
+<form id="fileForm" action="/files" method="post" enctype="multipart/form-data" class="form-card collapsible">
+  <label>파일 선택 (여러 개 가능 · 사진/동영상/공문 등)
+    <input type="file" name="files" multiple required />
+  </label>
+  <label>메모 <input type="text" name="memo" placeholder="예: 3일차 정문 앞 채증 사진" /></label>
+  <div class="form-actions"><button class="btn-primary">업로드</button></div>
+</form>
+
+<% if (items.length === 0) { %>
+  <p class="empty big">보관된 자료가 없습니다. 사진·동영상·공문 등 증거 자료를 올려두세요.</p>
+<% } else { %>
+<div class="file-grid">
+  <% items.forEach(function(f){ %>
+    <div class="file-card">
+      <a href="/files/<%= f.id %>/raw<%= isImg(f.mimetype)?'?inline=1':'' %>" target="_blank" class="file-thumb">
+        <% if (isImg(f.mimetype)) { %>
+          <img src="/files/<%= f.id %>/raw?inline=1" alt="" loading="lazy" />
+        <% } else { %>
+          <span class="file-icon">📄</span>
+        <% } %>
+      </a>
+      <div class="file-info">
+        <div class="file-name" title="<%= f.original %>"><%= f.original %></div>
+        <div class="file-meta">
+          <%= fmtSize(f.size) %> · <%= f.uploader_name || '-' %> · <%= (f.created_at||'').slice(5,16).replace('T',' ') %>
+        </div>
+        <% if (f.memo){ %><div class="file-memo"><%= f.memo %></div><% } %>
+        <% if (f.timeline_title){ %><div class="file-link">🔗 <%= f.timeline_title %></div><% } %>
+        <div class="file-actions">
+          <a href="/files/<%= f.id %>/raw" class="mini">다운로드</a>
+          <form action="/files/<%= f.id %>/delete" method="post" class="inline" onsubmit="return confirm('삭제할까요?')">
+            <button class="mini del">삭제</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  <% }) %>
+</div>
+<% } %>
+<%- include('partials/foot') %>

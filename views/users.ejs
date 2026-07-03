@@ -1,0 +1,60 @@
+<%- include('partials/head') %>
+<div class="page-head">
+  <h1>사용자 관리</h1>
+  <button class="btn-primary" onclick="document.getElementById('userForm').classList.toggle('show')">＋ 사용자 추가</button>
+</div>
+<% if (msg) { %><div class="flash ok"><%= msg %></div><% } %>
+
+<form id="userForm" action="/users" method="post" class="form-card collapsible">
+  <div class="grid2">
+    <label>아이디 <input type="text" name="username" required /></label>
+    <label>이름 <input type="text" name="name" required /></label>
+    <label>전화번호 <input type="tel" name="phone" placeholder="010-0000-0000" /></label>
+    <label>임시 비밀번호 <input type="text" name="password" required /></label>
+    <label>권한
+      <select name="role"><option value="member">일반</option><option value="admin">관리자</option></select>
+    </label>
+  </div>
+  <div class="form-actions"><button class="btn-primary">추가</button></div>
+</form>
+
+<div class="table-wrap">
+<table class="data-table">
+  <thead><tr><th>아이디</th><th>이름</th><th>전화</th><th>권한</th><th>상태</th><th>관리</th></tr></thead>
+  <tbody>
+    <% users.forEach(function(u){ %>
+      <tr class="<%= u.active ? '' : 'row-off' %>">
+        <td><%= u.username %></td>
+        <td><%= u.name %></td>
+        <td><%= u.phone || '-' %></td>
+        <td>
+          <% if (u.id === currentUser.id) { %>
+            <%= u.role === 'admin' ? '관리자' : '일반' %>
+          <% } else { %>
+            <form action="/users/<%= u.id %>/role" method="post" class="inline">
+              <select name="role" onchange="this.form.submit()">
+                <option value="member" <%= u.role==='member'?'selected':'' %>>일반</option>
+                <option value="admin" <%= u.role==='admin'?'selected':'' %>>관리자</option>
+              </select>
+            </form>
+          <% } %>
+        </td>
+        <td><%= u.active ? '활성' : '비활성' %></td>
+        <td class="row-actions">
+          <button class="mini" onclick="document.getElementById('reset-<%= u.id %>').classList.toggle('show')">비번변경</button>
+          <% if (u.id !== currentUser.id) { %>
+            <form action="/users/<%= u.id %>/toggle" method="post" class="inline">
+              <button class="mini"><%= u.active ? '비활성화' : '활성화' %></button>
+            </form>
+          <% } %>
+          <form id="reset-<%= u.id %>" action="/users/<%= u.id %>/reset" method="post" class="reset-form collapsible">
+            <input type="text" name="password" placeholder="새 비밀번호" required />
+            <button class="mini">변경</button>
+          </form>
+        </td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+</div>
+<%- include('partials/foot') %>

@@ -1,0 +1,64 @@
+<%- include('partials/head') %>
+<div class="page-head">
+  <h1>대응 업무</h1>
+  <button class="btn-primary" onclick="document.getElementById('taskForm').classList.toggle('show')">＋ 업무 추가</button>
+</div>
+
+<form id="taskForm" action="/tasks" method="post" class="form-card collapsible">
+  <div class="grid2">
+    <label>업무 제목
+      <input type="text" name="title" placeholder="예: 경찰서에 집회 신고 확인 요청" required />
+    </label>
+    <label>담당자
+      <select name="assignee_id">
+        <option value="">미지정</option>
+        <% members.forEach(function(m){ %><option value="<%= m.id %>"><%= m.name %></option><% }) %>
+      </select>
+    </label>
+    <label>우선순위
+      <select name="priority">
+        <option value="high">높음</option>
+        <option value="normal" selected>보통</option>
+        <option value="low">낮음</option>
+      </select>
+    </label>
+    <label>기한
+      <input type="date" name="due_date" />
+    </label>
+  </div>
+  <label>세부 내용
+    <textarea name="description" rows="2" placeholder="필요한 세부 사항"></textarea>
+  </label>
+  <div class="form-actions"><button class="btn-primary">추가</button></div>
+</form>
+
+<div class="kanban">
+  <% ['todo','doing','done'].forEach(function(st){ %>
+    <div class="kb-col kb-<%= st %>">
+      <div class="kb-head"><%= statusLabel[st] %> <span class="kb-count"><%= columns[st].length %></span></div>
+      <% if (columns[st].length === 0) { %><p class="empty small">없음</p><% } %>
+      <% columns[st].forEach(function(t){ %>
+        <div class="kb-card pri-border-<%= t.priority %>">
+          <div class="kb-card-title"><%= t.title %></div>
+          <% if (t.description) { %><div class="kb-card-desc"><%= t.description %></div><% } %>
+          <div class="kb-card-meta">
+            <% if (t.assignee_name){ %><span>👤 <%= t.assignee_name %></span><% } %>
+            <% if (t.due_date){ %><span>📅 <%= t.due_date %></span><% } %>
+            <span class="pri-tag pri-<%= t.priority %>"><%= t.priority==='high'?'높음':(t.priority==='low'?'낮음':'보통') %></span>
+          </div>
+          <div class="kb-card-actions">
+            <form action="/tasks/<%= t.id %>/status" method="post" class="inline">
+              <% if (st !== 'todo'){ %><button name="status" value="todo" class="mini">← 할일</button><% } %>
+              <% if (st !== 'doing'){ %><button name="status" value="doing" class="mini">진행</button><% } %>
+              <% if (st !== 'done'){ %><button name="status" value="done" class="mini done">완료 ✓</button><% } %>
+            </form>
+            <form action="/tasks/<%= t.id %>/delete" method="post" class="inline" onsubmit="return confirm('삭제할까요?')">
+              <button class="mini del">✕</button>
+            </form>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  <% }) %>
+</div>
+<%- include('partials/foot') %>
