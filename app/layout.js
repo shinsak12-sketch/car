@@ -1,5 +1,6 @@
 import './globals.css';
 import { getSession } from '@/lib/auth';
+import { ensureSchema } from '@/lib/ensureSchema';
 import Nav from '@/components/Nav';
 import BottomNav from '@/components/BottomNav';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
@@ -20,6 +21,11 @@ export const viewport = { width: 'device-width', initialScale: 1, themeColor: '#
 
 export default async function RootLayout({ children }) {
   const user = await getSession();
+  // 로그인 사용자가 있으면(=앱 내부 화면) 렌더 전에 스키마(새 컬럼) 자동 보정.
+  // 부모 레이아웃의 await 가 자식 페이지 렌더보다 먼저 끝나므로 컬럼 누락 크래시 방지.
+  if (user) {
+    try { await ensureSchema(); } catch {}
+  }
   return (
     <html lang="ko">
       <body className={user ? 'has-bottomnav' : ''}>
