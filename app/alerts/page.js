@@ -1,6 +1,6 @@
 import { sql } from '@/lib/db';
 import { providerInfo } from '@/lib/notify';
-import { countSubscriptions } from '@/lib/push';
+import { countSubscriptions, listSubscribers } from '@/lib/push';
 import { fmtDateTime } from '@/lib/format';
 import { sendAlert } from '@/actions/alerts';
 import AlertForm from '@/components/AlertForm';
@@ -9,11 +9,11 @@ import EnableNotifications from '@/components/EnableNotifications';
 export const dynamic = 'force-dynamic';
 
 export default async function AlertsPage() {
-  const [allContacts, history, pushCount] = await Promise.all([
+  const [allContacts, history, subscribers] = await Promise.all([
     sql`SELECT id, name, org, phone, category, notify FROM contacts WHERE phone <> '' ORDER BY name`,
     sql`SELECT a.*, u.name AS sender_name FROM alerts a
         LEFT JOIN users u ON u.id = a.sender_id ORDER BY a.id DESC LIMIT 50`,
-    countSubscriptions(),
+    listSubscribers(),
   ]);
   const notifyIds = allContacts.filter((c) => c.notify).map((c) => c.id);
   const provider = providerInfo();
@@ -25,13 +25,13 @@ export default async function AlertsPage() {
 
       <EnableNotifications vapidPublicKey={vapidPublicKey} />
 
-      <div className="flash ok" style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#1e40af' }}>
-        🔔 지금 <b>{pushCount}대</b>의 기기가 이 알림을 받습니다.
-        {' '}팀원들은 각자 휴대폰에서 로그인 후 이 화면의 <b>“비상 알림 받기”</b>를 한 번 눌러두면 됩니다.
-        {!provider.live && <> · 문자(SMS)는 아직 꺼져 있어요(원하면 나중에 연결).</>}
-      </div>
-
-      <AlertForm allContacts={allContacts} notifyIds={notifyIds} action={sendAlert} />
+      <AlertForm
+        allContacts={allContacts}
+        notifyIds={notifyIds}
+        subscribers={subscribers}
+        smsLive={provider.live}
+        action={sendAlert}
+      />
 
       <h2 className="section-title">발송 이력</h2>
       {history.length === 0 ? (

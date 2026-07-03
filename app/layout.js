@@ -2,6 +2,7 @@ import './globals.css';
 import { getSession } from '@/lib/auth';
 import Nav from '@/components/Nav';
 import BottomNav from '@/components/BottomNav';
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import { ORG_NAME } from '@/lib/constants';
 
 export const metadata = {
@@ -22,6 +23,7 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="ko">
       <body className={user ? 'has-bottomnav' : ''}>
+        <ServiceWorkerRegister />
         {user && <Nav user={user} orgName={ORG_NAME} />}
         <main className="container">{children}</main>
         {user && <BottomNav isAdmin={user.role === 'admin'} />}

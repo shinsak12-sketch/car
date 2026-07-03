@@ -3,6 +3,9 @@
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
 
+// 설치 가능(installable) 조건 충족용 최소 fetch 핸들러 (기본 네트워크 동작 유지)
+self.addEventListener('fetch', () => {});
+
 self.addEventListener('push', (event) => {
   let data = {};
   try {

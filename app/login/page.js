@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ShieldLogo from '@/components/ShieldLogo';
+import InstallButton from '@/components/InstallButton';
 import { ORG_NAME } from '@/lib/constants';
 
 export default function LoginPage() {
@@ -58,6 +59,7 @@ export default function LoginPage() {
         </form>
         <div className="login-divider"><span>계정이 없으신가요?</span></div>
         <Link href="/request" className="btn-request btn-block">접속 권한 요청</Link>
+        <InstallButton />
       </div>
     </div>
   );

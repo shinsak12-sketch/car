@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 
 function SubmitBtn() {
@@ -12,10 +12,12 @@ function SubmitBtn() {
   );
 }
 
-export default function AlertForm({ allContacts, notifyIds, action }) {
+export default function AlertForm({ allContacts, notifyIds, subscribers = [], smsLive = false, action }) {
   const [state, formAction] = useFormState(action, {});
   const listRef = useRef(null);
   const notifySet = new Set(notifyIds);
+  const [showSms, setShowSms] = useState(false);
+  const deviceTotal = subscribers.reduce((n, s) => n + (s.devices || 0), 0);
 
   function setAll(pred) {
     const boxes = listRef.current?.querySelectorAll('.rcpt') || [];
@@ -29,45 +31,59 @@ export default function AlertForm({ allContacts, notifyIds, action }) {
       {state?.error && <div className="flash error">{state.error}</div>}
       {state?.result && <ResultCard result={state.result} />}
 
+      {/* 실제로 이 알림을 받을 사람 = 앱 알림을 켠 기기 */}
+      <div className="sub-box">
+        <div className="sub-head">🔔 이 알림을 받을 사람 ({subscribers.length}명 · {deviceTotal}대)</div>
+        {subscribers.length === 0 ? (
+          <div className="sub-empty">
+            아직 알림을 켠 사람이 없습니다. 팀원들이 각자 로그인 후 위의 <b>“이 기기에서 비상 알림 받기”</b>를 눌러야 이 목록에 표시됩니다.
+          </div>
+        ) : (
+          <div className="sub-names">
+            {subscribers.map((s, i) => (
+              <span className="sub-name" key={i}>{s.name}{s.devices > 1 ? ` ×${s.devices}` : ''}</span>
+            ))}
+          </div>
+        )}
+      </div>
+
       <form action={formAction} className="form-card">
         <label>
           알림 내용
           <textarea name="message" rows={4} required placeholder="예: [긴급] 정문 앞 집회 인원 급증. 대응조 즉시 1층 로비로 집결 바랍니다." />
         </label>
 
-        <div className="recipients">
-          <div className="recipients-head">
-            <strong>수신 대상</strong>
-            <span className="hint">아무도 선택하지 않으면 “비상 알림 대상”으로 지정된 연락처 전체에게 발송됩니다.</span>
+        {/* 문자(SMS) 발송은 선택 (연락처가 있을 때만) */}
+        {allContacts.length > 0 && (
+          <div className="recipients">
+            <button type="button" className="sms-toggle" onClick={() => setShowSms((v) => !v)}>
+              {showSms ? '▼' : '▶'} 문자(SMS)로도 보내기 {smsLive ? '' : '(문자 미설정 — 기록만)'}
+            </button>
+            {showSms && (
+              <>
+                <div className="check-actions" style={{ marginTop: 10 }}>
+                  <button type="button" className="mini" onClick={() => setAll(() => true)}>전체 선택</button>
+                  <button type="button" className="mini" onClick={() => setAll(() => false)}>전체 해제</button>
+                  <button type="button" className="mini" onClick={() => setAll((b) => b.dataset.notify === '1')}>알림대상만</button>
+                </div>
+                <div className="recipient-list" ref={listRef}>
+                  {allContacts.map((c) => (
+                    <label className="rcpt-item" key={c.id}>
+                      <input
+                        type="checkbox"
+                        className="rcpt"
+                        name="contact_ids"
+                        value={c.id}
+                        data-notify={notifySet.has(c.id) ? '1' : '0'}
+                      />
+                      <span>{c.name}{c.org && <small> {c.org}</small>} · {c.phone}</span>
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-
-          {allContacts.length === 0 ? (
-            <p className="empty">전화번호가 등록된 연락처가 없습니다. 연락처를 먼저 등록하세요.</p>
-          ) : (
-            <>
-              <div className="check-actions">
-                <button type="button" className="mini" onClick={() => setAll(() => true)}>전체 선택</button>
-                <button type="button" className="mini" onClick={() => setAll(() => false)}>전체 해제</button>
-                <button type="button" className="mini" onClick={() => setAll((b) => b.dataset.notify === '1')}>알림대상만</button>
-              </div>
-              <div className="recipient-list" ref={listRef}>
-                {allContacts.map((c) => (
-                  <label className="rcpt-item" key={c.id}>
-                    <input
-                      type="checkbox"
-                      className="rcpt"
-                      name="contact_ids"
-                      value={c.id}
-                      data-notify={notifySet.has(c.id) ? '1' : '0'}
-                      defaultChecked={notifySet.has(c.id)}
-                    />
-                    <span>{c.name}{c.org && <small> {c.org}</small>} · {c.phone}</span>
-                  </label>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        )}
 
         <div className="form-actions"><SubmitBtn /></div>
       </form>
