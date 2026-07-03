@@ -76,28 +76,36 @@ export default function AlertForm({ allContacts, notifyIds, action }) {
 }
 
 function ResultCard({ result }) {
+  const push = result.push;
+  const hasSms = result.results.length > 0;
   const label =
-    result.status === 'sent' ? '✅ 발송 완료' : result.status === 'recorded' ? '📝 기록 완료 (기록 모드)' : '⚠️ 발송 실패';
+    result.status === 'sent' ? '✅ 발송 완료' : result.status === 'recorded' ? '📝 문자 기록 모드' : '⚠️ 발송 실패';
   return (
     <div className="result-card">
       <div className="result-summary">
-        {label}
-        <span className="result-cnt">{result.successCnt}/{result.results.length}명</span>
+        {push && push.total > 0 ? '✅ 발송 완료' : label}
+        {push && push.total > 0 && <span className="result-cnt">🔔 휴대폰 알림 {push.sent}/{push.total}명</span>}
+        {hasSms && <span className="result-cnt">✉️ 문자 {result.successCnt}/{result.results.length}명</span>}
       </div>
       <div className="result-msg">{result.message}</div>
+      {push && push.total === 0 && !hasSms && (
+        <div className="result-note">알림을 켠 기기가 아직 없습니다. 팀원들이 각자 휴대폰에서 “비상 알림 받기”를 켜야 합니다.</div>
+      )}
       {result.note && <div className="result-note">{result.note}</div>}
-      <table className="result-table">
-        <thead><tr><th>이름</th><th>번호</th><th>결과</th></tr></thead>
-        <tbody>
-          {result.results.map((r, i) => (
-            <tr key={i}>
-              <td>{r.name}</td>
-              <td>{r.phone}</td>
-              <td className={r.ok ? 'ok' : 'ng'}>{r.ok ? '성공' : '실패'}{r.info && <small> ({r.info})</small>}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {hasSms && (
+        <table className="result-table">
+          <thead><tr><th>이름</th><th>번호</th><th>결과</th></tr></thead>
+          <tbody>
+            {result.results.map((r, i) => (
+              <tr key={i}>
+                <td>{r.name}</td>
+                <td>{r.phone}</td>
+                <td className={r.ok ? 'ok' : 'ng'}>{r.ok ? '성공' : '실패'}{r.info && <small> ({r.info})</small>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

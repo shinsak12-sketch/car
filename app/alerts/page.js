@@ -1,32 +1,35 @@
 import { sql } from '@/lib/db';
 import { providerInfo } from '@/lib/notify';
+import { countSubscriptions } from '@/lib/push';
 import { fmtDateTime } from '@/lib/format';
 import { sendAlert } from '@/actions/alerts';
 import AlertForm from '@/components/AlertForm';
+import EnableNotifications from '@/components/EnableNotifications';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AlertsPage() {
-  const [allContacts, history] = await Promise.all([
+  const [allContacts, history, pushCount] = await Promise.all([
     sql`SELECT id, name, org, phone, category, notify FROM contacts WHERE phone <> '' ORDER BY name`,
     sql`SELECT a.*, u.name AS sender_name FROM alerts a
         LEFT JOIN users u ON u.id = a.sender_id ORDER BY a.id DESC LIMIT 50`,
+    countSubscriptions(),
   ]);
   const notifyIds = allContacts.filter((c) => c.notify).map((c) => c.id);
   const provider = providerInfo();
+  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || '';
 
   return (
     <>
       <div className="page-head"><h1>🚨 비상 알림</h1></div>
 
-      {provider.live ? (
-        <div className="flash ok">실제 발송 켜짐 · 제공자: {provider.provider} · 발신번호: {provider.sender}</div>
-      ) : (
-        <div className="flash warn">
-          현재 <strong>기록 모드</strong>입니다 — 실제 문자는 발송되지 않고, <b>누구에게 무엇을 보냈는지 기록만</b> 남습니다.
-          실제 문자 발송을 켜려면 환경변수 <code>NOTIFY_PROVIDER</code> 와 발신번호를 설정하세요.
-        </div>
-      )}
+      <EnableNotifications vapidPublicKey={vapidPublicKey} />
+
+      <div className="flash ok" style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#1e40af' }}>
+        🔔 지금 <b>{pushCount}대</b>의 기기가 이 알림을 받습니다.
+        {' '}팀원들은 각자 휴대폰에서 로그인 후 이 화면의 <b>“비상 알림 받기”</b>를 한 번 눌러두면 됩니다.
+        {!provider.live && <> · 문자(SMS)는 아직 꺼져 있어요(원하면 나중에 연결).</>}
+      </div>
 
       <AlertForm allContacts={allContacts} notifyIds={notifyIds} action={sendAlert} />
 

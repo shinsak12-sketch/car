@@ -68,6 +68,15 @@ CREATE TABLE IF NOT EXISTS alerts (
   sender_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id         SERIAL PRIMARY KEY,
+  endpoint   TEXT UNIQUE NOT NULL,
+  p256dh     TEXT NOT NULL,
+  auth       TEXT NOT NULL,
+  user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  user_name  TEXT DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE INDEX IF NOT EXISTS idx_timeline_occurred ON timeline (occurred_at DESC);
 CREATE INDEX IF NOT EXISTS idx_files_timeline ON files (timeline_id);
 `;

@@ -7,6 +7,12 @@ import { ORG_NAME } from '@/lib/constants';
 export const metadata = {
   title: ORG_NAME + ' · 분쟁 대응 관리',
   description: '집회·분쟁 상황 대응 협업 관리',
+  manifest: '/manifest.json',
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: ORG_NAME },
+  icons: {
+    icon: '/icons/icon-192.png',
+    apple: '/icons/apple-touch-icon.png',
+  },
 };
 
 export const viewport = { width: 'device-width', initialScale: 1, themeColor: '#1f2937' };
