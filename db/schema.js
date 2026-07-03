@@ -79,6 +79,9 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 );
 CREATE INDEX IF NOT EXISTS idx_timeline_occurred ON timeline (occurred_at DESC);
 CREATE INDEX IF NOT EXISTS idx_files_timeline ON files (timeline_id);
+
+-- 접속 권한 신청/승인 상태 (기존 사용자는 active 로 유지)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 `;
 
 // 세미콜론 기준으로 개별 실행 문장 배열 반환 (neon http는 문장을 하나씩 실행)

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ORG_NAME } from '@/lib/constants';
 
 export default function LoginPage() {
@@ -54,6 +55,8 @@ export default function LoginPage() {
             {loading ? '확인 중…' : '로그인'}
           </button>
         </form>
+        <div className="login-divider"><span>계정이 없으신가요?</span></div>
+        <Link href="/request" className="btn-request btn-block">접속 권한 요청</Link>
       </div>
     </div>
   );

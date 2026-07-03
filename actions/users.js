@@ -45,6 +45,19 @@ export async function toggleActive(id) {
   revalidatePath('/users');
 }
 
+export async function approveUser(id) {
+  await requireAdmin();
+  await sql`UPDATE users SET status = 'active', active = true WHERE id = ${id}`;
+  revalidatePath('/users');
+}
+
+export async function rejectUser(id) {
+  await requireAdmin();
+  // 대기 상태인 신청만 삭제 (활성 사용자 보호)
+  await sql`DELETE FROM users WHERE id = ${id} AND status = 'pending'`;
+  revalidatePath('/users');
+}
+
 export async function setRole(id, formData) {
   const admin = await requireAdmin();
   if (id === admin.id) return;

@@ -92,6 +92,19 @@ textarea{resize:vertical}
 .login-sub{color:var(--muted);margin:0 0 20px;font-size:.9rem}
 .login-form{display:flex;flex-direction:column;gap:14px;text-align:left}
 .login-form label{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:.88rem}
+.login-divider{display:flex;align-items:center;gap:10px;margin:18px 0 12px;color:var(--muted);font-size:.8rem}
+.login-divider::before,.login-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+.btn-request{display:inline-flex;align-items:center;justify-content:center;padding:12px;border-radius:9px;border:1px solid var(--primary);color:var(--primary);background:#fff;font-weight:600;cursor:pointer}
+.btn-request:hover{background:#eff6ff}
+
+/* 접속 권한 요청 (관리자) */
+.req-badge{background:var(--danger);color:#fff;font-size:.72rem;padding:2px 8px;border-radius:12px;margin-left:6px}
+.req-list{display:flex;flex-direction:column;gap:10px}
+.req-item{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;flex-wrap:wrap}
+.req-id{color:var(--primary);font-weight:600}
+.req-phone{color:var(--muted);font-size:.88rem}
+.req-time{font-size:.76rem;color:var(--muted);margin-top:3px}
+.req-actions{display:flex;gap:8px}
 
 /* ── 대시보드 ── */
 .stat-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px}
