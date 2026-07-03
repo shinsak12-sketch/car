@@ -29,10 +29,12 @@ export default function TimelineForm({ item, action, blobReady = true }) {
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
           setProgress(`사진 업로드 중… (${i + 1}/${files.length})`);
-          const blob = await upload(file.name, file, {
-            access: 'public',
-            handleUploadUrl: '/api/blob/upload',
-          });
+          const blob = await Promise.race([
+            upload(file.name, file, { access: 'public', handleUploadUrl: '/api/blob/upload' }),
+            new Promise((_, rej) =>
+              setTimeout(() => rej(new Error('업로드가 응답하지 않습니다. 잠시 후 다시 시도하거나 파일 크기를 줄여보세요.')), 120000)
+            ),
+          ]);
           uploaded.push({ url: blob.url, pathname: blob.pathname, name: file.name, type: file.type, size: file.size });
         }
       }
