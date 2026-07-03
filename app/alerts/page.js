@@ -7,10 +7,12 @@ import AlertForm from '@/components/AlertForm';
 export const dynamic = 'force-dynamic';
 
 export default async function AlertsPage() {
-  const allContacts = await sql`SELECT id, name, org, phone, category, notify FROM contacts WHERE phone <> '' ORDER BY name`;
+  const [allContacts, history] = await Promise.all([
+    sql`SELECT id, name, org, phone, category, notify FROM contacts WHERE phone <> '' ORDER BY name`,
+    sql`SELECT a.*, u.name AS sender_name FROM alerts a
+        LEFT JOIN users u ON u.id = a.sender_id ORDER BY a.id DESC LIMIT 50`,
+  ]);
   const notifyIds = allContacts.filter((c) => c.notify).map((c) => c.id);
-  const history = await sql`SELECT a.*, u.name AS sender_name FROM alerts a
-    LEFT JOIN users u ON u.id = a.sender_id ORDER BY a.id DESC LIMIT 50`;
   const provider = providerInfo();
 
   return (

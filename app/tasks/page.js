@@ -8,12 +8,14 @@ import ConfirmButton from '@/components/ConfirmButton';
 export const dynamic = 'force-dynamic';
 
 export default async function TasksPage() {
-  const rows = await sql`
-    SELECT t.*, u.name AS assignee_name
-    FROM tasks t LEFT JOIN users u ON u.id = t.assignee_id
-    ORDER BY CASE t.priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
-             (t.due_date IS NULL), t.due_date ASC, t.id DESC`;
-  const members = await sql`SELECT id, name FROM users WHERE active = true ORDER BY name`;
+  const [rows, members] = await Promise.all([
+    sql`
+      SELECT t.*, u.name AS assignee_name
+      FROM tasks t LEFT JOIN users u ON u.id = t.assignee_id
+      ORDER BY CASE t.priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
+               (t.due_date IS NULL), t.due_date ASC, t.id DESC`,
+    sql`SELECT id, name FROM users WHERE active = true ORDER BY name`,
+  ]);
 
   const columns = { todo: [], doing: [], done: [] };
   for (const r of rows) (columns[r.status] || columns.todo).push(r);

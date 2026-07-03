@@ -58,6 +58,8 @@ export default async function TimelinePage({ searchParams }) {
         <button className="btn-sm">검색</button>
       </form>
 
+      <Link href="/timeline/new" className="fab" aria-label="새 기록">＋</Link>
+
       {items.length === 0 ? (
         <p className="empty big">기록이 없습니다. 상황이 발생하면 <Link href="/timeline/new">새 기록</Link>으로 바로 남겨두세요.</p>
       ) : (

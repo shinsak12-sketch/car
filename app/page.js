@@ -6,33 +6,31 @@ import { fmtDateTime, fmtDate } from '@/lib/format';
 export const dynamic = 'force-dynamic';
 
 export default async function Dashboard() {
-  const recentTimeline = await sql`
-    SELECT t.*, u.name AS author_name,
-      (SELECT COUNT(*) FROM files f WHERE f.timeline_id = t.id)::int AS file_count
-    FROM timeline t LEFT JOIN users u ON u.id = t.author_id
-    ORDER BY t.occurred_at DESC, t.id DESC LIMIT 6`;
-
-  const openTasks = await sql`
-    SELECT t.*, u.name AS assignee_name
-    FROM tasks t LEFT JOIN users u ON u.id = t.assignee_id
-    WHERE t.status <> 'done'
-    ORDER BY CASE t.priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
-             (t.due_date IS NULL), t.due_date ASC LIMIT 6`;
-
-  const s = (
-    await sql`SELECT
+  // 여러 쿼리를 병렬로 (각 쿼리는 Neon 으로의 개별 HTTP 왕복이라 병렬화가 속도에 큰 영향)
+  const [recentTimeline, openTasks, statsRows, lastAlertRows] = await Promise.all([
+    sql`
+      SELECT t.*, u.name AS author_name,
+        (SELECT COUNT(*) FROM files f WHERE f.timeline_id = t.id)::int AS file_count
+      FROM timeline t LEFT JOIN users u ON u.id = t.author_id
+      ORDER BY t.occurred_at DESC, t.id DESC LIMIT 6`,
+    sql`
+      SELECT t.*, u.name AS assignee_name
+      FROM tasks t LEFT JOIN users u ON u.id = t.assignee_id
+      WHERE t.status <> 'done'
+      ORDER BY CASE t.priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
+               (t.due_date IS NULL), t.due_date ASC LIMIT 6`,
+    sql`SELECT
       (SELECT COUNT(*) FROM timeline)::int AS timeline,
       (SELECT COUNT(*) FROM tasks WHERE status <> 'done')::int AS tasks_open,
       (SELECT COUNT(*) FROM tasks WHERE status = 'done')::int AS tasks_done,
       (SELECT COUNT(*) FROM contacts)::int AS contacts,
       (SELECT COUNT(*) FROM files)::int AS files,
-      (SELECT COUNT(*) FROM contacts WHERE notify = true)::int AS notify_targets`
-  )[0];
-
-  const lastAlert = (
-    await sql`SELECT a.*, u.name AS sender_name FROM alerts a LEFT JOIN users u ON u.id = a.sender_id
-              ORDER BY a.id DESC LIMIT 1`
-  )[0];
+      (SELECT COUNT(*) FROM contacts WHERE notify = true)::int AS notify_targets`,
+    sql`SELECT a.*, u.name AS sender_name FROM alerts a LEFT JOIN users u ON u.id = a.sender_id
+        ORDER BY a.id DESC LIMIT 1`,
+  ]);
+  const s = statsRows[0];
+  const lastAlert = lastAlertRows[0];
 
   return (
     <>

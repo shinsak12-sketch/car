@@ -6,17 +6,12 @@ import { usePathname } from 'next/navigation';
 export default function Nav({ user, orgName }) {
   const path = usePathname() || '/';
   const is = (p) => (p === '/' ? path === '/' : path.startsWith(p));
-  const toggle = () => document.body.classList.toggle('nav-open');
-  const close = () => document.body.classList.remove('nav-open');
 
   return (
     <header className="topbar">
       <div className="topbar-inner">
-        <Link href="/" className="brand" onClick={close}>
-          🛡️ <span>{orgName}</span>
-        </Link>
-        <button className="nav-toggle" onClick={toggle} aria-label="메뉴">☰</button>
-        <nav className="mainnav" onClick={close}>
+        <Link href="/" className="brand">🛡️ <span>{orgName}</span></Link>
+        <nav className="mainnav">
           <Link href="/" className={is('/') ? 'active' : ''}>상황판</Link>
           <Link href="/timeline" className={is('/timeline') ? 'active' : ''}>상황 일지</Link>
           <Link href="/tasks" className={is('/tasks') ? 'active' : ''}>대응 업무</Link>
@@ -28,7 +23,7 @@ export default function Nav({ user, orgName }) {
           )}
         </nav>
         <div className="topbar-right">
-          <Link href="/account" className="whoami" onClick={close}>
+          <Link href="/account" className="whoami">
             {user.name}
             {user.role === 'admin' && <span className="badge-admin">관리자</span>}
           </Link>

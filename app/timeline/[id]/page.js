@@ -13,11 +13,14 @@ function isImg(m) {
 }
 
 export default async function TimelineDetail({ params }) {
-  const rows = await sql`SELECT t.*, u.name AS author_name FROM timeline t
-    LEFT JOIN users u ON u.id = t.author_id WHERE t.id = ${params.id}`;
+  // 두 쿼리 모두 URL 의 id 로 조회하므로 병렬 실행 가능
+  const [rows, files] = await Promise.all([
+    sql`SELECT t.*, u.name AS author_name FROM timeline t
+        LEFT JOIN users u ON u.id = t.author_id WHERE t.id = ${params.id}`,
+    sql`SELECT * FROM files WHERE timeline_id = ${params.id} ORDER BY id`,
+  ]);
   const item = rows[0];
   if (!item) notFound();
-  const files = await sql`SELECT * FROM files WHERE timeline_id = ${item.id} ORDER BY id`;
 
   return (
     <>
