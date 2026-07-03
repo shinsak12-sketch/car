@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { query } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { CONTACT_CATEGORIES } from '@/lib/constants';
 import { createContact, updateContact, deleteContact } from '@/actions/contacts';
 import ToggleForm from '@/components/ToggleForm';
@@ -10,24 +10,29 @@ export const dynamic = 'force-dynamic';
 export default async function ContactsPage({ searchParams }) {
   const category = CONTACT_CATEGORIES.includes(searchParams?.category) ? searchParams.category : '';
   const q = (searchParams?.q || '').trim();
+  const pat = `%${q}%`;
 
-  const where = [];
-  const params = [];
-  if (category) {
-    params.push(category);
-    where.push(`category = $${params.length}`);
+  let items;
+  if (category && q) {
+    items = await sql`SELECT * FROM contacts
+      WHERE category = ${category}
+        AND (name ILIKE ${pat} OR org ILIKE ${pat} OR phone ILIKE ${pat} OR memo ILIKE ${pat})
+      ORDER BY CASE category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
+               WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, name`;
+  } else if (category) {
+    items = await sql`SELECT * FROM contacts WHERE category = ${category}
+      ORDER BY CASE category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
+               WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, name`;
+  } else if (q) {
+    items = await sql`SELECT * FROM contacts
+      WHERE (name ILIKE ${pat} OR org ILIKE ${pat} OR phone ILIKE ${pat} OR memo ILIKE ${pat})
+      ORDER BY CASE category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
+               WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, name`;
+  } else {
+    items = await sql`SELECT * FROM contacts
+      ORDER BY CASE category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
+               WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, name`;
   }
-  if (q) {
-    params.push(`%${q}%`);
-    const i = params.length;
-    where.push(`(name ILIKE $${i} OR org ILIKE $${i} OR phone ILIKE $${i} OR memo ILIKE $${i})`);
-  }
-  const items = await query(
-    `SELECT * FROM contacts ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-     ORDER BY CASE category WHEN '경찰' THEN 0 WHEN '구청' THEN 1 WHEN '변호사' THEN 2
-              WHEN '사내' THEN 3 WHEN '상대측' THEN 4 ELSE 5 END, name`,
-    params
-  );
 
   return (
     <>

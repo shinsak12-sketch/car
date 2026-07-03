@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { query } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { TIMELINE_CATEGORIES, catClass } from '@/lib/constants';
 import { fmtDateTime } from '@/lib/format';
 
@@ -8,24 +8,37 @@ export const dynamic = 'force-dynamic';
 export default async function TimelinePage({ searchParams }) {
   const category = TIMELINE_CATEGORIES.includes(searchParams?.category) ? searchParams.category : '';
   const q = (searchParams?.q || '').trim();
+  const pat = `%${q}%`;
 
-  const where = [];
-  const params = [];
-  if (category) {
-    params.push(category);
-    where.push(`t.category = $${params.length}`);
+  let items;
+  if (category && q) {
+    items = await sql`
+      SELECT t.*, u.name AS author_name,
+        (SELECT COUNT(*) FROM files f WHERE f.timeline_id = t.id)::int AS file_count
+      FROM timeline t LEFT JOIN users u ON u.id = t.author_id
+      WHERE t.category = ${category} AND (t.title ILIKE ${pat} OR t.body ILIKE ${pat})
+      ORDER BY t.occurred_at DESC, t.id DESC`;
+  } else if (category) {
+    items = await sql`
+      SELECT t.*, u.name AS author_name,
+        (SELECT COUNT(*) FROM files f WHERE f.timeline_id = t.id)::int AS file_count
+      FROM timeline t LEFT JOIN users u ON u.id = t.author_id
+      WHERE t.category = ${category}
+      ORDER BY t.occurred_at DESC, t.id DESC`;
+  } else if (q) {
+    items = await sql`
+      SELECT t.*, u.name AS author_name,
+        (SELECT COUNT(*) FROM files f WHERE f.timeline_id = t.id)::int AS file_count
+      FROM timeline t LEFT JOIN users u ON u.id = t.author_id
+      WHERE (t.title ILIKE ${pat} OR t.body ILIKE ${pat})
+      ORDER BY t.occurred_at DESC, t.id DESC`;
+  } else {
+    items = await sql`
+      SELECT t.*, u.name AS author_name,
+        (SELECT COUNT(*) FROM files f WHERE f.timeline_id = t.id)::int AS file_count
+      FROM timeline t LEFT JOIN users u ON u.id = t.author_id
+      ORDER BY t.occurred_at DESC, t.id DESC`;
   }
-  if (q) {
-    params.push(`%${q}%`);
-    where.push(`(t.title ILIKE $${params.length} OR t.body ILIKE $${params.length})`);
-  }
-  const sqlText = `
-    SELECT t.*, u.name AS author_name,
-      (SELECT COUNT(*) FROM files f WHERE f.timeline_id = t.id)::int AS file_count
-    FROM timeline t LEFT JOIN users u ON u.id = t.author_id
-    ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-    ORDER BY t.occurred_at DESC, t.id DESC`;
-  const items = await query(sqlText, params);
 
   return (
     <>

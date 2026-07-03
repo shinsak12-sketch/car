@@ -6,9 +6,7 @@
 
 import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
+import { schemaStatements } from '../db/schema.js';
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -21,37 +19,22 @@ const username = argUser || 'admin';
 const password = argPass || '1234';
 const name = argName || '관리자';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const schema = readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8');
-
 const sql = neon(url);
-
-function splitStatements(text) {
-  return text
-    .split('\n')
-    .filter((l) => !l.trim().startsWith('--'))
-    .join('\n')
-    .split(';')
-    .map((s) => s.trim())
-    .filter(Boolean);
+function exec(text) {
+  const strings = [text];
+  strings.raw = [text];
+  return sql(strings);
 }
 
 async function run() {
   console.log('스키마 생성 중...');
-  for (const stmt of splitStatements(schema)) {
-    await sql.query(stmt);
-  }
+  for (const stmt of schemaStatements()) await exec(stmt);
   console.log('스키마 준비 완료.');
 
-  const existing = await sql.query('SELECT COUNT(*)::int AS c FROM users');
+  const existing = await sql`SELECT COUNT(*)::int AS c FROM users`;
   if (existing[0].c === 0) {
-    const hash = bcrypt.hashSync(password, 10);
-    await sql.query('INSERT INTO users (username, password, name, role) VALUES ($1,$2,$3,$4)', [
-      username,
-      hash,
-      name,
-      'admin',
-    ]);
+    await sql`INSERT INTO users (username, password, name, role)
+              VALUES (${username}, ${bcrypt.hashSync(password, 10)}, ${name}, 'admin')`;
     console.log(`기본 관리자 생성됨 →  아이디: ${username}  비밀번호: ${password}`);
     console.log('※ 로그인 후 반드시 비밀번호를 변경하세요.');
   } else {
