@@ -47,8 +47,9 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 .brand{font-size:20px;font-weight:700;letter-spacing:-0.4px;white-space:nowrap;display:flex;align-items:center;gap:2px;}
 .brand .accent{color:var(--db-green);}
 .top-right{margin-left:auto;display:flex;align-items:center;gap:var(--sp-3);}
-#viewToggle{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;background:var(--bg-grouped);font-size:14px;font-weight:600;color:var(--text-primary);white-space:nowrap;}
-#viewToggle svg{color:var(--db-green);}
+#topnav{display:flex;gap:4px;background:rgba(118,118,128,0.12);border-radius:10px;padding:2px;margin-left:var(--sp-2);}
+#topnav button{padding:6px 18px;border-radius:8px;font-size:14px;font-weight:600;color:var(--text-secondary);transition:color .2s var(--ease);}
+#topnav button.on{background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,0.12),0 1px 1px rgba(0,0,0,0.04);}
 #saveDot{width:9px;height:9px;border-radius:50%;background:var(--text-tertiary);opacity:0;transition:opacity .3s var(--ease),background .2s var(--ease);flex-shrink:0;}
 #saveDot.saving{opacity:1;background:var(--text-tertiary);}
 #saveDot.saved{opacity:1;background:var(--db-green);}
@@ -64,6 +65,7 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 .kpi-item .kpi-val{font-family:var(--font-num);font-size:20px;font-weight:700;line-height:1;}
 .kpi-item .kpi-label{font-size:11px;color:var(--text-secondary);margin-top:3px;}
 .kpi-item.alert .kpi-val{color:var(--dday-red);}
+#segwrap #kpi{margin-bottom:var(--sp-3);flex:none;}
 #app[data-mode="list"] #kpi{display:none;}
 
 /* 세그먼트 (대시보드 전용) */
@@ -102,7 +104,11 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 .chat-hint{font-size:11px;color:var(--text-tertiary);margin:8px 6px 2px;line-height:1.5;}
 
 /* ============================================================ 태스크 카드 ============================================================ */
-.card{background:var(--bg-card);border-radius:12px;box-shadow:var(--sh-card);margin-bottom:var(--sp-3);position:relative;overflow:hidden;transition:box-shadow .2s var(--ease),transform .2s var(--ease);}
+.card{background:var(--bg-card);border-radius:12px;box-shadow:var(--sh-card);margin-bottom:var(--sp-3);position:relative;overflow:hidden;transition:box-shadow .2s var(--ease),transform .2s var(--ease);break-inside:avoid;-webkit-column-break-inside:avoid;}
+/* 목록 2열 */
+#app[data-mode="list"] #content .task-list{column-count:2;column-gap:var(--sp-3);}
+.card-head[data-editopen]{cursor:pointer;}
+.board .card-head{cursor:grab;}
 .card.dragging{box-shadow:var(--sh-drag);transform:scale(1.02) rotate(1deg);opacity:0.95;}
 .card.shake{animation:shake .4s var(--ease);}
 @keyframes shake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}
@@ -325,9 +331,10 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 @media (max-width:1280px){#sidebar{width:260px;}#content,#composer{padding-left:var(--sp-4);padding-right:var(--sp-4);}#topbar,#segwrap{padding-left:var(--sp-4);padding-right:var(--sp-4);}}
 @media (max-width:768px){
   #sidebar{display:none;}
+  #topnav{display:none;}
+  #app[data-mode="list"] #content .task-list{column-count:1;}
   #topbar{padding:var(--sp-2) var(--sp-4);}
   .brand{font-size:18px;}
-  #viewToggle{padding:7px 10px;font-size:13px;}
   #segwrap{padding:var(--sp-2) var(--sp-4) 0;}
   #composer{padding:var(--sp-3) var(--sp-4) 0;}
   #content{padding:var(--sp-3) var(--sp-4) 150px;}
@@ -346,16 +353,18 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 <div id="app" data-mode="list">
   <div id="banner">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-    <span>로컬 저장소 사용 중 — 브라우저 데이터 삭제 시 유실됩니다.</span>
+    <span>로컬 저장소 사용 중 — 데이터 폴더(D:\신이삭\2020인사\업무관리프로그램)를 연결하세요.</span>
     <button class="tap" id="bannerConnect">폴더 연결하기</button>
   </div>
 
   <div id="topbar">
     <button class="brand tap" id="brandBtn" title="업무 목록으로">업무<span class="accent">관리</span></button>
-    <div id="kpi"></div>
+    <nav id="topnav">
+      <button data-nav="list" class="on">목록</button>
+      <button data-nav="dash">대시보드</button>
+    </nav>
     <div class="top-right">
       <div id="saveDot" title="저장 상태"></div>
-      <button id="viewToggle" class="tap"></button>
       <button class="icon-btn tap" id="settingsBtn" title="설정">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
@@ -363,6 +372,7 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
   </div>
 
   <div id="segwrap">
+    <div id="kpi"></div>
     <div class="segment" id="segment">
       <div class="seg-ind" id="segInd"></div>
       <button data-view="board" class="on">보드</button>
@@ -429,6 +439,8 @@ const $=(s,el=document)=>el.querySelector(s);
 const $$=(s,el=document)=>[...el.querySelectorAll(s)];
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function nanoid(n=10){const a='0123456789abcdefghijklmnopqrstuvwxyz';let s='';const arr=new Uint8Array(n);crypto.getRandomValues(arr);for(let i=0;i<n;i++)s+=a[arr[i]%a.length];return s;}
+const TARGET_PATH="D:\\신이삭\\2020인사\\업무관리프로그램";
+const TARGET_FOLDER="업무관리프로그램";
 const CATEGORIES=["법무","인력운영","인사제도","신사업","콘텐츠","기타"];
 const CAT_COLORS={"법무":"#8E7CC3","인력운영":"#6D9EC9","인사제도":"#7DB08A","신사업":"#C99A6D","콘텐츠":"#C97D9E","기타":"#9E9E9E"};
 const PALETTE=["#8E7CC3","#6D9EC9","#7DB08A","#C99A6D","#C97D9E","#9E9E9E","#C9A06D","#6D9E9E"];
@@ -454,7 +466,7 @@ function ddayInfo(due){
 
 let state={tasks:[],projects:[],settings:{}};
 let ui={
-  view:"list",
+  view:"list",dashSub:"board",
   filters:{project:new Set(),category:new Set(),priority:new Set(),tag:new Set()},
   search:"",kpiFilter:null,
   collapsed:new Set(),      // 접힌 카드 id (디폴트는 펴짐)
@@ -472,15 +484,23 @@ async function idbGet(k){const db=await idbOpen();return new Promise((res,rej)=>
 async function verifyPermission(h){const o={mode:"readwrite"};if((await h.queryPermission(o))==="granted")return true;if((await h.requestPermission(o))==="granted")return true;return false;}
 async function fsWriteJSON(name,obj){const fh=await dirHandle.getFileHandle(name,{create:true});const w=await fh.createWritable();await w.write(JSON.stringify(obj,null,2));await w.close();}
 async function fsReadJSON(name){try{const fh=await dirHandle.getFileHandle(name);const f=await fh.getFile();const t=await f.text();return t?JSON.parse(t):null;}catch(e){return null;}}
+function promptConnectFolder(){
+  openConfirm("데이터 폴더 연결",`다음 폴더를 선택해 주세요:\n\n${TARGET_PATH}\n\n최초 1회만 지정하면 다음 실행부터 자동으로 연결됩니다.`,()=>{connectFolder();},false);
+}
 async function connectFolder(){
-  if(!window.showDirectoryPicker){toast("이 브라우저는 폴더 연결을 지원하지 않습니다");return false;}
+  if(!window.showDirectoryPicker){toast("이 브라우저는 폴더 연결을 지원하지 않습니다 (Chrome/Edge 권장)");return false;}
   try{
-    const handle=await window.showDirectoryPicker({mode:"readwrite"});
+    let opts={mode:"readwrite"};
+    try{opts.startIn="documents";}catch(e){}
+    const handle=await window.showDirectoryPicker(opts);
     if(!await verifyPermission(handle))return false;
     dirHandle=handle;await idbSet("dir",handle);storageMode="fs";state.settings.folderName=handle.name;
     const existing=await fsReadJSON("tasks.json");
     if(existing===null&&state.tasks.length){await saveAll(true);}else{await loadFromFS();}
-    $("#banner").classList.remove("show");toast("폴더 연결됨: "+handle.name);renderAll();return true;
+    $("#banner").classList.remove("show");
+    if(handle.name!==TARGET_FOLDER)toast(`연결됨: ${handle.name} (권장 폴더명: ${TARGET_FOLDER})`);
+    else toast("폴더 연결됨: "+handle.name);
+    renderAll();return true;
   }catch(e){if(e.name!=="AbortError")console.warn(e);return false;}
 }
 async function loadFromFS(){const p=await fsReadJSON("projects.json");const t=await fsReadJSON("tasks.json");const s=await fsReadJSON("settings.json");if(p)state.projects=p;if(t)state.tasks=t;if(s)state.settings={...state.settings,...s};}
@@ -669,7 +689,7 @@ function cardHTML(tk){
 
   return `<div class="card ${done?'done':''} ${tk.status==='hold'?'hold':''} ${expanded?'expanded':''}" data-id="${tk.id}" draggable="true">
     <div class="card-color" style="background:${color}"></div>
-    <div class="card-head">
+    <div class="card-head" data-editopen="${tk.id}">
       <div class="card-main">
         <div class="card-title-row"><span class="card-title-wrap"><span class="card-title">${esc(tk.title)}</span></span></div>
         <div class="card-meta">${meta}</div>
@@ -826,6 +846,7 @@ function bindCardEvents(){
   $$("[data-subdel]").forEach(b=>b.onclick=e=>{e.stopPropagation();deleteSub(b.dataset.subdel);});
   $$("[data-subadd]").forEach(inp=>{inp.onclick=e=>e.stopPropagation();inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();const v=inp.value.trim();if(v)addSub(inp.dataset.subadd,v);else inp.blur();}};});
   bindSubDnD();
+  if(ui.view!=="board")$$(".card-head[data-editopen]").forEach(el=>el.onclick=e=>{if(e.target.closest("button,input,a"))return;openTaskEdit(el.dataset.editopen);});
   const dt=$("#doneToggle");if(dt)dt.onclick=()=>{ui.showDone=!ui.showDone;renderContent();};
   $$("[data-cat]").forEach(el=>el.onclick=()=>{const c=el.dataset.cat;if(ui.collapsedCats.has(c))ui.collapsedCats.delete(c);else ui.collapsedCats.add(c);renderContent();});
   $$("[data-editproj]").forEach(b=>b.onclick=e=>{e.stopPropagation();openProjectModal(b.dataset.editproj);});
@@ -1006,19 +1027,19 @@ function deleteProject(id){
 }
 function closeModal(){$("#scrim").classList.remove("show");$("#scrim").onclick=null;$$("#sheetRoot .modal,#sheetRoot .sheet").forEach(el=>el.classList.remove("show"));setTimeout(()=>{$("#sheetRoot").innerHTML="";},300);}
 function openConfirm(title,msg,onYes,danger=true){
-  $("#sheetRoot").innerHTML=`<div class="modal" id="confirmModal"><div class="modal-head"><div class="m-title">${esc(title)}</div></div><div class="modal-body"><p style="color:var(--text-secondary);font-size:15px;line-height:1.5;padding-bottom:8px;">${esc(msg)}</p></div><div class="modal-foot"><button class="btn-cancel tap" id="cfCancel">취소</button><button class="${danger?'btn-danger':'btn-primary'} tap" id="cfYes">확인</button></div></div>`;
+  $("#sheetRoot").innerHTML=`<div class="modal" id="confirmModal"><div class="modal-head"><div class="m-title">${esc(title)}</div></div><div class="modal-body"><p style="color:var(--text-secondary);font-size:15px;line-height:1.5;padding-bottom:8px;white-space:pre-line;word-break:break-all;">${esc(msg)}</p></div><div class="modal-foot"><button class="btn-cancel tap" id="cfCancel">취소</button><button class="${danger?'btn-danger':'btn-primary'} tap" id="cfYes">확인</button></div></div>`;
   requestAnimationFrame(()=>{$("#confirmModal").classList.add("show");$("#scrim").classList.add("show");});
   $("#scrim").onclick=closeModal;$("#cfCancel").onclick=closeModal;$("#cfYes").onclick=()=>{closeModal();onYes();};
 }
 
 /* ===== 설정 ===== */
 function openSettings(){
-  const modeLabel=storageMode==="fs"?`폴더 연결됨 (${esc(state.settings.folderName||"")})`:"로컬 저장소 사용 중";
+  const modeLabel=storageMode==="fs"?`폴더 연결됨 (${esc(state.settings.folderName||"")})`:`로컬 저장소 · 권장 폴더 D:\\신이삭\\2020인사\\업무관리프로그램`;
   $("#sheetRoot").innerHTML=`<div class="sheet" id="settingsSheet"><div class="sheet-handle"><div class="bar"></div></div><div class="sheet-head"><div class="sh-title">설정</div><button class="sh-close tap" id="stClose">${icoX()}</button></div><div class="sheet-body"><div class="group-title">저장</div><div class="group"><div class="settings-row"><div class="sr-label">저장 방식<div class="sr-sub">${modeLabel}</div></div><button class="sr-act tap" id="stConnect">${storageMode==="fs"?"폴더 변경":"폴더 연결"}</button></div><div class="settings-row"><div class="sr-label">기본 진입 화면<div class="sr-sub">앱 실행 시 처음 보이는 화면</div></div><select id="stDefView" style="padding:8px;border-radius:8px;border:1px solid var(--separator-strong);"><option value="list">목록</option><option value="board">보드</option><option value="project">프로젝트</option><option value="calendar">캘린더</option></select></div></div><div class="group-title">데이터</div><div class="group"><div class="settings-row"><div class="sr-label">샘플 데이터<div class="sr-sub">시드로 생성된 예시 업무·프로젝트</div></div><button class="sr-danger tap" id="stClearSample">일괄 삭제</button></div><div class="settings-row"><div class="sr-label">전체 초기화<div class="sr-sub">모든 업무·프로젝트 삭제</div></div><button class="sr-danger tap" id="stReset">초기화</button></div></div><div class="group-title">정보</div><div class="group"><div class="settings-row"><div class="sr-label">업무 ${state.tasks.length}건 · 프로젝트 ${state.projects.length}개<div class="sr-sub">기준 연도 2026</div></div></div></div></div></div>`;
   requestAnimationFrame(()=>{$("#settingsSheet").classList.add("show");$("#scrim").classList.add("show");});
   $("#stDefView").value=state.settings.defaultView||"list";
   $("#scrim").onclick=closeModal;$("#stClose").onclick=closeModal;
-  $("#stConnect").onclick=async()=>{closeModal();await connectFolder();};
+  $("#stConnect").onclick=()=>{closeModal();setTimeout(promptConnectFolder,320);};
   $("#stDefView").onchange=e=>{state.settings.defaultView=e.target.value;scheduleSave();};
   $("#stClearSample").onclick=()=>{closeModal();clearSampleData();};
   $("#stReset").onclick=()=>{closeModal();openConfirm("전체 초기화","모든 업무와 프로젝트가 삭제됩니다. 되돌릴 수 없습니다.",()=>{state.tasks=[];state.projects=[];state.settings.sampleDataLoaded=false;scheduleSave();renderAll();toast("초기화됨");});};
@@ -1041,25 +1062,80 @@ function attachSheetDrag(sheet){
   const end=()=>{if(!active)return;active=false;sheet.style.transition="";if(curY>120)closeModal();else sheet.style.transform="";curY=0;};
   handle.addEventListener("pointerup",end);handle.addEventListener("pointercancel",end);
 }
+/* ===== 업무 수정 시트 ===== */
+function renderRepeatDay(type,day){
+  if(type==="weekly")return `<select id="tsRepeatDay"><option value="">요일 선택</option>${WEEKDAYS.map((w,i)=>`<option value="${i}" ${i===day?'selected':''}>매주 ${w}요일</option>`).join("")}</select>`;
+  if(type==="monthly"){let opts="";for(let d=1;d<=31;d++)opts+=`<option value="${d}" ${d===day?'selected':''}>매월 ${d}일</option>`;return `<select id="tsRepeatDay">${opts}</select>`;}
+  return `<span></span>`;
+}
+function openTaskEdit(id){
+  const tk=findTask(id);if(!tk)return;
+  const tmp={priority:tk.priority,repeatType:tk.repeat?tk.repeat.type:"none",repeatDay:tk.repeat?tk.repeat.day:(new Date().getDay())};
+  const projOpts=`<option value="">미분류</option>`+state.projects.map(p=>`<option value="${p.id}" ${p.id===tk.projectId?'selected':''}>${esc(p.name)}</option>`).join("");
+  $("#sheetRoot").innerHTML=`<div class="sheet" id="taskSheet"><div class="sheet-handle"><div class="bar"></div></div>
+    <div class="sheet-head"><div class="sh-title">업무 수정</div><button class="sh-close tap" id="tsClose">${icoX()}</button></div>
+    <div class="sheet-body">
+      <div class="field"><label>제목</label><input type="text" id="tsTitle" value="${esc(tk.title)}"></div>
+      <div class="field"><label>프로젝트 (구분)</label><select id="tsProj">${projOpts}</select></div>
+      <div class="field"><label>우선순위</label><div class="seg-inline" id="tsPrio">${[1,2,3,4].map(p=>`<button data-p="${p}" class="tap ${tk.priority===p?'on':''}">!${p} ${PRIO_LABEL[p]}</button>`).join("")}</div></div>
+      <div class="field"><label>마감일 (D-day)</label><input type="date" id="tsDue" value="${tk.dueDate||''}"></div>
+      <div class="field"><label>태그 (쉼표로 구분)</label><input type="text" id="tsTags" value="${esc(tk.tags.join(', '))}" placeholder="예) 모회사보고, 긴급"></div>
+      <div class="field"><label>메모</label><textarea id="tsMemo" placeholder="메모">${esc(tk.memo)}</textarea></div>
+      <div class="field"><label>반복</label><div class="seg-inline" id="tsRepeat"><button data-r="none" class="tap ${tmp.repeatType==='none'?'on':''}">없음</button><button data-r="weekly" class="tap ${tmp.repeatType==='weekly'?'on':''}">매주</button><button data-r="monthly" class="tap ${tmp.repeatType==='monthly'?'on':''}">매월</button></div><div id="tsRepeatDayWrap" style="margin-top:8px;">${renderRepeatDay(tmp.repeatType,tmp.repeatDay)}</div></div>
+      <div class="modal-foot" style="padding:8px 0 20px;"><button class="btn-danger tap" id="tsDelete" style="flex:0 0 auto;padding:12px 20px;">삭제</button><button class="btn-primary tap" id="tsSave">저장</button></div>
+    </div></div>`;
+  requestAnimationFrame(()=>{$("#taskSheet").classList.add("show");$("#scrim").classList.add("show");});
+  $("#tsTitle").focus();
+  $$("#tsPrio button").forEach(b=>b.onclick=()=>{tmp.priority=+b.dataset.p;$$("#tsPrio button").forEach(x=>x.classList.toggle("on",x===b));});
+  $$("#tsRepeat button").forEach(b=>b.onclick=()=>{tmp.repeatType=b.dataset.r;$$("#tsRepeat button").forEach(x=>x.classList.toggle("on",x===b));const wrap=$("#tsRepeatDayWrap");wrap.innerHTML=renderRepeatDay(tmp.repeatType,tmp.repeatType==='weekly'?(new Date().getDay()):1);});
+  $("#scrim").onclick=closeModal;$("#tsClose").onclick=closeModal;
+  $("#tsDelete").onclick=()=>{closeModal();deleteTask(id);};
+  $("#tsSave").onclick=()=>{
+    const title=$("#tsTitle").value.trim();if(!title){toast("제목을 입력하세요");return;}
+    tk.title=title;
+    tk.projectId=$("#tsProj").value||null;
+    tk.priority=tmp.priority;
+    tk.dueDate=$("#tsDue").value||null;
+    tk.tags=$("#tsTags").value.split(",").map(s=>s.trim()).filter(Boolean);
+    tk.memo=$("#tsMemo").value.trim();
+    if(tmp.repeatType==="none")tk.repeat=null;
+    else{const dv=$("#tsRepeatDay")?$("#tsRepeatDay").value:"";tk.repeat={type:tmp.repeatType,day:dv===""?(tmp.repeatType==='weekly'?new Date().getDay():1):+dv};}
+    scheduleSave();closeModal();renderAll();toast("수정됨: "+tk.title);
+  };
+  attachSheetDrag($("#taskSheet"));
+}
+function addTaskOnDate(dateStr,text){
+  const p=parseQuick(text);if(!p.title){toast("제목을 입력하세요");return false;}
+  let projectId=p.projectId;
+  if(p.projectMissing){const np={id:"p_"+nanoid(),name:p.projectMissing,category:"기타",color:CAT_COLORS["기타"],status:"active",createdAt:new Date().toISOString()};state.projects.push(np);projectId=np.id;}
+  const maxOrder=Math.max(0,...state.tasks.map(t=>t.order));
+  state.tasks.push({id:"t_"+nanoid(),projectId:projectId||null,title:p.title,memo:"",status:"todo",priority:p.priority||3,dueDate:p.dueDate||dateStr,tags:p.tags,order:maxOrder+1,createdAt:new Date().toISOString(),completedAt:null,repeat:null,subtasks:p.subs.map((s,i)=>({id:"s_"+nanoid(),title:s,done:false,completedAt:null,order:i}))});
+  scheduleSave();return true;
+}
 function openDaySheet(dateStr){
   const tasks=visibleTasks().filter(t=>t.dueDate===dateStr).sort(sortByPrio);
   const d=parseYmd(dateStr);
-  $("#sheetRoot").innerHTML=`<div class="sheet" id="daySheet"><div class="sheet-handle"><div class="bar"></div></div><div class="sheet-head"><div class="sh-title num">${d.getMonth()+1}. ${d.getDate()} (${WEEKDAYS[d.getDay()]})</div><button class="sh-close tap" id="dsClose">${icoX()}</button></div><div class="sheet-body">${tasks.length?`<div class="task-list">${tasks.map(cardHTML).join("")}</div>`:`<div class="empty" style="padding:40px 20px;"><div class="em-sub">이 날짜에 마감 업무가 없습니다</div></div>`}</div></div>`;
+  $("#sheetRoot").innerHTML=`<div class="sheet" id="daySheet"><div class="sheet-handle"><div class="bar"></div></div><div class="sheet-head"><div class="sh-title num">${d.getMonth()+1}. ${d.getDate()} (${WEEKDAYS[d.getDay()]})</div><button class="sh-close tap" id="dsClose">${icoX()}</button></div><div class="sheet-body">
+    <div class="field" style="margin-bottom:16px;"><label>이 날짜에 일정 추가</label><div style="display:flex;gap:8px;"><input type="text" id="dsAdd" placeholder="업무 제목  예) 팀 회의 !2 @법무" style="flex:1;padding:11px 12px;border-radius:10px;border:1px solid var(--separator-strong);outline:none;" autocomplete="off"><button class="tap" id="dsAddBtn" style="padding:0 18px;border-radius:10px;color:#fff;background:var(--db-green);font-weight:600;white-space:nowrap;">추가</button></div></div>
+    ${tasks.length?`<div class="task-list">${tasks.map(cardHTML).join("")}</div>`:`<div class="empty" style="padding:32px 20px;"><div class="em-sub">이 날짜에 등록된 일정이 없습니다</div></div>`}</div></div>`;
   requestAnimationFrame(()=>{$("#daySheet").classList.add("show");$("#scrim").classList.add("show");});
   $("#scrim").onclick=closeModal;$("#dsClose").onclick=closeModal;attachSheetDrag($("#daySheet"));bindCardEvents();
+  const addInp=$("#dsAdd");
+  const doAdd=()=>{const v=addInp.value.trim();if(!v)return;if(addTaskOnDate(dateStr,v)){renderContent();openDaySheet(dateStr);toast("일정 추가됨");}};
+  addInp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();doAdd();}};
+  $("#dsAddBtn").onclick=doAdd;
 }
 
 /* ===== 뷰 전환 ===== */
 function setView(v){
   ui.view=v;
   if(v!=="board")ui._showOld=false;
+  if(v!=="list")ui.dashSub=v;
   const isDash=v!=="list";
   $("#app").dataset.mode=isDash?"dashboard":"list";
+  $$("#topnav button").forEach(b=>{const isListBtn=b.dataset.nav==="list";b.classList.toggle("on",isListBtn?v==="list":isDash);});
   $$("#segment button").forEach(b=>b.classList.toggle("on",b.dataset.view===v));
   $$("#tabbar button").forEach(b=>b.classList.toggle("on",b.dataset.view===v));
-  const tg=$("#viewToggle");
-  if(isDash)tg.innerHTML=`${icoList()}<span>목록</span>`;
-  else tg.innerHTML=`${icoGrid()}<span>대시보드</span>`;
   moveSegInd();renderContent();
   if(ui.view==="list")requestAnimationFrame(autosizeInput);
 }
@@ -1083,7 +1159,7 @@ function bindGlobal(){
   $$("#segment button").forEach(b=>b.onclick=()=>setView(b.dataset.view));
   $$("#tabbar button").forEach(b=>b.onclick=()=>setView(b.dataset.view));
   $("#brandBtn").onclick=()=>setView("list");
-  $("#viewToggle").onclick=()=>setView(ui.view==="list"?"board":"list");
+  $$("#topnav button").forEach(b=>b.onclick=()=>setView(b.dataset.nav==="list"?"list":(ui.dashSub||"board")));
   const qi=$("#quickInput");
   qi.addEventListener("input",()=>{renderQuickPreview();autosizeInput();});
   qi.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();submitQuick();}});
@@ -1092,7 +1168,7 @@ function bindGlobal(){
   si.addEventListener("input",()=>{ui.search=si.value.trim();$("#searchBox").classList.toggle("has-val",!!si.value);renderContent();});
   $("#searchClear").onclick=()=>{si.value="";ui.search="";$("#searchBox").classList.remove("has-val");renderContent();};
   $("#settingsBtn").onclick=openSettings;
-  $("#bannerConnect").onclick=connectFolder;
+  $("#bannerConnect").onclick=promptConnectFolder;
   window.addEventListener("resize",moveSegInd);
 }
 
@@ -1106,6 +1182,8 @@ async function init(){
   }catch(e){console.warn(e);}
   if(!restored){loadFromLS();storageMode="local";$("#banner").classList.add("show");}
   if(!state.settings.sampleDataLoaded&&state.tasks.length===0&&state.projects.length===0){const seed=buildSeed();state.projects=seed.projects;state.tasks=seed.tasks;state.settings.sampleDataLoaded=true;await saveAll();}
+  const validViews=["list","board","project","calendar"];
+  if(!validViews.includes(state.settings.defaultView))state.settings.defaultView="list";
   ui.view=state.settings.defaultView||"list";
   bindGlobal();setView(ui.view);renderAll();moveSegInd();requestAnimationFrame(moveSegInd);runBackup();
   if(ui.view==="list"){const qi=$("#quickInput");if(qi&&state.tasks.length===0)qi.focus();}
