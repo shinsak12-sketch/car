@@ -87,7 +87,8 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 .sec-head.done-head{cursor:pointer;}
 .done-chev{margin-left:auto;color:var(--text-tertiary);display:flex;transition:transform .2s var(--ease);}
 .done-chev.collapsed{transform:rotate(-90deg);}
-.task-list{column-count:var(--list-cols,4);column-gap:var(--sp-3);}
+/* 열 수는 최대값, 각 열 최소 240px 보장 → 화면 좁아지면 자동으로 열이 줄어듦 */
+.task-list{column-width:240px;column-count:var(--list-cols,4);column-gap:var(--sp-3);}
 .card-notes{display:flex;flex-wrap:wrap;gap:6px;padding:2px 15px 10px;}
 
 /* 상태 세그먼트 */
@@ -171,7 +172,12 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 .sub-title-wrap::after{content:"";position:absolute;left:0;top:50%;height:1.5px;width:100%;background:var(--text-primary);transform:scaleX(0);transform-origin:left center;transition:transform .3s var(--ease);}
 .sub-item.done .sub-title-wrap::after{transform:scaleX(1);}
 .sub-drag{cursor:grab;color:var(--text-tertiary);display:flex;padding:2px;touch-action:none;}
-.sub-item.sub-dragging{opacity:0.5;}
+.sub-branch.sub-dragging{opacity:0.5;}
+.sub-children{margin-left:11px;padding-left:11px;border-left:1.5px solid var(--separator);}
+.sub-addchild{color:var(--db-green);padding:2px;display:flex;opacity:0;transition:opacity .15s;}
+.sub-item:hover .sub-addchild{opacity:0.75;}
+.sub-addchild:hover{opacity:1;}
+.sub-addchild svg{width:15px;height:15px;}
 .sub-del{color:var(--text-tertiary);padding:2px;display:flex;opacity:0;transition:opacity .15s;}
 .sub-item:hover .sub-del{opacity:1;}
 .sub-add{display:flex;align-items:center;gap:10px;padding:8px 2px 2px;}
@@ -468,6 +474,7 @@ function normalize(){
     if(t.status==="todo"||t.status==="doing")t.status="active";
     if(!["active","hold","done"].includes(t.status))t.status="active";
     if(!Array.isArray(t.subtasks))t.subtasks=[];
+    ensureSubTree(t.subtasks);
     if(!t.createdAt)t.createdAt=new Date().toISOString();
   });
   state.notes.forEach(n=>{if(!Array.isArray(n.taskIds))n.taskIds=[];});
@@ -497,7 +504,7 @@ function buildSeed(){
   const now=new Date();
   const iso=d=>{const x=new Date(now);x.setDate(x.getDate()-d);return x.toISOString();};
   const t=todayStr();let ord=0;
-  const mk=(title,o={})=>({id:"t_"+nanoid(),title,status:o.status||"active",dueDate:o.due??null,order:ord++,createdAt:iso(o.age||0),completedAt:o.status==="done"?iso(o.age||0):null,subtasks:(o.subs||[]).map((s,i)=>({id:"s_"+nanoid(),title:s,done:false,completedAt:null,order:i}))});
+  const mk=(title,o={})=>({id:"t_"+nanoid(),title,status:o.status||"active",dueDate:o.due??null,order:ord++,createdAt:iso(o.age||0),completedAt:o.status==="done"?iso(o.age||0):null,subtasks:(o.subs||[]).map((s,i)=>({id:"s_"+nanoid(),title:s,done:false,completedAt:null,order:i,subtasks:[]}))});
   const tasks=[
     mk("준비서면 초안 제출",{due:addDays(t,-2),age:120,subs:["사실관계 정리","법리 검토","초안 작성"]}),
     mk("지노위 답변서 최종 검토",{due:t,age:14,subs:["증거자료 확인","답변서 교정"]}),
@@ -557,7 +564,7 @@ function submitQuick(){
   const p=parseQuick(val);
   if(!p.title){toast("제목을 입력하세요");return;}
   const maxOrder=Math.max(0,...state.tasks.map(t=>t.order));
-  const task={id:"t_"+nanoid(),title:p.title,status:"active",dueDate:p.dueDate||null,order:maxOrder+1,createdAt:new Date().toISOString(),completedAt:null,subtasks:p.subs.map((s,i)=>({id:"s_"+nanoid(),title:s,done:false,completedAt:null,order:i}))};
+  const task={id:"t_"+nanoid(),title:p.title,status:"active",dueDate:p.dueDate||null,order:maxOrder+1,createdAt:new Date().toISOString(),completedAt:null,subtasks:p.subs.map((s,i)=>({id:"s_"+nanoid(),title:s,done:false,completedAt:null,order:i,subtasks:[]}))};
   state.tasks.push(task);
   inp.value="";inp.style.height="auto";renderQuickPreview();
   if(ui.view!=="list")setView("list");
@@ -568,8 +575,17 @@ function submitQuick(){
 function findTask(id){return state.tasks.find(t=>t.id===id);}
 function findNote(id){return state.notes.find(n=>n.id===id);}
 function notesOf(taskId){return state.notes.filter(n=>n.taskIds.includes(taskId));}
-function progressOf(tk){const total=tk.subtasks.length,done=tk.subtasks.filter(s=>s.done).length;return{total,done,pct:total?Math.round(done/total*100):0};}
+function flattenSubs(nodes){let out=[];for(const n of (nodes||[])){out.push(n);if(n.subtasks&&n.subtasks.length)out=out.concat(flattenSubs(n.subtasks));}return out;}
+function progressOf(tk){const all=flattenSubs(tk.subtasks);const total=all.length,done=all.filter(s=>s.done).length;return{total,done,pct:total?Math.round(done/total*100):0};}
 function sortSubs(subs){return [...subs].sort((a,b)=>{if(a.done!==b.done)return a.done?1:-1;return a.order-b.order;});}
+function ensureSubTree(nodes){(nodes||[]).forEach(n=>{if(!Array.isArray(n.subtasks))n.subtasks=[];ensureSubTree(n.subtasks);});}
+// 하위 노드 검색 (트리 전역)
+function searchSubArr(arr,id,parent){for(const n of arr){if(n.id===id)return{node:n,arr,parent};if(n.subtasks&&n.subtasks.length){const r=searchSubArr(n.subtasks,id,n);if(r)return r;}}return null;}
+function locateSub(subId){for(const tk of state.tasks){const r=searchSubArr(tk.subtasks,subId,null);if(r)return{tk,...r};}return null;}
+// containerId가 태스크면 최상위 하위목록, 하위업무면 그 자식목록 반환
+function childArrayOf(containerId){const tk=findTask(containerId);if(tk)return tk.subtasks;const loc=locateSub(containerId);return loc?loc.node.subtasks:null;}
+function taskOfContainer(containerId){const tk=findTask(containerId);if(tk)return tk;const loc=locateSub(containerId);return loc?loc.tk:null;}
+function setDoneCascade(node,val){node.done=val;node.completedAt=val?new Date().toISOString():null;(node.subtasks||[]).forEach(c=>setDoneCascade(c,val));}
 function matchesSearch(tk){
   if(!ui.search)return true;
   const q=ui.search.toLowerCase();
@@ -631,14 +647,21 @@ function cardHTML(tk){
 }
 function icoNoteMini(){return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;}
 function subsHTML(tk){
-  const sorted=sortSubs(tk.subtasks);
-  let rows=sorted.map(s=>`<div class="sub-item ${s.done?'done':''}" data-sub="${s.id}">
-    <span class="sub-drag" data-subdrag="${s.id}" title="순서 변경">${icoDrag()}</span>
-    <button class="sub-check ${s.done?'on':''}" data-subcheck="${s.id}" aria-label="하위 완료">${icoCheck()}</button>
-    <div class="sub-title-wrap"><input class="sub-title" value="${esc(s.title)}" data-subtitle="${s.id}"></div>
-    <button class="sub-del" data-subdel="${s.id}" title="삭제">${icoTrash()}</button></div>`).join("");
-  rows+=`<div class="sub-add"><span class="plus">${icoPlus()}</span><input placeholder="하위 업무 추가 (엔터)" data-subadd="${tk.id}" autocomplete="off"></div>`;
-  return `<div class="sub-list">${rows}</div>`;
+  const branches=sortSubs(tk.subtasks).map(s=>branchHTML(s)).join("");
+  return `<div class="sub-list"><div class="sub-branches" data-parent="${tk.id}">${branches}</div><div class="sub-add"><span class="plus">${icoPlus()}</span><input placeholder="하위 업무 추가 (엔터)" data-subadd="${tk.id}" autocomplete="off"></div></div>`;
+}
+function branchHTML(s){
+  const kids=sortSubs(s.subtasks||[]).map(k=>branchHTML(k)).join("");
+  return `<div class="sub-branch" data-sub="${s.id}">
+    <div class="sub-item ${s.done?'done':''}">
+      <span class="sub-drag" data-subdrag="${s.id}" title="순서 변경">${icoDrag()}</span>
+      <button class="sub-check ${s.done?'on':''}" data-subcheck="${s.id}" aria-label="완료">${icoCheck()}</button>
+      <div class="sub-title-wrap"><input class="sub-title" value="${esc(s.title)}" data-subtitle="${s.id}"></div>
+      <button class="sub-addchild" data-subaddchild="${s.id}" title="하위 추가">${icoPlus()}</button>
+      <button class="sub-del" data-subdel="${s.id}" title="삭제">${icoTrash()}</button>
+    </div>
+    <div class="sub-children" data-parent="${s.id}">${kids}</div>
+  </div>`;
 }
 
 /* ===== 렌더 ===== */
@@ -813,7 +836,8 @@ function bindCardEvents(){
   $$("[data-titleedit]").forEach(el=>el.ondblclick=e=>{e.stopPropagation();startTitleEdit(el);});
   $$("[data-noteview]").forEach(b=>b.onclick=e=>{e.stopPropagation();openNoteView(b.dataset.noteview);});
   $$("[data-subcheck]").forEach(b=>b.onclick=e=>{e.stopPropagation();toggleSubDone(b.dataset.subcheck);});
-  $$("[data-subtitle]").forEach(inp=>{inp.onclick=e=>e.stopPropagation();inp.onchange=()=>editSubTitle(inp.dataset.subtitle,inp.value);inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();inp.blur();}};});
+  $$("[data-subtitle]").forEach(inp=>{inp.onclick=e=>e.stopPropagation();inp.onchange=()=>editSubTitle(inp.dataset.subtitle,inp.value);inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();const v=inp.value.trim();if(!v){inp.blur();return;}editSubTitle(inp.dataset.subtitle,v);addSibling(inp.dataset.subtitle);}};});
+  $$("[data-subaddchild]").forEach(b=>b.onclick=e=>{e.stopPropagation();addSub(b.dataset.subaddchild,"",true);});
   $$("[data-subdel]").forEach(b=>b.onclick=e=>{e.stopPropagation();deleteSub(b.dataset.subdel);});
   $$("[data-subadd]").forEach(inp=>{inp.onclick=e=>e.stopPropagation();inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();const v=inp.value.trim();if(v)addSub(inp.dataset.subadd,v);else inp.blur();}};});
   bindSubDnD();
@@ -858,13 +882,12 @@ function deleteTask(id){
   toast("삭제됨: "+removed.title,()=>{state.tasks.splice(Math.min(idx,state.tasks.length),0,removed);affected.forEach(n=>{if(!n.taskIds.includes(id))n.taskIds.push(id);});scheduleSave();renderAll();});
 }
 function toggleSubDone(subId){
-  let tk,sub;for(const t of state.tasks){const s=t.subtasks.find(x=>x.id===subId);if(s){tk=t;sub=s;break;}}
-  if(!sub)return;
-  sub.done=!sub.done;sub.completedAt=sub.done?new Date().toISOString():null;
-  scheduleSave();refreshCardSubs(tk);
-  const prog=progressOf(tk);
-  if(prog.total>0&&prog.done===prog.total&&tk.status!=="done")promptParentComplete(tk);
-  else removeParentPrompt(tk.id);
+  const loc=locateSub(subId);if(!loc)return;
+  setDoneCascade(loc.node,!loc.node.done);
+  scheduleSave();refreshCardSubs(loc.tk);
+  const prog=progressOf(loc.tk);
+  if(prog.total>0&&prog.done===prog.total&&loc.tk.status!=="done")promptParentComplete(loc.tk);
+  else removeParentPrompt(loc.tk.id);
 }
 function refreshCardSubs(tk){
   const card=$(`.card[data-id="${tk.id}"]`);if(!card)return;
@@ -885,24 +908,47 @@ function promptParentComplete(tk){
   div.querySelector(".no").onclick=e=>{e.stopPropagation();div.remove();};
 }
 function removeParentPrompt(id){const card=$(`.card[data-id="${id}"]`);if(card){const el=card.querySelector(".confirm-parent");if(el)el.remove();}}
-function addSub(taskId,title){
-  const tk=findTask(taskId);if(!tk)return;
-  const maxOrder=Math.max(0,...tk.subtasks.map(s=>s.order));
-  tk.subtasks.push({id:"s_"+nanoid(),title,done:false,completedAt:null,order:maxOrder+1});
-  if(!ui.expanded.has(taskId))ui.expanded.add(taskId);
+// containerId: 태스크 id(최상위) 또는 하위업무 id(그 자식). title 없으면 빈 항목 생성 후 포커스
+function addSub(containerId,title,focusNew){
+  const arr=childArrayOf(containerId);if(!arr)return;
+  const tk=taskOfContainer(containerId);if(!tk)return;
+  const maxOrder=Math.max(0,...arr.map(s=>s.order));
+  const node={id:"s_"+nanoid(),title:title||"",done:false,completedAt:null,order:maxOrder+1,subtasks:[]};
+  arr.push(node);
+  if(!ui.expanded.has(tk.id))ui.expanded.add(tk.id);
   scheduleSave();refreshCardSubs(tk);
-  const card=$(`.card[data-id="${taskId}"]`);if(card){card.classList.add("expanded");const inp=card.querySelector("[data-subadd]");if(inp)inp.focus();}
+  const card=$(`.card[data-id="${tk.id}"]`);if(card){card.classList.add("expanded");
+    if(focusNew){const ni=card.querySelector(`[data-subtitle="${node.id}"]`);if(ni){ni.focus();}}
+    else{const inp=card.querySelector(`[data-subadd="${containerId}"]`);if(inp)inp.focus();}
+  }
+  return node;
 }
-function editSubTitle(subId,val){for(const t of state.tasks){const s=t.subtasks.find(x=>x.id===subId);if(s){if(!val.trim()){deleteSub(subId);return;}s.title=val.trim();scheduleSave();return;}}}
-function deleteSub(subId){for(const t of state.tasks){const idx=t.subtasks.findIndex(x=>x.id===subId);if(idx>=0){t.subtasks.splice(idx,1);scheduleSave();refreshCardSubs(t);return;}}}
+function addSibling(subId){
+  const loc=locateSub(subId);if(!loc)return;
+  const idx=loc.arr.indexOf(loc.node);
+  const node={id:"s_"+nanoid(),title:"",done:false,completedAt:null,order:loc.node.order+0.5,subtasks:[]};
+  loc.arr.splice(idx+1,0,node);
+  loc.arr.forEach((n,i)=>n.order=i);
+  scheduleSave();refreshCardSubs(loc.tk);
+  const card=$(`.card[data-id="${loc.tk.id}"]`);if(card){const ni=card.querySelector(`[data-subtitle="${node.id}"]`);if(ni)ni.focus();}
+}
+function editSubTitle(subId,val){const loc=locateSub(subId);if(!loc)return;if(!val.trim()){deleteSub(subId);return;}loc.node.title=val.trim();scheduleSave();}
+function deleteSub(subId){const loc=locateSub(subId);if(!loc)return;const idx=loc.arr.indexOf(loc.node);if(idx>=0){loc.arr.splice(idx,1);scheduleSave();refreshCardSubs(loc.tk);}}
 function bindSubDnD(){
-  let dragTask=null;
-  $$(".sub-item").forEach(item=>{
-    const handle=item.querySelector("[data-subdrag]");if(!handle)return;
+  $$(".sub-branch").forEach(branch=>{
+    const handle=branch.querySelector(":scope > .sub-item > [data-subdrag]");if(!handle)return;
     handle.onpointerdown=e=>{
-      e.preventDefault();const list=item.parentElement;const taskCard=item.closest(".card");dragTask=findTask(taskCard.dataset.id);item.classList.add("sub-dragging");
-      const move=ev=>{const els=[...list.querySelectorAll(".sub-item:not(.sub-dragging)")];const after=els.find(el=>{const r=el.getBoundingClientRect();return ev.clientY<r.top+r.height/2;});if(after)list.insertBefore(item,after);else list.insertBefore(item,list.querySelector(".sub-add"));};
-      const up=()=>{item.classList.remove("sub-dragging");document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);const ids=[...list.querySelectorAll(".sub-item")].map(el=>el.dataset.sub);ids.forEach((id,i)=>{const s=dragTask.subtasks.find(x=>x.id===id);if(s)s.order=i;});scheduleSave();};
+      e.preventDefault();
+      const container=branch.parentElement; // .sub-branches 또는 .sub-children (형제 그룹)
+      branch.classList.add("sub-dragging");
+      const siblingBranches=()=>[...container.children].filter(c=>c.classList.contains("sub-branch")&&c!==branch);
+      const move=ev=>{const after=siblingBranches().find(el=>{const r=el.getBoundingClientRect();return ev.clientY<r.top+r.height/2;});if(after)container.insertBefore(branch,after);else container.appendChild(branch);};
+      const up=()=>{
+        branch.classList.remove("sub-dragging");
+        document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);
+        const parentId=container.dataset.parent;const arr=childArrayOf(parentId);
+        if(arr){const ids=[...container.children].filter(c=>c.classList.contains("sub-branch")).map(c=>c.dataset.sub);ids.forEach((id,i)=>{const n=arr.find(x=>x.id===id);if(n)n.order=i;});scheduleSave();}
+      };
       document.addEventListener("pointermove",move);document.addEventListener("pointerup",up);
     };
   });
@@ -1019,7 +1065,7 @@ function openDaySheet(dateStr){
 function addTaskOnDate(dateStr,text){
   const p=parseQuick(text);if(!p.title)return;
   const maxOrder=Math.max(0,...state.tasks.map(t=>t.order));
-  state.tasks.push({id:"t_"+nanoid(),title:p.title,status:"active",dueDate:p.dueDate||dateStr,order:maxOrder+1,createdAt:new Date().toISOString(),completedAt:null,subtasks:p.subs.map((s,i)=>({id:"s_"+nanoid(),title:s,done:false,completedAt:null,order:i}))});
+  state.tasks.push({id:"t_"+nanoid(),title:p.title,status:"active",dueDate:p.dueDate||dateStr,order:maxOrder+1,createdAt:new Date().toISOString(),completedAt:null,subtasks:p.subs.map((s,i)=>({id:"s_"+nanoid(),title:s,done:false,completedAt:null,order:i,subtasks:[]}))});
   scheduleSave();
 }
 
