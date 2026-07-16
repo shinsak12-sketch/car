@@ -391,7 +391,7 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 <div id="app">
   <div id="banner">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-    <span>로컬 저장소 사용 중 — 데이터 폴더(D:\신이삭\2020인사\업무관리프로그램)를 연결하세요.</span>
+    <span>브라우저에 저장 중 — 폴더에 저장하려면 <b>폴더 연결</b> (켤 때 1번 허용). 백업은 설정에서도 가능.</span>
     <button class="tap" id="bannerConnect">폴더 연결하기</button>
   </div>
   <div id="topbar">
@@ -1295,7 +1295,7 @@ function attachSheetDrag(sheet){
 /* ===== 설정 ===== */
 function openSettings(){
   const modeLabel=storageMode==="fs"?`폴더 연결됨 (${esc(state.settings.folderName||"")})`:`로컬 저장소 · 권장 폴더 ${TARGET_PATH}`;
-  $("#sheetRoot").innerHTML=`<div class="sheet" id="settingsSheet"><div class="sheet-handle"><div class="bar"></div></div><div class="sheet-head"><div class="sh-title">설정</div><button class="sh-close tap" id="stClose">${icoX()}</button></div><div class="sheet-body"><div class="group-title">저장</div><div class="group"><div class="settings-row"><div class="sr-label">저장 방식<div class="sr-sub">${modeLabel}</div></div><button class="sr-act tap" id="stConnect">${storageMode==="fs"?"폴더 변경":"폴더 연결"}</button></div><div class="settings-row"><div class="sr-label">기본 진입 화면<div class="sr-sub">앱 실행 시 처음 보이는 화면</div></div><select id="stDefView" style="padding:8px;border-radius:8px;border:1px solid var(--separator-strong);"><option value="list">목록</option><option value="calendar">캘린더</option><option value="notes">메모</option></select></div><div class="settings-row"><div class="sr-label">목록 열 수<div class="sr-sub">넓은 화면에서 카드 열 개수</div></div><select id="stCols" style="padding:8px;border-radius:8px;border:1px solid var(--separator-strong);"><option value="2">2열</option><option value="3">3열</option><option value="4">4열</option><option value="5">5열</option><option value="6">6열</option></select></div></div><div class="group-title">데이터</div><div class="group"><div class="settings-row"><div class="sr-label">전체 초기화<div class="sr-sub">모든 업무·메모 삭제</div></div><button class="sr-danger tap" id="stReset">초기화</button></div></div><div class="group-title">정보</div><div class="group"><div class="settings-row"><div class="sr-label">업무 ${state.tasks.length}건 · 메모 ${state.notes.length}개<div class="sr-sub">기준 연도 2026</div></div></div></div></div></div>`;
+  $("#sheetRoot").innerHTML=`<div class="sheet" id="settingsSheet"><div class="sheet-handle"><div class="bar"></div></div><div class="sheet-head"><div class="sh-title">설정</div><button class="sh-close tap" id="stClose">${icoX()}</button></div><div class="sheet-body"><div class="group-title">저장</div><div class="group"><div class="settings-row"><div class="sr-label">저장 방식<div class="sr-sub">${modeLabel}</div></div><button class="sr-act tap" id="stConnect">${storageMode==="fs"?"폴더 변경":"폴더 연결"}</button></div><div class="settings-row"><div class="sr-label">기본 진입 화면<div class="sr-sub">앱 실행 시 처음 보이는 화면</div></div><select id="stDefView" style="padding:8px;border-radius:8px;border:1px solid var(--separator-strong);"><option value="list">목록</option><option value="calendar">캘린더</option><option value="notes">메모</option></select></div><div class="settings-row"><div class="sr-label">목록 열 수<div class="sr-sub">넓은 화면에서 카드 열 개수</div></div><select id="stCols" style="padding:8px;border-radius:8px;border:1px solid var(--separator-strong);"><option value="2">2열</option><option value="3">3열</option><option value="4">4열</option><option value="5">5열</option><option value="6">6열</option></select></div></div><div class="group-title">백업 · 데이터</div><div class="group"><div class="settings-row"><div class="sr-label">백업 내보내기<div class="sr-sub">전체 데이터를 .json 파일로 저장 (폴더에 보관)</div></div><button class="sr-act tap" id="stExport">내보내기</button></div><div class="settings-row"><div class="sr-label">백업 가져오기<div class="sr-sub">.json 백업으로 복원 (현재 데이터 덮어씀)</div></div><button class="sr-act tap" id="stImport">가져오기</button></div><div class="settings-row"><div class="sr-label">전체 초기화<div class="sr-sub">모든 업무·메모·아이디어 삭제</div></div><button class="sr-danger tap" id="stReset">초기화</button></div></div><div class="group-title">정보</div><div class="group"><div class="settings-row"><div class="sr-label">업무 ${state.tasks.length}건 · 메모 ${state.notes.length}개<div class="sr-sub">기준 연도 2026</div></div></div></div></div></div>`;
   requestAnimationFrame(()=>{$("#settingsSheet").classList.add("show");$("#scrim").classList.add("show");});
   $("#stDefView").value=state.settings.defaultView||"list";
   $("#stCols").value=String(state.settings.listCols||4);
@@ -1303,8 +1303,45 @@ function openSettings(){
   $("#stConnect").onclick=()=>{closeModal();setTimeout(connectAction,320);};
   $("#stDefView").onchange=e=>{state.settings.defaultView=e.target.value;scheduleSave();};
   $("#stCols").onchange=e=>{state.settings.listCols=parseInt(e.target.value)||4;applyListCols();scheduleSave();};
-  $("#stReset").onclick=()=>{closeModal();setTimeout(()=>openConfirm("전체 초기화","모든 업무와 메모가 삭제됩니다. 되돌릴 수 없습니다.",()=>{state.tasks=[];state.notes=[];state.settings.sampleDataLoaded=false;scheduleSave();renderAll();toast("초기화됨");}),320);};
+  $("#stExport").onclick=exportData;
+  $("#stImport").onclick=()=>{closeModal();setTimeout(importData,320);};
+  $("#stReset").onclick=()=>{closeModal();setTimeout(()=>openConfirm("전체 초기화","모든 업무·메모·아이디어가 삭제됩니다. 되돌릴 수 없습니다.",()=>{state.tasks=[];state.notes=[];state.ideas=[];state.settings.sampleDataLoaded=false;scheduleSave();renderAll();toast("초기화됨");}),320);};
   attachSheetDrag($("#settingsSheet"));
+}
+
+/* ===== 백업 내보내기 / 가져오기 ===== */
+function exportData(){
+  const data={app:"업무관리",version:1,exportedAt:new Date().toISOString(),tasks:state.tasks,notes:state.notes,ideas:state.ideas,settings:state.settings};
+  try{
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download="업무관리_백업_"+todayStr().replace(/-/g,"")+".json";
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+    toast("백업 파일을 내보냈어요 (다운로드 폴더 확인)");
+  }catch(e){toast("내보내기 실패: "+e.message);}
+}
+function importData(){
+  const inp=document.createElement("input");inp.type="file";inp.accept="application/json,.json";
+  inp.onchange=()=>{
+    const f=inp.files&&inp.files[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=()=>{
+      let d;try{d=JSON.parse(r.result);}catch(e){toast("잘못된 파일이에요 (.json 아님)");return;}
+      const nt=Array.isArray(d.tasks)?d.tasks.length:0,nn=Array.isArray(d.notes)?d.notes.length:0,ni=Array.isArray(d.ideas)?d.ideas.length:0;
+      openConfirm("백업 가져오기",`업무 ${nt} · 메모 ${nn} · 아이디어 ${ni}개를 불러옵니다.\n현재 데이터는 덮어써집니다. 진행할까요?`,()=>{
+        state.tasks=Array.isArray(d.tasks)?d.tasks:[];
+        state.notes=Array.isArray(d.notes)?d.notes:[];
+        state.ideas=Array.isArray(d.ideas)?d.ideas:[];
+        if(d.settings&&typeof d.settings==="object")state.settings={...state.settings,...d.settings};
+        state.settings.sampleDataLoaded=true;
+        ui.noteSelected=null;ui.ideaBoard=null;
+        normalize();applyListCols();scheduleSave();renderAll();toast("복원했어요");
+      });
+    };
+    r.readAsText(f);
+  };
+  inp.click();
 }
 
 /* ===== 토스트 ===== */
@@ -1346,6 +1383,7 @@ function bindGlobal(){
   $("#quickSend").onclick=submitQuick;
   $("#settingsBtn").onclick=openSettings;
   $("#bannerConnect").onclick=connectAction;
+  const bb=$("#bannerBackup");if(bb)bb.onclick=exportData;
 }
 
 /* ===== 초기화 & 복구 ===== */
