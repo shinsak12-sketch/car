@@ -107,11 +107,16 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 @keyframes pulse{0%{transform:scale(1);}50%{transform:scale(1.025);}100%{transform:scale(1);}}
 .card.shake{animation:shake .4s var(--ease);}
 @keyframes shake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}
-/* 투톤 헤더 밴드 */
-.card-header{padding:11px 15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--separator);}
-.card:not(.hold):not(.done) .card-header{background:linear-gradient(180deg,rgba(0,168,92,0.09),rgba(0,168,92,0.028));}
-.card.hold .card-header{background:linear-gradient(180deg,rgba(255,159,10,0.12),rgba(255,159,10,0.04));}
-.card.done .card-header{background:rgba(142,142,147,0.09);}
+/* 투톤 헤더 밴드 (구분 색상) */
+.card-header{padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--separator);background:#FAFAFB;}
+.card.done .card-header{background:rgba(142,142,147,0.10)!important;}
+.cat-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:2px 9px 2px 7px;border-radius:7px;letter-spacing:-0.2px;white-space:nowrap;}
+.cat-chip .cat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.cat-chip.cat-none{color:var(--text-secondary);background:rgba(120,120,128,0.12);}
+.cat-picker{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:8px;}
+.cat-pick{display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border-radius:10px;background:var(--bg-grouped);font-size:14px;font-weight:600;color:var(--text-primary);}
+.cat-pick .cat-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.cat-pick:hover{background:rgba(120,120,128,0.16);}
 .card-title{font-weight:700;font-size:16px;letter-spacing:-0.3px;line-height:1.3;word-break:break-word;color:var(--text-primary);cursor:text;}
 .card.done .card-title{text-decoration:line-through;text-decoration-thickness:1.5px;color:var(--text-secondary);}
 .card-title-input{background:#fff;border:1.5px solid var(--db-green);border-radius:10px;padding:5px 10px;font-weight:700;font-size:16px;outline:none;width:100%;max-width:100%;box-shadow:0 0 0 4px var(--db-green-light);}
@@ -421,7 +426,7 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
             </button>
           </div>
           <div class="quick-preview" id="quickPreview"></div>
-          <div class="chat-hint">#마감일(내일·7/25·+3일) · &gt;하위,업무,여러개 · 마감일은 카드 ⋯메뉴에서도 설정</div>
+          <div class="chat-hint">@구분(인사·노무·법무·교육·채용·총무) · #마감일(내일·7/25·+3일) · &gt;하위,업무 · 구분·마감일은 카드 ⋯메뉴에서도 변경</div>
         </div>
       </div>
       <div id="content"></div>
@@ -448,6 +453,16 @@ const TARGET_PATH="D:\\신이삭\\2020인사\\업무관리프로그램";
 const TARGET_FOLDER="업무관리프로그램";
 const WEEKDAYS=["일","월","화","수","목","금","토"];
 const STATUS_LABEL={active:"진행",hold:"보류",done:"완료"};
+const CATEGORIES=[
+  {id:"인사",color:"#6366F1"},
+  {id:"노무",color:"#8B5CF6"},
+  {id:"법무",color:"#0EA5E9"},
+  {id:"교육",color:"#10B981"},
+  {id:"채용",color:"#F59E0B"},
+  {id:"총무",color:"#14B8A6"},
+  {id:"기타",color:"#64748B"},
+];
+function catOf(tk){return tk&&tk.category?CATEGORIES.find(c=>c.id===tk.category)||null:null;}
 
 function todayStr(){return ymd(new Date());}
 function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
@@ -557,18 +572,18 @@ function buildSeed(){
   const now=new Date();
   const iso=d=>{const x=new Date(now);x.setDate(x.getDate()-d);return x.toISOString();};
   const t=todayStr();let ord=0;
-  const mk=(title,o={})=>({id:"t_"+nanoid(),title,status:o.status||"active",dueDate:o.due??null,order:ord++,createdAt:iso(o.age||0),completedAt:o.status==="done"?iso(o.age||0):null,subtasks:(o.subs||[]).map((s,i)=>({id:"s_"+nanoid(),title:s,done:false,completedAt:null,order:i,subtasks:[]}))});
+  const mk=(title,o={})=>({id:"t_"+nanoid(),title,category:o.cat||null,status:o.status||"active",dueDate:o.due??null,order:ord++,createdAt:iso(o.age||0),completedAt:o.status==="done"?iso(o.age||0):null,subtasks:(o.subs||[]).map((s,i)=>({id:"s_"+nanoid(),title:s,done:false,completedAt:null,order:i,subtasks:[]}))});
   const tasks=[
-    mk("준비서면 초안 제출",{due:addDays(t,-2),age:120,subs:["사실관계 정리","법리 검토","초안 작성"]}),
-    mk("지노위 답변서 최종 검토",{due:t,age:14,subs:["증거자료 확인","답변서 교정"]}),
-    mk("평가지표 초안 회의",{due:t,age:5,subs:["지표안 정리","부서 의견 취합","회의자료 배포"]}),
-    mk("브릿지 대상자 명단 확정",{due:addDays(t,2),age:8,subs:["1차 후보 추출","면담 일정 조율"]}),
-    mk("스코어링 로직 정의서 작성",{due:addDays(t,5),age:20,subs:["가중치 설계","샘플 검증","리뷰 반영"]}),
-    mk("센터 오픈 체크리스트 점검",{due:addDays(t,6),age:3,subs:["집기 발주 확인","인력 배치","안내문 게시"]}),
-    mk("강등제도 규정안 사내 공람",{status:"hold",due:addDays(t,9),age:45,subs:["규정 초안 검토","노무 자문"]}),
-    mk("위촉 계약서 표준안 마련",{due:addDays(t,12),age:2,subs:["법무 검토 요청","보수 체계 설계"]}),
-    mk("8월호 편집 회의",{due:addDays(t,3),age:6,subs:["기사 목록 확정","필진 섭외"]}),
-    mk("1심 판결문 검토",{status:"done",due:addDays(t,-1),age:10,subs:["판결 요지 정리","항소 검토"]}),
+    mk("준비서면 초안 제출",{cat:"법무",due:addDays(t,-2),age:120,subs:["사실관계 정리","법리 검토","초안 작성"]}),
+    mk("지노위 답변서 최종 검토",{cat:"노무",due:t,age:14,subs:["증거자료 확인","답변서 교정"]}),
+    mk("평가지표 초안 회의",{cat:"인사",due:t,age:5,subs:["지표안 정리","부서 의견 취합","회의자료 배포"]}),
+    mk("브릿지 대상자 명단 확정",{cat:"인사",due:addDays(t,2),age:8,subs:["1차 후보 추출","면담 일정 조율"]}),
+    mk("스코어링 로직 정의서 작성",{cat:"인사",due:addDays(t,5),age:20,subs:["가중치 설계","샘플 검증","리뷰 반영"]}),
+    mk("센터 오픈 체크리스트 점검",{cat:"총무",due:addDays(t,6),age:3,subs:["집기 발주 확인","인력 배치","안내문 게시"]}),
+    mk("강등제도 규정안 사내 공람",{cat:"노무",status:"hold",due:addDays(t,9),age:45,subs:["규정 초안 검토","노무 자문"]}),
+    mk("위촉 계약서 표준안 마련",{cat:"법무",due:addDays(t,12),age:2,subs:["법무 검토 요청","보수 체계 설계"]}),
+    mk("8월호 편집 회의",{cat:"교육",due:addDays(t,3),age:6,subs:["기사 목록 확정","필진 섭외"]}),
+    mk("1심 판결문 검토",{cat:"법무",status:"done",due:addDays(t,-1),age:10,subs:["판결 요지 정리","항소 검토"]}),
   ];
   tasks.forEach(tk=>{if(tk.status==="done")tk.subtasks.forEach(s=>{s.done=true;s.completedAt=tk.completedAt;});});
   const notes=[
@@ -598,13 +613,14 @@ function parseDate(token){
   return null;
 }
 function parseQuick(text){
-  const res={title:"",dueDate:null,subs:[]};
+  const res={title:"",dueDate:null,subs:[],category:null};
   let s=text.trim();
   const gt=s.indexOf(">");
   if(gt>=0){res.subs=s.slice(gt+1).trim().split(",").map(x=>x.trim()).filter(Boolean);s=s.slice(0,gt).trim();}
   const parts=[];
   for(const tk of s.split(/\s+/)){
     if(tk.startsWith("#")&&tk.length>1){const d=parseDate(tk.slice(1));if(d){res.dueDate=d;continue;}}
+    if(tk.startsWith("@")&&tk.length>1){const name=tk.slice(1);const c=CATEGORIES.find(x=>x.id===name)||CATEGORIES.find(x=>x.id.includes(name)||name.includes(x.id));if(c){res.category=c.id;continue;}}
     parts.push(tk);
   }
   res.title=parts.join(" ").trim();
@@ -616,6 +632,7 @@ function renderQuickPreview(){
   if(!val.trim()){box.innerHTML="";return;}
   const p=parseQuick(val);let h="";
   if(p.title)h+=`<span class="pv-chip pv-title">${esc(p.title)}</span>`;
+  if(p.category){const c=CATEGORIES.find(x=>x.id===p.category);h+=`<span class="pv-chip" style="color:${c.color};background:${c.color}1A">@${esc(p.category)}</span>`;}
   if(p.dueDate){const dd=ddayInfo(p.dueDate);h+=`<span class="pv-chip">#${esc(p.dueDate)}${dd?" · "+dd.text:""}</span>`;}
   if(p.subs.length)h+=`<span class="pv-chip">하위 ${p.subs.length}건</span>`;
   box.innerHTML=h;
@@ -625,7 +642,7 @@ function submitQuick(){
   const p=parseQuick(val);
   if(!p.title){toast("제목을 입력하세요");return;}
   const maxOrder=Math.max(0,...state.tasks.map(t=>t.order));
-  const task={id:"t_"+nanoid(),title:p.title,status:"active",dueDate:p.dueDate||null,order:maxOrder+1,createdAt:new Date().toISOString(),completedAt:null,subtasks:p.subs.map((s,i)=>({id:"s_"+nanoid(),title:s,done:false,completedAt:null,order:i,subtasks:[]}))};
+  const task={id:"t_"+nanoid(),title:p.title,category:p.category||null,status:"active",dueDate:p.dueDate||null,order:maxOrder+1,createdAt:new Date().toISOString(),completedAt:null,subtasks:p.subs.map((s,i)=>({id:"s_"+nanoid(),title:s,done:false,completedAt:null,order:i,subtasks:[]}))};
   state.tasks.push(task);
   inp.value="";inp.style.height="auto";renderQuickPreview();
   if(ui.view!=="list")setView("list");
@@ -683,8 +700,11 @@ function cardHTML(tk){
   const expanded=ui.expanded.has(tk.id);
   const age=ageInfo(tk.createdAt);
   const linked=notesOf(tk.id);
-  const statusPill=done?`<span class="status-pill done gloss">완료</span>`:tk.status==="hold"?`<span class="status-pill hold gloss">보류</span>`:`<span class="status-pill active gloss">진행</span>`;
+  const cat=catOf(tk);
+  const catChip=cat?`<span class="cat-chip" style="color:${cat.color};background:${cat.color}1F"><span class="cat-dot" style="background:${cat.color}"></span>${esc(cat.id)}</span>`:`<span class="cat-chip cat-none"><span class="cat-dot" style="background:#C7C7CC"></span>미분류</span>`;
+  const headerStyle=(!done&&cat)?` style="background:linear-gradient(180deg,${cat.color}22,${cat.color}0A)"`:"";
   let meta="";
+  if(tk.status==="hold")meta+=`<span class="status-pill hold gloss">보류</span>`;
   if(dd)meta+=`<span class="badge dday gloss" style="background:${dd.color}">${dd.text}</span>`;
   if(age&&!done)meta+=`<span class="age-chip ${age.old?'old':''}">${age.text}</span>`;
   const notesRow=linked.length?`<div class="card-notes">${linked.map((n,i)=>`<button class="note-btn tap" data-noteview="${n.id}">${icoNoteMini()} ${esc(n.title||("메모"+(i+1)))}</button>`).join("")}</div>`:"";
@@ -699,7 +719,7 @@ function cardHTML(tk){
   const expandBtn=`<button class="foot-btn expand-btn ${expanded?'':'collapsed'} tap" data-expandtoggle="${tk.id}"><span class="chev">${icoChevron()}</span><span>${hasSub?`하위 ${prog.done}/${prog.total}`:'하위 추가'}</span></button>`;
   const bodyInner=(meta?`<div class="card-meta">${meta}</div>`:"")+progHTML;
   return `<div class="card ${done?'done':''} ${tk.status==='hold'?'hold':''} ${expanded?'expanded':''}" data-id="${tk.id}">
-    <div class="card-header">${statusPill}<span class="card-title" data-titleedit="${tk.id}" title="더블클릭하면 수정">${esc(tk.title)}</span></div>
+    <div class="card-header"${headerStyle}>${catChip}<span class="card-title" data-titleedit="${tk.id}" title="더블클릭하면 수정">${esc(tk.title)}</span></div>
     ${bodyInner?`<div class="card-body">${bodyInner}</div>`:""}
     <div class="subs">${subsHTML(tk)}</div>
     ${notesRow}
@@ -1022,16 +1042,26 @@ function cardMenuOutside(e){if(!e.target.closest("#cardMenu"))closeCardMenu();}
 function openCardMenu(id,btn){
   closeCardMenu();
   const pop=document.createElement("div");pop.className="menu-pop";pop.id="cardMenu";
-  pop.innerHTML=`<button data-act="due">${icoCal()} 마감일 설정</button><button data-act="note">${icoNote()} 메모 연결</button><button data-act="del" class="danger">${icoTrash()} 삭제</button>`;
+  pop.innerHTML=`<button data-act="cat">${icoTag()} 구분 변경</button><button data-act="due">${icoCal()} 마감일 설정</button><button data-act="note">${icoNote()} 메모 연결</button><button data-act="del" class="danger">${icoTrash()} 삭제</button>`;
   document.body.appendChild(pop);
   const r=btn.getBoundingClientRect();
   let left=r.right-pop.offsetWidth;if(left<8)left=8;
   let top=r.bottom+6;if(top+pop.offsetHeight>window.innerHeight-8)top=r.top-pop.offsetHeight-6;
   pop.style.left=left+"px";pop.style.top=top+"px";
+  pop.querySelector('[data-act="cat"]').onclick=()=>{closeCardMenu();openCategoryPicker(id);};
   pop.querySelector('[data-act="due"]').onclick=()=>{closeCardMenu();openDueEditor(id);};
   pop.querySelector('[data-act="note"]').onclick=()=>{closeCardMenu();openNoteLink(id);};
   pop.querySelector('[data-act="del"]').onclick=()=>{closeCardMenu();deleteTask(id);};
   setTimeout(()=>document.addEventListener("pointerdown",cardMenuOutside,true),0);
+}
+function icoTag(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`;}
+function openCategoryPicker(id){
+  const tk=findTask(id);if(!tk)return;
+  const opts=CATEGORIES.map(c=>`<button class="cat-pick tap" data-cat="${c.id}"><span class="cat-dot" style="background:${c.color}"></span>${c.id}${tk.category===c.id?' ✓':''}</button>`).join("");
+  $("#sheetRoot").innerHTML=`<div class="modal" id="catModal"><div class="modal-head"><div class="m-title">업무 구분</div><button class="m-close tap" id="catClose">${icoX()}</button></div><div class="modal-body"><div style="font-size:13px;color:var(--text-secondary);margin-bottom:10px;">${esc(tk.title)}</div><div class="cat-picker">${opts}<button class="cat-pick tap ${!tk.category?'on':''}" data-cat=""><span class="cat-dot" style="background:#C7C7CC"></span>미분류${!tk.category?' ✓':''}</button></div></div></div>`;
+  requestAnimationFrame(()=>{$("#catModal").classList.add("show");$("#scrim").classList.add("show");});
+  $("#scrim").onclick=closeModal;$("#catClose").onclick=closeModal;
+  $$('#catModal [data-cat]').forEach(b=>b.onclick=()=>{tk.category=b.dataset.cat||null;scheduleSave();closeModal();renderAll();toast(tk.category?("구분: "+tk.category):"미분류로 변경");});
 }
 
 /* ===== 마감일 설정 ===== */
@@ -1272,7 +1302,7 @@ function openDaySheet(dateStr){
 function addTaskOnDate(dateStr,text){
   const p=parseQuick(text);if(!p.title)return;
   const maxOrder=Math.max(0,...state.tasks.map(t=>t.order));
-  state.tasks.push({id:"t_"+nanoid(),title:p.title,status:"active",dueDate:p.dueDate||dateStr,order:maxOrder+1,createdAt:new Date().toISOString(),completedAt:null,subtasks:p.subs.map((s,i)=>({id:"s_"+nanoid(),title:s,done:false,completedAt:null,order:i,subtasks:[]}))});
+  state.tasks.push({id:"t_"+nanoid(),title:p.title,category:p.category||null,status:"active",dueDate:p.dueDate||dateStr,order:maxOrder+1,createdAt:new Date().toISOString(),completedAt:null,subtasks:p.subs.map((s,i)=>({id:"s_"+nanoid(),title:s,done:false,completedAt:null,order:i,subtasks:[]}))});
   scheduleSave();
 }
 
