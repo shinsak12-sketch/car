@@ -636,12 +636,12 @@ function submitQuick(){
 function findTask(id){return state.tasks.find(t=>t.id===id);}
 function findNote(id){return state.notes.find(n=>n.id===id);}
 function notesOf(taskId){return state.notes.filter(n=>n.taskIds.includes(taskId));}
-function flattenSubs(nodes){let out=[];for(const n of (nodes||[])){out.push(n);if(n.subtasks&&n.subtasks.length)out=out.concat(flattenSubs(n.subtasks));}return out;}
+function flattenSubs(nodes,depth){if((depth||0)>500)return [];let out=[];for(const n of (nodes||[])){out.push(n);if(n.subtasks&&n.subtasks.length)out=out.concat(flattenSubs(n.subtasks,(depth||0)+1));}return out;}
 function progressOf(tk){const all=flattenSubs(tk.subtasks);const total=all.length,done=all.filter(s=>s.done).length;return{total,done,pct:total?Math.round(done/total*100):0};}
-function sortSubs(subs){return [...subs].sort((a,b)=>{if(a.done!==b.done)return a.done?1:-1;return a.order-b.order;});}
-function ensureSubTree(nodes){(nodes||[]).forEach(n=>{if(!Array.isArray(n.subtasks))n.subtasks=[];ensureSubTree(n.subtasks);});}
+function sortSubs(subs){return [...(subs||[])].sort((a,b)=>{if(a.done!==b.done)return a.done?1:-1;return a.order-b.order;});}
+function ensureSubTree(nodes,depth){if((depth||0)>500)return;(nodes||[]).forEach(n=>{if(!Array.isArray(n.subtasks))n.subtasks=[];ensureSubTree(n.subtasks,(depth||0)+1);});}
 // 하위 노드 검색 (트리 전역)
-function searchSubArr(arr,id,parent){for(const n of arr){if(n.id===id)return{node:n,arr,parent};if(n.subtasks&&n.subtasks.length){const r=searchSubArr(n.subtasks,id,n);if(r)return r;}}return null;}
+function searchSubArr(arr,id,parent,depth){if((depth||0)>500)return null;for(const n of (arr||[])){if(n.id===id)return{node:n,arr,parent};if(n.subtasks&&n.subtasks.length){const r=searchSubArr(n.subtasks,id,n,(depth||0)+1);if(r)return r;}}return null;}
 function locateSub(subId){for(const tk of state.tasks){const r=searchSubArr(tk.subtasks,subId,null);if(r)return{tk,...r};}return null;}
 // containerId가 태스크면 최상위 하위목록, 하위업무면 그 자식목록 반환
 function childArrayOf(containerId){const tk=findTask(containerId);if(tk)return tk.subtasks;const loc=locateSub(containerId);return loc?loc.node.subtasks:null;}
@@ -1348,21 +1348,50 @@ function bindGlobal(){
   $("#bannerConnect").onclick=connectAction;
 }
 
-/* ===== 초기화 ===== */
+/* ===== 초기화 & 복구 ===== */
 function applyListCols(){const n=Math.min(6,Math.max(1,parseInt(state.settings.listCols)||4));document.documentElement.style.setProperty("--list-cols",n);}
+function withTimeout(p,ms){return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]);}
+function hardResetStorage(){try{localStorage.removeItem(LS_KEY);}catch(e){}try{indexedDB.deleteDatabase(IDB_NAME);}catch(e){}}
+function showRecovery(msg){
+  try{document.body.innerHTML=`<div style="max-width:540px;margin:11vh auto;padding:28px;font-family:'Malgun Gothic',sans-serif;text-align:center;color:#111;">
+    <div style="font-size:46px;">🛟</div>
+    <h2 style="margin:12px 0 8px;font-size:22px;">앱을 불러오지 못했어요</h2>
+    <p style="color:#666;font-size:14px;line-height:1.6;">저장 데이터가 손상됐거나 폴더 접근이 막혔을 수 있어요.<br>아래 버튼을 누르면 브라우저에 남은 손상 데이터만 비우고 다시 시작합니다.<br><b>데이터 폴더의 파일은 삭제되지 않습니다.</b></p>
+    <pre style="text-align:left;background:#f4f4f6;border-radius:10px;padding:10px;font-size:11px;color:#a00;white-space:pre-wrap;overflow:auto;max-height:130px;margin:14px 0;">${esc((msg||"").toString().slice(0,700))}</pre>
+    <button id="recReset" style="background:#00854A;color:#fff;border:none;border-radius:10px;padding:12px 22px;font-size:15px;font-weight:700;cursor:pointer;">초기화 후 다시 시작</button>
+    <div style="margin-top:10px;font-size:12px;color:#999;">그래도 안 되면 주소 끝에 <b>#reset</b> 붙여서 열어보세요</div>
+  </div>`;
+  const b=document.getElementById("recReset");if(b)b.onclick=()=>{hardResetStorage();location.hash="";location.reload();};}catch(e){}
+}
+window.addEventListener("error",e=>{if(!window.__booted)showRecovery((e.message||"")+"\n"+((e.error&&e.error.stack)||""));});
+window.addEventListener("unhandledrejection",e=>{if(!window.__booted)showRecovery("promise: "+((e.reason&&(e.reason.stack||e.reason.message))||e.reason));});
 async function init(){
-  state.settings={defaultView:"list",listCols:4,lastOpened:"",folderName:"",sampleDataLoaded:false};
-  let restored=false;
-  try{const handle=await idbGet("dir");if(handle){if((await handle.queryPermission({mode:"readwrite"}))==="granted"){dirHandle=handle;storageMode="fs";await loadFromFS();restored=true;}else dirHandle=handle;}}catch(e){console.warn(e);}
-  if(!restored){loadFromLS();storageMode="local";$("#banner").classList.add("show");}
-  normalize();
-  if(!state.settings.sampleDataLoaded&&state.tasks.length===0){const seed=buildSeed();state.tasks=seed.tasks;state.notes=seed.notes;state.ideas=seed.ideas;state.settings.sampleDataLoaded=true;await saveAll();}
-  const valid=["list","calendar","notes"];if(!valid.includes(state.settings.defaultView))state.settings.defaultView="list";
-  if(!state.settings.listCols)state.settings.listCols=4;
-  applyListCols();
-  ui.view=state.settings.defaultView;
-  bindGlobal();setView(ui.view);runBackup();
-  if(ui.view==="list"&&state.tasks.length===0){const qi=$("#quickInput");if(qi)qi.focus();}
+  // 강제 복구: 주소에 #reset 이 있으면 브라우저 저장분을 비우고 시작
+  if(String(location.hash||"").toLowerCase().includes("reset")){hardResetStorage();location.hash="";}
+  try{
+    state.settings={defaultView:"list",listCols:4,lastOpened:"",folderName:"",sampleDataLoaded:false};
+    let restored=false;
+    try{
+      const handle=await idbGet("dir");
+      if(handle){
+        if((await handle.queryPermission({mode:"readwrite"}))==="granted"){
+          dirHandle=handle;
+          try{await withTimeout(loadFromFS(),6000);storageMode="fs";restored=true;}
+          catch(e){console.warn("폴더 로딩 지연/실패 → 로컬 폴백",e);dirHandle=null;}
+        }else dirHandle=handle;
+      }
+    }catch(e){console.warn(e);}
+    if(!restored){loadFromLS();storageMode="local";$("#banner").classList.add("show");}
+    normalize();
+    if(!state.settings.sampleDataLoaded&&state.tasks.length===0){const seed=buildSeed();state.tasks=seed.tasks;state.notes=seed.notes;state.ideas=seed.ideas;state.settings.sampleDataLoaded=true;await saveAll();}
+    const valid=["list","calendar","notes"];if(!valid.includes(state.settings.defaultView))state.settings.defaultView="list";
+    if(!state.settings.listCols)state.settings.listCols=4;
+    applyListCols();
+    ui.view=state.settings.defaultView;
+    bindGlobal();setView(ui.view);runBackup();
+    if(ui.view==="list"&&state.tasks.length===0){const qi=$("#quickInput");if(qi)qi.focus();}
+    window.__booted=true;
+  }catch(err){showRecovery((err&&err.stack)||err);}
 }
 window.addEventListener("resize",()=>{closeCardMenu();if(ui.view==="list")moveLSeg();});
 window.addEventListener("DOMContentLoaded",init);
