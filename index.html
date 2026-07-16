@@ -105,14 +105,17 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 @keyframes pulse{0%{transform:scale(1);}50%{transform:scale(1.025);}100%{transform:scale(1);}}
 .card.shake{animation:shake .4s var(--ease);}
 @keyframes shake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}
-.card.hold{background:#FCFBF9;}
-.card.done{background:#FBFBFC;}
-.card-head{padding:var(--sp-4) var(--sp-4) var(--sp-3);}
-.card-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;}
-.card-title{font-weight:700;font-size:16px;letter-spacing:-0.3px;line-height:1.35;word-break:break-word;color:var(--text-primary);cursor:text;}
+/* 투톤 헤더 밴드 */
+.card-header{padding:11px 15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--separator);}
+.card:not(.hold):not(.done) .card-header{background:linear-gradient(180deg,rgba(0,168,92,0.09),rgba(0,168,92,0.028));}
+.card.hold .card-header{background:linear-gradient(180deg,rgba(255,159,10,0.12),rgba(255,159,10,0.04));}
+.card.done .card-header{background:rgba(142,142,147,0.09);}
+.card-title{font-weight:700;font-size:16px;letter-spacing:-0.3px;line-height:1.3;word-break:break-word;color:var(--text-primary);cursor:text;}
 .card.done .card-title{text-decoration:line-through;text-decoration-thickness:1.5px;color:var(--text-secondary);}
 .card-title-input{background:#fff;border:1.5px solid var(--db-green);border-radius:10px;padding:5px 10px;font-weight:700;font-size:16px;outline:none;width:100%;max-width:100%;box-shadow:0 0 0 4px var(--db-green-light);}
-.card-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;}
+.card-body{padding:12px 15px 2px;}
+.card-body:empty{display:none;}
+.card-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
 .gloss{background-image:linear-gradient(180deg,rgba(255,255,255,0.28),rgba(0,0,0,0.08));box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 2px rgba(0,0,0,0.18);}
 .status-pill{font-size:11px;font-weight:700;padding:3px 9px;border-radius:8px;color:#fff;letter-spacing:-0.2px;text-shadow:0 1px 1px rgba(0,0,0,0.14);}
 .status-pill.active{background-color:#00A85C;}
@@ -125,6 +128,7 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 .note-btn{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:8px;background:var(--db-green-light);color:var(--db-green-dark);box-shadow:inset 0 1px 0 rgba(255,255,255,0.6),0 1px 2px rgba(0,0,0,0.07);}
 .note-btn:hover{background:#d4ecdd;}
 .progress-wrap{display:flex;align-items:center;gap:8px;margin-top:11px;}
+.card-body .progress-wrap:first-child{margin-top:2px;}
 .progress-num{font-family:var(--font-num);font-size:11px;color:var(--text-secondary);flex-shrink:0;}
 .progress-bar{flex:1;height:5px;background:rgba(120,120,128,0.16);border-radius:3px;overflow:hidden;box-shadow:inset 0 1px 1px rgba(0,0,0,0.08);}
 .progress-fill{height:100%;background:linear-gradient(180deg,#12b06c,var(--db-green));border-radius:3px;transition:width .4s var(--ease);box-shadow:0 0 6px rgba(0,133,74,0.25);}
@@ -137,7 +141,7 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 .link-chip button svg{width:14px;height:14px;}
 .link-chips:empty::after{content:"연결된 업무 없음";color:var(--text-tertiary);font-size:13px;}
 
-.card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px var(--sp-3) 10px calc(var(--sp-4) + 4px);}
+.card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 12px 10px 15px;}
 .foot-btn{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600;color:var(--text-secondary);padding:7px 10px;border-radius:9px;}
 .foot-btn:hover{background:rgba(0,0,0,0.04);}
 .foot-btn svg{width:16px;height:16px;}
@@ -152,7 +156,7 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 .hold-btn:hover{color:#8A5A00;background:rgba(255,149,0,0.1);}
 
 /* 하위 */
-.subs{max-height:0;overflow:hidden;transition:max-height .3s var(--ease);padding:0 var(--sp-4) 0 calc(var(--sp-4) + 4px);}
+.subs{max-height:0;overflow:hidden;transition:max-height .3s var(--ease);padding:0 15px;}
 .card.expanded .subs{max-height:1400px;}
 .sub-list{border-top:0.5px solid var(--separator);padding:8px 0 4px;}
 .sub-item{display:flex;align-items:center;gap:10px;padding:7px 2px;position:relative;transition:transform .3s var(--ease);}
@@ -192,43 +196,74 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 .empty .em-title{font-size:17px;font-weight:600;color:var(--text-primary);margin-bottom:6px;}
 .empty .em-sub{font-size:14px;}
 
-/* 캘린더 */
-.cal-head{display:flex;align-items:center;justify-content:center;gap:var(--sp-4);margin:var(--sp-2) 0 var(--sp-4);}
-.cal-head .cal-month{font-size:20px;font-weight:700;font-family:var(--font-num);min-width:130px;text-align:center;}
-.cal-head button{padding:8px;border-radius:8px;color:var(--text-secondary);display:flex;}
-.cal-head button:hover{background:var(--bg-card);}
-.cal-today-btn{font-family:var(--font-ui)!important;font-size:13px;font-weight:600;color:var(--db-green)!important;padding:6px 12px!important;}
-.cal-grid{background:var(--bg-card);border-radius:var(--r-card);box-shadow:var(--sh-card);overflow:hidden;}
+/* 캘린더 - 좌우 분할 */
+.cal-split{display:flex;gap:var(--sp-4);align-items:flex-start;}
+.cal-left{flex:1;min-width:0;}
+.cal-right{width:360px;flex-shrink:0;position:sticky;top:0;}
+.cal-head{display:flex;align-items:center;gap:var(--sp-3);margin:var(--sp-1) 0 var(--sp-4);}
+.cal-head .cal-month{font-size:23px;font-weight:700;font-family:var(--font-num);letter-spacing:-0.5px;}
+.cal-head .cal-nav{display:flex;gap:4px;margin-left:auto;}
+.cal-head .cal-nav button{padding:9px;border-radius:10px;color:var(--text-secondary);display:flex;}
+.cal-head .cal-nav button:hover{background:var(--bg-card);}
+.cal-today-btn{font-family:var(--font-ui);font-size:13px;font-weight:700;color:var(--db-green);padding:8px 15px;background:var(--db-green-light);border-radius:10px;}
+.cal-grid{background:var(--bg-card);border-radius:var(--r-card);box-shadow:var(--sh-card);overflow:hidden;border:0.5px solid rgba(0,0,0,0.04);}
 .cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:0.5px solid var(--separator);}
-.cal-weekdays div{text-align:center;padding:10px 0;font-size:12px;font-weight:600;color:var(--text-secondary);}
+.cal-weekdays div{text-align:center;padding:12px 0;font-size:13px;font-weight:700;color:var(--text-secondary);}
 .cal-weekdays div:first-child{color:var(--dday-red);}
 .cal-weekdays div:last-child{color:#5A8BD6;}
 .cal-days{display:grid;grid-template-columns:repeat(7,1fr);}
-.cal-day{min-height:92px;padding:6px;border-right:0.5px solid var(--separator);border-bottom:0.5px solid var(--separator);cursor:pointer;transition:background .12s var(--ease);}
+.cal-day{min-height:106px;padding:8px 7px;border-right:0.5px solid var(--separator);border-bottom:0.5px solid var(--separator);cursor:pointer;transition:background .12s var(--ease);}
 .cal-day:nth-child(7n){border-right:none;}
 .cal-day:hover{background:var(--bg-grouped);}
-.cal-day.other{background:#FAFAFA;}
+.cal-day.other{background:#FAFAFB;}
 .cal-day.other .cal-date{color:var(--text-tertiary);}
-.cal-date{font-family:var(--font-num);font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;}
+.cal-day.selected{background:var(--db-green-light);box-shadow:inset 0 0 0 2px var(--db-green);}
+.cal-date{font-family:var(--font-num);font-size:16px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;}
 .cal-day.today .cal-date{background:var(--db-green);color:#fff;}
 .cal-day.sun .cal-date{color:var(--dday-red);}
 .cal-day.sat .cal-date{color:#5A8BD6;}
-.cal-events{margin-top:3px;display:flex;flex-direction:column;gap:2px;}
-.cal-ev{font-size:10px;padding:1px 5px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;}
+.cal-events{margin-top:5px;display:flex;flex-direction:column;gap:3px;}
+.cal-ev{font-size:12px;font-weight:600;padding:2px 7px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,0.25);}
 .cal-ev.done{opacity:0.5;text-decoration:line-through;}
-.cal-more{font-size:10px;color:var(--text-secondary);padding:0 5px;}
+.cal-more{font-size:11px;color:var(--text-secondary);padding:1px 6px;font-weight:600;}
+.cal-detail{background:var(--bg-card);border-radius:var(--r-card);box-shadow:var(--sh-card);border:0.5px solid rgba(0,0,0,0.04);overflow:hidden;}
+.cal-detail-head{padding:16px 18px;border-bottom:1px solid var(--separator);background:linear-gradient(180deg,rgba(0,133,74,0.07),transparent);}
+.cal-detail-head .cd-date{font-size:20px;font-weight:700;font-family:var(--font-num);}
+.cal-detail-head .cd-wd{font-size:13px;color:var(--text-secondary);margin-top:2px;}
+.cal-detail-body{padding:14px 16px 18px;max-height:calc(100vh - 300px);overflow-y:auto;}
+.cd-add{display:flex;gap:8px;margin-bottom:14px;}
+.cd-add input{flex:1;padding:11px 12px;border-radius:10px;border:1px solid var(--separator-strong);outline:none;font-size:14px;}
+.cd-add input:focus{border-color:var(--db-green);}
+.cd-add button{padding:0 16px;border-radius:10px;background:var(--db-green);color:#fff;font-weight:600;white-space:nowrap;}
+.cd-list{display:flex;flex-direction:column;gap:10px;}
 
-/* 메모 화면 */
-.notes-top{display:flex;align-items:center;justify-content:space-between;margin:var(--sp-2) 0 var(--sp-4);}
-.notes-top .nt-title{font-size:22px;font-weight:700;letter-spacing:-0.4px;}
-.new-note-btn{display:inline-flex;align-items:center;gap:6px;background:var(--db-green);color:#fff;padding:9px 16px;border-radius:10px;font-size:14px;font-weight:600;}
-.notes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--sp-3);}
-.note-card{background:var(--bg-card);border-radius:12px;box-shadow:var(--sh-card);padding:var(--sp-4);cursor:pointer;display:flex;flex-direction:column;gap:8px;min-height:130px;transition:transform .1s var(--ease);}
-.note-card:active{transform:scale(0.98);}
-.note-card .nc-title{font-size:15px;font-weight:700;}
-.note-card .nc-body{font-size:13px;color:var(--text-secondary);flex:1;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;white-space:pre-wrap;line-height:1.5;}
-.note-card .nc-foot{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-tertiary);}
-.note-card .nc-link{color:var(--db-green-dark);background:var(--db-green-light);padding:2px 7px;border-radius:6px;font-weight:600;}
+/* 메모 - 좌우 분할 */
+.notes-top{display:flex;align-items:center;justify-content:space-between;margin:var(--sp-1) 0 var(--sp-4);}
+.notes-top .nt-title{font-size:23px;font-weight:700;letter-spacing:-0.4px;}
+.new-note-btn{display:inline-flex;align-items:center;gap:6px;background:var(--db-green);color:#fff;padding:9px 16px;border-radius:10px;font-size:14px;font-weight:600;box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),0 1px 3px rgba(0,133,74,0.25);}
+.notes-split{display:flex;gap:var(--sp-4);align-items:flex-start;}
+.notes-list-pane{width:300px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;}
+.note-list-card{background:var(--bg-card);border-radius:12px;box-shadow:var(--sh-card);border:0.5px solid rgba(0,0,0,0.045);padding:13px 15px;cursor:pointer;transition:box-shadow .2s var(--ease),transform .1s var(--ease);}
+.note-list-card:hover{box-shadow:0 3px 10px rgba(0,0,0,0.09);transform:translateY(-1px);}
+.note-list-card.active{box-shadow:inset 0 0 0 2px var(--db-green);}
+.note-list-card .nl-title{font-size:14px;font-weight:700;margin-bottom:3px;}
+.note-list-card .nl-prev{font-size:12px;color:var(--text-secondary);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.45;white-space:pre-wrap;word-break:break-word;}
+.note-list-card .nl-foot{display:flex;gap:8px;align-items:center;margin-top:7px;font-size:10px;color:var(--text-tertiary);}
+.note-list-card .nl-link{background:var(--db-green-light);color:var(--db-green-dark);padding:1px 6px;border-radius:5px;font-weight:700;}
+.note-edit-pane{flex:1;min-width:0;background:var(--bg-card);border-radius:var(--r-card);box-shadow:var(--sh-card);border:0.5px solid rgba(0,0,0,0.04);position:sticky;top:0;min-height:400px;}
+.note-edit-inner{padding:20px 22px;}
+.note-edit-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:90px 20px;color:var(--text-secondary);text-align:center;}
+.note-edit-empty svg{color:var(--text-tertiary);margin-bottom:14px;}
+.ne-title-input{width:100%;border:none;outline:none;font-size:21px;font-weight:700;padding:2px 0;background:none;letter-spacing:-0.4px;}
+.ne-divider{height:1px;background:var(--separator);margin:14px 0;}
+.ne-body-input{width:100%;border:none;outline:none;font-size:15px;line-height:1.7;resize:none;background:none;min-height:320px;}
+.ne-link-sec{border-top:1px solid var(--separator);margin-top:16px;padding-top:16px;}
+.ne-link-sec label{font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:9px;}
+.ne-head{display:flex;justify-content:flex-end;gap:6px;margin-bottom:6px;}
+.ne-del{color:var(--dday-red);font-weight:600;padding:8px 14px;border-radius:9px;font-size:14px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0;}
+.ne-del svg{width:16px;height:16px;flex-shrink:0;}
+.ne-del:hover{background:rgba(255,59,48,0.08);}
+.ne-saved{font-size:12px;color:var(--text-tertiary);align-self:center;margin-right:auto;}
 
 /* 시트/모달 */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,0.4);opacity:0;pointer-events:none;transition:opacity .3s var(--ease);z-index:100;}
@@ -282,7 +317,9 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 #tabbar{display:none;}
 @media (max-width:1150px){.task-list{column-count:2;}}
 @media (max-width:1100px){.notes-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));}}
-@media (max-width:900px){#content{padding-left:var(--sp-4);padding-right:var(--sp-4);}#composer{padding-left:var(--sp-4);padding-right:var(--sp-4);}#topbar{padding-left:var(--sp-4);padding-right:var(--sp-4);}}
+@media (max-width:900px){#content{padding-left:var(--sp-4);padding-right:var(--sp-4);}#composer{padding-left:var(--sp-4);padding-right:var(--sp-4);}#topbar{padding-left:var(--sp-4);padding-right:var(--sp-4);}
+  .cal-split{flex-direction:column;}.cal-right{width:auto;position:static;margin-top:var(--sp-4);}.cal-detail-body{max-height:none;}
+  .notes-split{flex-direction:column;}.notes-list-pane{width:auto;}.note-edit-pane{position:static;width:100%;}}
 @media (max-width:768px){
   #topnav{display:none;}
   .task-list{column-count:1;}
@@ -379,7 +416,7 @@ function ageInfo(createdAt){
 }
 
 let state={tasks:[],notes:[],settings:{}};
-let ui={view:"list",listFilter:"active",search:"",expanded:new Set(),calMonth:null};
+let ui={view:"list",listFilter:"active",search:"",expanded:new Set(),calMonth:null,calSelected:null,noteSelected:null};
 let lastToast=null;
 
 /* ===== 데이터 레이어 ===== */
@@ -569,12 +606,10 @@ function cardHTML(tk){
     footActions=`<button class="menu-btn tap" data-menu="${tk.id}" title="메뉴">${icoMenu()}</button>${holdBtn}<button class="foot-btn done-btn primary tap" data-done="${tk.id}">${icoCheck2()}<span>완료</span></button>`;
   }
   const expandBtn=`<button class="foot-btn expand-btn ${expanded?'':'collapsed'} tap" data-expandtoggle="${tk.id}"><span class="chev">${icoChevron()}</span><span>${hasSub?`하위 ${prog.done}/${prog.total}`:'하위 추가'}</span></button>`;
+  const bodyInner=(meta?`<div class="card-meta">${meta}</div>`:"")+progHTML;
   return `<div class="card ${done?'done':''} ${tk.status==='hold'?'hold':''} ${expanded?'expanded':''}" data-id="${tk.id}">
-    <div class="card-head">
-      <div class="card-title-row">${statusPill}<span class="card-title" data-titleedit="${tk.id}" title="더블클릭하면 수정">${esc(tk.title)}</span></div>
-      <div class="card-meta">${meta}</div>
-      ${progHTML}
-    </div>
+    <div class="card-header">${statusPill}<span class="card-title" data-titleedit="${tk.id}" title="더블클릭하면 수정">${esc(tk.title)}</span></div>
+    ${bodyInner?`<div class="card-body">${bodyInner}</div>`:""}
     <div class="subs">${subsHTML(tk)}</div>
     <div class="card-foot">${expandBtn}<div class="foot-actions">${footActions}</div></div>
   </div>`;
@@ -645,9 +680,10 @@ function updateListOnly(){
   if(wasSearch){const si=$("#searchInput");if(si){si.focus();try{si.setSelectionRange(selStart,selStart);}catch(e){}}}
 }
 
-/* 캘린더 */
+/* 캘린더 - 좌우 분할 */
 function renderCalendar(c){
   if(!ui.calMonth){const d=new Date();ui.calMonth={y:d.getFullYear(),m:d.getMonth()};}
+  if(!ui.calSelected)ui.calSelected=todayStr();
   const{y,m}=ui.calMonth;
   const startDow=new Date(y,m,1).getDay();
   const daysInMonth=new Date(y,m+1,0).getDate();
@@ -660,11 +696,18 @@ function renderCalendar(c){
   for(let day=1;day<=daysInMonth;day++)cells+=dayCell(ymd(new Date(y,m,day)),day,"",byDate,t);
   const trailing=(7-((startDow+daysInMonth)%7))%7;
   for(let day=1;day<=trailing;day++)cells+=dayCell(ymd(new Date(y,m+1,day)),day,"other",byDate,t);
-  c.innerHTML=`<div class="cal-head"><button class="tap" id="calPrev">${icoChevronL()}</button><span class="cal-month num">${y}. ${String(m+1).padStart(2,"0")}</span><button class="tap" id="calNext">${icoChevronR()}</button><button class="cal-today-btn tap" id="calToday">오늘</button></div><div class="cal-grid"><div class="cal-weekdays">${WEEKDAYS.map(w=>`<div>${w}</div>`).join("")}</div><div class="cal-days">${cells}</div></div>`;
+  c.innerHTML=`<div class="cal-split">
+    <div class="cal-left">
+      <div class="cal-head"><span class="cal-month num">${y}. ${String(m+1).padStart(2,"0")}</span><button class="cal-today-btn tap" id="calToday">오늘</button><div class="cal-nav"><button class="tap" id="calPrev">${icoChevronL()}</button><button class="tap" id="calNext">${icoChevronR()}</button></div></div>
+      <div class="cal-grid"><div class="cal-weekdays">${WEEKDAYS.map(w=>`<div>${w}</div>`).join("")}</div><div class="cal-days">${cells}</div></div>
+    </div>
+    <div class="cal-right" id="calRight">${calDetailHTML()}</div>
+  </div>`;
   $("#calPrev").onclick=()=>{let mm=m-1,yy=y;if(mm<0){mm=11;yy--;}ui.calMonth={y:yy,m:mm};renderCalendar(c);};
   $("#calNext").onclick=()=>{let mm=m+1,yy=y;if(mm>11){mm=0;yy++;}ui.calMonth={y:yy,m:mm};renderCalendar(c);};
-  $("#calToday").onclick=()=>{const d=new Date();ui.calMonth={y:d.getFullYear(),m:d.getMonth()};renderCalendar(c);};
-  $$(".cal-day").forEach(el=>el.onclick=()=>openDaySheet(el.dataset.date));
+  $("#calToday").onclick=()=>{const d=new Date();ui.calMonth={y:d.getFullYear(),m:d.getMonth()};ui.calSelected=todayStr();renderCalendar(c);};
+  $$(".cal-day").forEach(el=>el.onclick=()=>{ui.calSelected=el.dataset.date;$$(".cal-day").forEach(x=>x.classList.toggle("selected",x.dataset.date===ui.calSelected));updateCalDetail();});
+  bindCalDetail();
 }
 function dayCell(dateStr,day,cls,byDate,today){
   const dow=parseYmd(dateStr).getDay();
@@ -672,25 +715,78 @@ function dayCell(dateStr,day,cls,byDate,today){
   let evHTML=evs.slice(0,3).map(tk=>{const dd=ddayInfo(tk.dueDate);const bg=tk.status==="done"?"#C7C7CC":(dd?dd.color:"#8E8E93");return `<div class="cal-ev ${tk.status==='done'?'done':''}" style="background:${bg}">${esc(tk.title)}</div>`;}).join("");
   if(evs.length>3)evHTML+=`<div class="cal-more">+${evs.length-3}건</div>`;
   const dowCls=dow===0?"sun":dow===6?"sat":"";
-  return `<div class="cal-day ${cls} ${dateStr===today?'today':''} ${dowCls}" data-date="${dateStr}"><span class="cal-date">${day}</span><div class="cal-events">${evHTML}</div></div>`;
+  const sel=dateStr===ui.calSelected?"selected":"";
+  return `<div class="cal-day ${cls} ${dateStr===today?'today':''} ${dowCls} ${sel}" data-date="${dateStr}"><span class="cal-date">${day}</span><div class="cal-events">${evHTML}</div></div>`;
+}
+function calDetailHTML(){
+  const dateStr=ui.calSelected||todayStr();
+  const d=parseYmd(dateStr);
+  const tasks=visibleTasks().filter(t=>t.dueDate===dateStr).sort(sortActive);
+  const isToday=dateStr===todayStr();
+  return `<div class="cal-detail">
+    <div class="cal-detail-head"><div class="cd-date">${d.getMonth()+1}월 ${d.getDate()}일${isToday?' · 오늘':''}</div><div class="cd-wd">${d.getFullYear()}년 ${WEEKDAYS[d.getDay()]}요일 · ${tasks.length}건</div></div>
+    <div class="cal-detail-body">
+      <div class="cd-add"><input type="text" id="cdAdd" placeholder="이 날짜에 일정 추가" autocomplete="off"><button class="tap" id="cdAddBtn">추가</button></div>
+      ${tasks.length?`<div class="cd-list">${tasks.map(cardHTML).join("")}</div>`:`<div class="empty" style="padding:30px 10px;"><div class="em-sub">등록된 일정이 없습니다</div></div>`}
+    </div></div>`;
+}
+function updateCalDetail(){const el=$("#calRight");if(el){el.innerHTML=calDetailHTML();bindCalDetail();}}
+function bindCalDetail(){
+  bindCardEvents();
+  const inp=$("#cdAdd");if(!inp)return;
+  const dateStr=ui.calSelected||todayStr();
+  const doAdd=()=>{const v=inp.value.trim();if(!v)return;addTaskOnDate(dateStr,v);renderCalendar($("#content"));toast("일정 추가됨");};
+  inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();doAdd();}};
+  $("#cdAddBtn").onclick=doAdd;
 }
 
-/* 메모 화면 */
+/* 메모 - 좌우 분할 (좌 리스트 / 우 인라인 편집) */
 function renderNotes(){
   const notes=[...state.notes].sort((a,b)=>(b.updatedAt||"").localeCompare(a.updatedAt||""));
+  if(!ui.noteSelected&&notes.length)ui.noteSelected=notes[0].id;
   let h=`<div class="notes-top"><span class="nt-title">메모</span><button class="new-note-btn tap" id="newNoteBtn">${icoPlus()} 새 메모</button></div>`;
-  if(!notes.length){h+=emptyState("메모가 없어요","새 메모를 만들어 업무와 연결해 보세요");return h;}
-  h+=`<div class="notes-grid">`;
-  notes.forEach(n=>{
+  h+=`<div class="notes-split"><div class="notes-list-pane" id="notesList">`;
+  if(!notes.length)h+=`<div class="empty" style="padding:40px 10px;"><div class="em-sub">메모가 없어요</div></div>`;
+  else notes.forEach(n=>{
     const linkCount=n.taskIds.filter(id=>findTask(id)).length;
-    h+=`<div class="note-card tap" data-noteopen="${n.id}"><div class="nc-title">${esc(n.title||"제목 없음")}</div><div class="nc-body">${esc(n.body||"")}</div><div class="nc-foot">${linkCount?`<span class="nc-link">업무 ${linkCount}</span>`:""}<span>${n.updatedAt?n.updatedAt.slice(0,10):""}</span></div></div>`;
+    h+=`<div class="note-list-card ${n.id===ui.noteSelected?'active':''}" data-noteopen="${n.id}"><div class="nl-title">${esc(n.title||"제목 없음")}</div><div class="nl-prev">${esc(n.body||"내용 없음")}</div><div class="nl-foot">${linkCount?`<span class="nl-link">업무 ${linkCount}</span>`:""}<span>${n.updatedAt?n.updatedAt.slice(0,10):""}</span></div></div>`;
   });
-  h+=`</div>`;
+  h+=`</div><div class="note-edit-pane" id="notePane">${noteEditHTML()}</div></div>`;
   return h;
 }
+function noteEditHTML(){
+  const n=findNote(ui.noteSelected);
+  if(!n)return `<div class="note-edit-empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><div>좌측에서 메모를 선택하거나<br>새 메모를 만드세요</div></div>`;
+  return `<div class="note-edit-inner">
+    <div class="ne-head"><button class="ne-del tap" id="neDelete">${icoTrash()} 삭제</button></div>
+    <input class="ne-title-input" id="neTitle" value="${esc(n.title)}" placeholder="제목">
+    <div class="ne-divider"></div>
+    <textarea class="ne-body-input" id="neBody" placeholder="내용을 입력하세요">${esc(n.body)}</textarea>
+    <div class="ne-link-sec"><label>연결된 업무</label><select class="link-select" id="neTaskSelect"></select><div class="link-chips" id="neChips"></div></div>
+  </div>`;
+}
 function bindNotesEvents(){
-  const nb=$("#newNoteBtn");if(nb)nb.onclick=()=>openNoteEditor(null);
-  $$("[data-noteopen]").forEach(el=>el.onclick=()=>openNoteEditor(el.dataset.noteopen));
+  const nb=$("#newNoteBtn");if(nb)nb.onclick=()=>{const n={id:"n_"+nanoid(),title:"",body:"",taskIds:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};state.notes.push(n);ui.noteSelected=n.id;scheduleSave();renderContent();const ti=$("#neTitle");if(ti)ti.focus();};
+  $$("[data-noteopen]").forEach(el=>el.onclick=()=>{ui.noteSelected=el.dataset.noteopen;renderContent();});
+  bindNoteEditor();
+}
+function bindNoteEditor(){
+  const n=findNote(ui.noteSelected);if(!n)return;
+  const ti=$("#neTitle"),bo=$("#neBody");
+  const touch=()=>{n.updatedAt=new Date().toISOString();scheduleSave();const card=$(`.note-list-card[data-noteopen="${n.id}"]`);if(card){const tl=card.querySelector(".nl-title");if(tl)tl.textContent=n.title||"제목 없음";const pv=card.querySelector(".nl-prev");if(pv)pv.textContent=n.body||"내용 없음";}};
+  if(ti)ti.oninput=()=>{n.title=ti.value;touch();};
+  if(bo)bo.oninput=()=>{n.body=bo.value;touch();};
+  const del=$("#neDelete");if(del)del.onclick=()=>openConfirm("메모 삭제","이 메모를 삭제할까요?",()=>{const idx=state.notes.findIndex(x=>x.id===n.id);if(idx>=0)state.notes.splice(idx,1);ui.noteSelected=null;scheduleSave();renderContent();toast("메모 삭제됨");});
+  renderNoteLinkUI(n);
+}
+function renderNoteLinkUI(n){
+  const sel=$("#neTaskSelect");if(!sel)return;
+  const avail=state.tasks.filter(t=>!n.taskIds.includes(t.id)).sort(sortActive);
+  sel.innerHTML=`<option value="">＋ 업무 선택해서 연결…</option>`+avail.map(t=>`<option value="${t.id}">${esc(t.title)}</option>`).join("");
+  const chips=$("#neChips");
+  chips.innerHTML=n.taskIds.map(id=>{const t=findTask(id);if(!t)return"";return `<span class="link-chip">${esc(t.title)}<button data-unlink="${id}" title="연결 해제">${icoX()}</button></span>`;}).join("");
+  $$('#neChips [data-unlink]').forEach(b=>b.onclick=()=>{n.taskIds=n.taskIds.filter(x=>x!==b.dataset.unlink);n.updatedAt=new Date().toISOString();scheduleSave();renderNoteLinkUI(n);});
+  sel.onchange=e=>{if(e.target.value){n.taskIds.push(e.target.value);n.updatedAt=new Date().toISOString();scheduleSave();renderNoteLinkUI(n);}};
 }
 
 /* ===== 카드 이벤트 ===== */
@@ -850,7 +946,7 @@ function openNoteView(noteId){
   $("#sheetRoot").innerHTML=`<div class="modal" id="noteViewModal"><div class="modal-head"><div class="m-title">${esc(n.title||"메모")}</div><button class="m-close tap" id="nvClose">${icoX()}</button></div><div class="note-view-body">${esc(n.body||"(내용 없음)")}</div><div class="modal-foot"><button class="btn-cancel tap" id="nvEdit">편집</button><button class="btn-primary tap" id="nvOk">닫기</button></div></div>`;
   requestAnimationFrame(()=>{$("#noteViewModal").classList.add("show");$("#scrim").classList.add("show");});
   $("#scrim").onclick=closeModal;$("#nvClose").onclick=closeModal;$("#nvOk").onclick=closeModal;
-  $("#nvEdit").onclick=()=>{closeModal();setTimeout(()=>openNoteEditor(noteId),320);};
+  $("#nvEdit").onclick=()=>{closeModal();ui.noteSelected=noteId;setView("notes");};
 }
 
 /* ===== 메모 편집 ===== */
