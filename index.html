@@ -87,7 +87,8 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 .sec-head.done-head{cursor:pointer;}
 .done-chev{margin-left:auto;color:var(--text-tertiary);display:flex;transition:transform .2s var(--ease);}
 .done-chev.collapsed{transform:rotate(-90deg);}
-.task-list{column-count:3;column-gap:var(--sp-3);}
+.task-list{column-count:var(--list-cols,4);column-gap:var(--sp-3);}
+.card-notes{display:flex;flex-wrap:wrap;gap:6px;padding:2px 15px 10px;}
 
 /* 상태 세그먼트 */
 .lseg{position:relative;display:flex;background:rgba(118,118,128,0.14);border-radius:12px;padding:3px;margin:var(--sp-3) 0 var(--sp-4);max-width:380px;box-shadow:inset 0 1px 2px rgba(0,0,0,0.06);}
@@ -242,15 +243,15 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 .notes-top .nt-title{font-size:23px;font-weight:700;letter-spacing:-0.4px;}
 .new-note-btn{display:inline-flex;align-items:center;gap:6px;background:var(--db-green);color:#fff;padding:9px 16px;border-radius:10px;font-size:14px;font-weight:600;box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),0 1px 3px rgba(0,133,74,0.25);}
 .notes-split{display:flex;gap:var(--sp-4);align-items:flex-start;}
-.notes-list-pane{width:300px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;}
-.note-list-card{background:var(--bg-card);border-radius:12px;box-shadow:var(--sh-card);border:0.5px solid rgba(0,0,0,0.045);padding:13px 15px;cursor:pointer;transition:box-shadow .2s var(--ease),transform .1s var(--ease);}
+.notes-list-pane{flex:1;min-width:0;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-content:start;}
+.note-list-card{background:var(--bg-card);border-radius:12px;box-shadow:var(--sh-card);border:0.5px solid rgba(0,0,0,0.045);padding:13px 15px;cursor:pointer;min-height:96px;transition:box-shadow .2s var(--ease),transform .1s var(--ease);}
 .note-list-card:hover{box-shadow:0 3px 10px rgba(0,0,0,0.09);transform:translateY(-1px);}
 .note-list-card.active{box-shadow:inset 0 0 0 2px var(--db-green);}
 .note-list-card .nl-title{font-size:14px;font-weight:700;margin-bottom:3px;}
 .note-list-card .nl-prev{font-size:12px;color:var(--text-secondary);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.45;white-space:pre-wrap;word-break:break-word;}
 .note-list-card .nl-foot{display:flex;gap:8px;align-items:center;margin-top:7px;font-size:10px;color:var(--text-tertiary);}
 .note-list-card .nl-link{background:var(--db-green-light);color:var(--db-green-dark);padding:1px 6px;border-radius:5px;font-weight:700;}
-.note-edit-pane{flex:1;min-width:0;background:var(--bg-card);border-radius:var(--r-card);box-shadow:var(--sh-card);border:0.5px solid rgba(0,0,0,0.04);position:sticky;top:0;min-height:400px;}
+.note-edit-pane{width:440px;flex-shrink:0;background:var(--bg-card);border-radius:var(--r-card);box-shadow:var(--sh-card);border:0.5px solid rgba(0,0,0,0.04);position:sticky;top:0;min-height:400px;}
 .note-edit-inner{padding:20px 22px;}
 .note-edit-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:90px 20px;color:var(--text-secondary);text-align:center;}
 .note-edit-empty svg{color:var(--text-tertiary);margin-bottom:14px;}
@@ -315,11 +316,9 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 #toast .undo{color:#4FD37A;font-weight:700;white-space:nowrap;}
 
 #tabbar{display:none;}
-@media (max-width:1150px){.task-list{column-count:2;}}
-@media (max-width:1100px){.notes-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));}}
 @media (max-width:900px){#content{padding-left:var(--sp-4);padding-right:var(--sp-4);}#composer{padding-left:var(--sp-4);padding-right:var(--sp-4);}#topbar{padding-left:var(--sp-4);padding-right:var(--sp-4);}
   .cal-split{flex-direction:column;}.cal-right{width:auto;position:static;margin-top:var(--sp-4);}.cal-detail-body{max-height:none;}
-  .notes-split{flex-direction:column;}.notes-list-pane{width:auto;}.note-edit-pane{position:static;width:100%;}}
+  .notes-split{flex-direction:column;}.notes-list-pane{grid-template-columns:repeat(2,1fr);}.note-edit-pane{position:static;width:100%;}}
 @media (max-width:768px){
   #topnav{display:none;}
   .task-list{column-count:1;}
@@ -596,7 +595,7 @@ function cardHTML(tk){
   let meta="";
   if(dd)meta+=`<span class="badge dday gloss" style="background:${dd.color}">${dd.text}</span>`;
   if(age&&!done)meta+=`<span class="age-chip ${age.old?'old':''}">${age.text}</span>`;
-  linked.forEach((n,i)=>meta+=`<button class="note-btn tap" data-noteview="${n.id}">${icoNoteMini()} ${esc(n.title||("메모"+(i+1)))}</button>`);
+  const notesRow=linked.length?`<div class="card-notes">${linked.map((n,i)=>`<button class="note-btn tap" data-noteview="${n.id}">${icoNoteMini()} ${esc(n.title||("메모"+(i+1)))}</button>`).join("")}</div>`:"";
   let progHTML="";
   if(hasSub)progHTML=`<div class="progress-wrap"><span class="progress-num">${prog.done}/${prog.total}</span><div class="progress-bar"><div class="progress-fill" style="width:${prog.pct}%"></div></div></div>`;
   let footActions;
@@ -611,6 +610,7 @@ function cardHTML(tk){
     <div class="card-header">${statusPill}<span class="card-title" data-titleedit="${tk.id}" title="더블클릭하면 수정">${esc(tk.title)}</span></div>
     ${bodyInner?`<div class="card-body">${bodyInner}</div>`:""}
     <div class="subs">${subsHTML(tk)}</div>
+    ${notesRow}
     <div class="card-foot">${expandBtn}<div class="foot-actions">${footActions}</div></div>
   </div>`;
 }
@@ -1027,13 +1027,15 @@ function attachSheetDrag(sheet){
 /* ===== 설정 ===== */
 function openSettings(){
   const modeLabel=storageMode==="fs"?`폴더 연결됨 (${esc(state.settings.folderName||"")})`:`로컬 저장소 · 권장 폴더 ${TARGET_PATH}`;
-  $("#sheetRoot").innerHTML=`<div class="sheet" id="settingsSheet"><div class="sheet-handle"><div class="bar"></div></div><div class="sheet-head"><div class="sh-title">설정</div><button class="sh-close tap" id="stClose">${icoX()}</button></div><div class="sheet-body"><div class="group-title">저장</div><div class="group"><div class="settings-row"><div class="sr-label">저장 방식<div class="sr-sub">${modeLabel}</div></div><button class="sr-act tap" id="stConnect">${storageMode==="fs"?"폴더 변경":"폴더 연결"}</button></div><div class="settings-row"><div class="sr-label">기본 진입 화면<div class="sr-sub">앱 실행 시 처음 보이는 화면</div></div><select id="stDefView" style="padding:8px;border-radius:8px;border:1px solid var(--separator-strong);"><option value="list">목록</option><option value="calendar">캘린더</option><option value="notes">메모</option></select></div></div><div class="group-title">데이터</div><div class="group"><div class="settings-row"><div class="sr-label">전체 초기화<div class="sr-sub">모든 업무·메모 삭제</div></div><button class="sr-danger tap" id="stReset">초기화</button></div></div><div class="group-title">정보</div><div class="group"><div class="settings-row"><div class="sr-label">업무 ${state.tasks.length}건 · 메모 ${state.notes.length}개<div class="sr-sub">기준 연도 2026</div></div></div></div></div></div>`;
+  $("#sheetRoot").innerHTML=`<div class="sheet" id="settingsSheet"><div class="sheet-handle"><div class="bar"></div></div><div class="sheet-head"><div class="sh-title">설정</div><button class="sh-close tap" id="stClose">${icoX()}</button></div><div class="sheet-body"><div class="group-title">저장</div><div class="group"><div class="settings-row"><div class="sr-label">저장 방식<div class="sr-sub">${modeLabel}</div></div><button class="sr-act tap" id="stConnect">${storageMode==="fs"?"폴더 변경":"폴더 연결"}</button></div><div class="settings-row"><div class="sr-label">기본 진입 화면<div class="sr-sub">앱 실행 시 처음 보이는 화면</div></div><select id="stDefView" style="padding:8px;border-radius:8px;border:1px solid var(--separator-strong);"><option value="list">목록</option><option value="calendar">캘린더</option><option value="notes">메모</option></select></div><div class="settings-row"><div class="sr-label">목록 열 수<div class="sr-sub">넓은 화면에서 카드 열 개수</div></div><select id="stCols" style="padding:8px;border-radius:8px;border:1px solid var(--separator-strong);"><option value="2">2열</option><option value="3">3열</option><option value="4">4열</option><option value="5">5열</option><option value="6">6열</option></select></div></div><div class="group-title">데이터</div><div class="group"><div class="settings-row"><div class="sr-label">전체 초기화<div class="sr-sub">모든 업무·메모 삭제</div></div><button class="sr-danger tap" id="stReset">초기화</button></div></div><div class="group-title">정보</div><div class="group"><div class="settings-row"><div class="sr-label">업무 ${state.tasks.length}건 · 메모 ${state.notes.length}개<div class="sr-sub">기준 연도 2026</div></div></div></div></div></div>`;
   requestAnimationFrame(()=>{$("#settingsSheet").classList.add("show");$("#scrim").classList.add("show");});
   $("#stDefView").value=state.settings.defaultView||"list";
+  $("#stCols").value=String(state.settings.listCols||4);
   $("#scrim").onclick=closeModal;$("#stClose").onclick=closeModal;
   $("#stConnect").onclick=()=>{closeModal();setTimeout(promptConnectFolder,320);};
   $("#stDefView").onchange=e=>{state.settings.defaultView=e.target.value;scheduleSave();};
-  $("#stReset").onclick=()=>{closeModal();openConfirm("전체 초기화","모든 업무와 메모가 삭제됩니다. 되돌릴 수 없습니다.",()=>{state.tasks=[];state.notes=[];state.settings.sampleDataLoaded=false;scheduleSave();renderAll();toast("초기화됨");});};
+  $("#stCols").onchange=e=>{state.settings.listCols=parseInt(e.target.value)||4;applyListCols();scheduleSave();};
+  $("#stReset").onclick=()=>{closeModal();setTimeout(()=>openConfirm("전체 초기화","모든 업무와 메모가 삭제됩니다. 되돌릴 수 없습니다.",()=>{state.tasks=[];state.notes=[];state.settings.sampleDataLoaded=false;scheduleSave();renderAll();toast("초기화됨");}),320);};
   attachSheetDrag($("#settingsSheet"));
 }
 
@@ -1079,14 +1081,17 @@ function bindGlobal(){
 }
 
 /* ===== 초기화 ===== */
+function applyListCols(){const n=Math.min(6,Math.max(1,parseInt(state.settings.listCols)||4));document.documentElement.style.setProperty("--list-cols",n);}
 async function init(){
-  state.settings={defaultView:"list",lastOpened:"",folderName:"",sampleDataLoaded:false};
+  state.settings={defaultView:"list",listCols:4,lastOpened:"",folderName:"",sampleDataLoaded:false};
   let restored=false;
   try{const handle=await idbGet("dir");if(handle){if((await handle.queryPermission({mode:"readwrite"}))==="granted"){dirHandle=handle;storageMode="fs";await loadFromFS();restored=true;}else dirHandle=handle;}}catch(e){console.warn(e);}
   if(!restored){loadFromLS();storageMode="local";$("#banner").classList.add("show");}
   normalize();
   if(!state.settings.sampleDataLoaded&&state.tasks.length===0){const seed=buildSeed();state.tasks=seed.tasks;state.notes=seed.notes;state.settings.sampleDataLoaded=true;await saveAll();}
   const valid=["list","calendar","notes"];if(!valid.includes(state.settings.defaultView))state.settings.defaultView="list";
+  if(!state.settings.listCols)state.settings.listCols=4;
+  applyListCols();
   ui.view=state.settings.defaultView;
   bindGlobal();setView(ui.view);runBackup();
   if(ui.view==="list"&&state.tasks.length===0){const qi=$("#quickInput");if(qi)qi.focus();}
