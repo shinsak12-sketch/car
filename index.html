@@ -428,6 +428,21 @@ async function verifyPermission(h){const o={mode:"readwrite"};if((await h.queryP
 async function fsWriteJSON(name,obj){const fh=await dirHandle.getFileHandle(name,{create:true});const w=await fh.createWritable();await w.write(JSON.stringify(obj,null,2));await w.close();}
 async function fsReadJSON(name){try{const fh=await dirHandle.getFileHandle(name);const f=await fh.getFile();const t=await f.text();return t?JSON.parse(t):null;}catch(e){return null;}}
 function promptConnectFolder(){openConfirm("데이터 폴더 연결",`다음 폴더를 선택해 주세요:\n\n${TARGET_PATH}\n\n최초 1회만 지정하면 다음 실행부터 자동으로 연결됩니다.`,()=>connectFolder(),false);}
+// 이미 지정한 폴더가 있으면 재선택 없이 권한만 재허용해서 연결
+async function reconnectFolder(){
+  if(dirHandle){
+    try{
+      if(await verifyPermission(dirHandle)){
+        storageMode="fs";state.settings.folderName=dirHandle.name;
+        const existing=await fsReadJSON("tasks.json");
+        if(existing===null&&state.tasks.length){await saveAll();}else{await loadFromFS();normalize();}
+        $("#banner").classList.remove("show");toast("폴더 재연결됨: "+dirHandle.name);renderAll();return true;
+      }
+    }catch(e){console.warn(e);}
+  }
+  return promptConnectFolder();
+}
+function connectAction(){return dirHandle?reconnectFolder():promptConnectFolder();}
 async function connectFolder(){
   if(!window.showDirectoryPicker){toast("이 브라우저는 폴더 연결을 지원하지 않습니다 (Chrome/Edge 권장)");return false;}
   try{
@@ -1032,7 +1047,7 @@ function openSettings(){
   $("#stDefView").value=state.settings.defaultView||"list";
   $("#stCols").value=String(state.settings.listCols||4);
   $("#scrim").onclick=closeModal;$("#stClose").onclick=closeModal;
-  $("#stConnect").onclick=()=>{closeModal();setTimeout(promptConnectFolder,320);};
+  $("#stConnect").onclick=()=>{closeModal();setTimeout(connectAction,320);};
   $("#stDefView").onchange=e=>{state.settings.defaultView=e.target.value;scheduleSave();};
   $("#stCols").onchange=e=>{state.settings.listCols=parseInt(e.target.value)||4;applyListCols();scheduleSave();};
   $("#stReset").onclick=()=>{closeModal();setTimeout(()=>openConfirm("전체 초기화","모든 업무와 메모가 삭제됩니다. 되돌릴 수 없습니다.",()=>{state.tasks=[];state.notes=[];state.settings.sampleDataLoaded=false;scheduleSave();renderAll();toast("초기화됨");}),320);};
@@ -1077,7 +1092,7 @@ function bindGlobal(){
   qi.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();submitQuick();}});
   $("#quickSend").onclick=submitQuick;
   $("#settingsBtn").onclick=openSettings;
-  $("#bannerConnect").onclick=promptConnectFolder;
+  $("#bannerConnect").onclick=connectAction;
 }
 
 /* ===== 초기화 ===== */
