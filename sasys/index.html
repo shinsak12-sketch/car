@@ -238,18 +238,28 @@ let dirHandle=null, fileHandle=null;
 let storeMode = FSA ? "fsa" : "local";   // fsa | local
 let saveTimer=null;
 
-// 폴더 선택 → 핸들 확보 → 데이터 로드/생성
+// 폴더 선택 → 핸들 확보 → 데이터 로드/이관
 async function pickFolder(){
   if(!FSA){ toast("이 브라우저는 폴더 저장을 지원하지 않습니다."); return; }
   try{
     dirHandle = await window.showDirectoryPicker({id:"sasys", mode:"readwrite"});
     await idbSet("dir", dirHandle);
     await ensureFileHandle();
-    await loadFromFile();
+    const f = await fileHandle.getFile();
+    const txt = await f.text();
+    if(txt.trim()){
+      // 폴더에 이미 데이터 파일이 있으면 그 내용을 사용
+      db = normalize(JSON.parse(txt));
+    } else {
+      // 파일이 비어 있으면: 폴더 연결 전 입력분(localStorage/샘플)을 이 폴더로 이관 저장
+      if(db.properties.length===0){ seedSample(); }
+    }
+    storeMode="fsa";
+    await saveNow();            // 현재 db를 파일에 기록(이관 완료)
     updateStoreState();
     toast("데이터 폴더 연결됨");
     render();
-  }catch(e){ if(e.name!=="AbortError") toast("폴더 선택 취소/실패"); }
+  }catch(e){ if(e.name!=="AbortError") toast("폴더 선택 취소/실패: "+e.message); }
 }
 async function ensureFileHandle(){
   fileHandle = await dirHandle.getFileHandle(DB_FILE, {create:true});
@@ -283,22 +293,27 @@ async function saveNow(){
 // 변경 후 호출: 짧은 디바운스로 저장 (연속 입력 대비)
 function save(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>saveNow().catch(e=>toast("저장 실패: "+e.message)),120); }
 
+// localStorage 폴백 로드(없으면 샘플 시드)
+function loadLocal(){
+  const s=localStorage.getItem("sasys_data");
+  if(s){ try{ db=normalize(JSON.parse(s)); return; }catch(e){/* 파싱 실패 시 아래로 */} }
+  db=emptyDB(); seedSample(); localStorage.setItem("sasys_data",JSON.stringify(db));
+}
 // 재실행 시 이전 폴더 핸들 복원 시도
 async function tryRestore(){
   if(!FSA){ // 폴백: localStorage
-    const s=localStorage.getItem("sasys_data");
-    if(s){ db=normalize(JSON.parse(s)); } else { db=emptyDB(); seedSample(); localStorage.setItem("sasys_data",JSON.stringify(db)); }
-    storeMode="local"; updateStoreState(); return;
+    storeMode="local"; loadLocal(); updateStoreState(); return;
   }
   try{
     const h=await idbGet("dir");
     if(h){
       dirHandle=h;
-      if(await verifyPermission(dirHandle)){ await ensureFileHandle(); await loadFromFile(); updateStoreState(); return; }
-      else { updateStoreState(true); return; } // 권한 재요청 필요 상태
+      if(await verifyPermission(dirHandle)){ await ensureFileHandle(); storeMode="fsa"; await loadFromFile(); updateStoreState(); return; }
+      else { storeMode="fsa"; updateStoreState(true); return; } // 권한 재요청 필요 (파일 데이터는 재연결 후 로드)
     }
   }catch(e){/* 무시 */}
-  updateStoreState(); // 최초: 미연결
+  // FSA 지원하지만 폴더 미연결: localStorage 폴백으로 이어서 사용(재실행해도 데이터 유지)
+  storeMode="local"; loadLocal(); updateStoreState();
 }
 function updateStoreState(needReconnect=false){
   const el=$("#storeState"); if(!el) return;
@@ -558,7 +573,7 @@ function render(){
   const v=$("#view");
   const noStore = FSA && !dirHandle;
   let banner="";
-  if(noStore) banner=`<div class="notice warn">⚠ 아직 데이터 폴더가 연결되지 않았습니다. 변경사항이 파일에 저장되려면 <a href="#" onclick="pickFolder();return false"><b>데이터 폴더 선택</b></a>을 먼저 진행하세요. (지금은 화면 확인용 샘플이 표시됩니다)</div>`;
+  if(noStore) banner=`<div class="notice warn">⚠ 데이터 폴더가 아직 연결되지 않았습니다. 지금 입력하는 내용은 <b>브라우저에 임시 저장</b>되어 재실행해도 유지되지만, 파일(sasys_data.json)로 안전하게 보관하려면 <a href="#" onclick="pickFolder();return false"><b>데이터 폴더 선택</b></a>을 진행하세요. (연결 시 지금까지 입력분이 파일로 이관됩니다)</div>`;
   if(storeMode==="local") banner=`<div class="notice gray">💾 이 브라우저는 폴더 저장(File System Access API)을 지원하지 않아 <b>브라우저 로컬 저장</b>으로 동작합니다. 정기적으로 <b>데이터 탭 → JSON 내보내기</b>로 백업하세요.</div>`;
   const fn={dash:viewDash,props:viewProps,contracts:viewContracts,settle:viewSettle,issues:viewIssues,reassign:viewReassign,limits:viewLimits,data:viewData}[curTab];
   v.innerHTML = banner + fn();
@@ -1011,8 +1026,7 @@ function submitIssue(id){
 /* ============================ 초기화 ============================ */
 $("#today").textContent = new Date().toLocaleDateString("ko-KR",{year:"numeric",month:"long",day:"numeric"});
 (async ()=>{
-  await tryRestore();
-  if(db.properties.length===0){ seedSample(); } // 최초 화면 확인용
+  await tryRestore();   // 저장소 상태에 맞게 db 로드(폴더/로컬/샘플)
   render();
 })();
 </script>
