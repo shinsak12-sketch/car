@@ -1,6 +1,6 @@
 /* ============================================================
    app.js — UI 오케스트레이션
-   흐름: 입력 → [급여계산](새 창 명세서) → 급여대장 업로드 → [검증](새 창 결과)
+   입력 → [급여계산](검색기 새 창) → 급여대장 → [검증](새 창) → [최종저장]
    ============================================================ */
 (function (PV) {
   'use strict';
@@ -12,23 +12,24 @@
 
   const store = {
     salary: null, roster: null, order: null, vacation: null, holiday: [], ledger: null,
-    files: {}, uploads: { annual: new Map(), prod: new Map(), etc: new Map() },
-    discipline: [], carry: new Map(),
+    files: {}, fileCounts: {}, uploads: { annual: new Map(), prod: new Map(), etc: new Map() },
+    discipline: [], carry: new Map(), overrides: { unpaidVac: new Map() },
   };
   let payrollResult = null, verifyResult = null;
 
-  /* ---------- theme ---------- */
+  /* ---------- theme / reset ---------- */
   const THEME_KEY = 'pv-theme';
-  function curTheme() { return document.documentElement.getAttribute('data-theme') || 'light'; }
+  const curTheme = () => document.documentElement.getAttribute('data-theme') || 'light';
   function setTheme(t) { document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem(THEME_KEY, t); } catch (e) {} }
   (function () { let t = 'light'; try { t = localStorage.getItem(THEME_KEY) || 'light'; } catch (e) {} setTheme(t); })();
   $('#themeBtn').onclick = () => setTheme(curTheme() === 'dark' ? 'light' : 'dark');
+  $('#resetBtn').onclick = () => { if (confirm('모든 입력·계산·검증 결과를 초기화할까요?')) location.reload(); };
 
   /* ---------- toast ---------- */
   function toast(msg, kind) {
     const t = el('div', 'toast' + (kind ? ' ' + kind : ''), `<span>${esc(msg)}</span>`);
     $('#toasts').appendChild(t);
-    setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(10px)'; setTimeout(() => t.remove(), 300); }, 2600);
+    setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(10px)'; setTimeout(() => t.remove(), 300); }, 3000);
   }
 
   /* ---------- period ---------- */
@@ -44,31 +45,55 @@
 
   const readFile = f => f.arrayBuffer();
 
-  /* ---------- folder ---------- */
+  /* ---------- folder (발령 다중파일 누적, 아카이브 로드) ---------- */
   $('#folderInput').onchange = async (e) => {
-    const files = [...e.target.files].filter(f => /\.x(lsx|ls)$/i.test(f.name));
-    if (!files.length) { toast('엑셀 파일이 없습니다', 'bad'); return; }
+    const all = [...e.target.files];
+    const xls = all.filter(f => /\.x(lsx|ls)$/i.test(f.name));
+    const jsons = all.filter(f => /\.json$/i.test(f.name));
+    if (!xls.length && !jsons.length) { toast('엑셀 파일이 없습니다', 'bad'); return; }
+    // 기준 데이터 리셋(재선택 시 중복 방지)
+    store.salary = store.roster = store.order = store.vacation = null; store.holiday = []; store.files = {}; store.fileCounts = {};
     let ok = 0;
-    for (const f of files) {
+    for (const f of xls) {
       try {
         const res = PV.readWorkbook(await readFile(f), f.name);
         if (res.type === 'unknown' || !res.data) continue;
         if (res.type === 'ledger') { store.ledger = res.data; store.files.ledger = f.name; markLedger(); continue; }
-        store[res.type] = res.data; store.files[res.type] = f.name; ok++;
+        if (res.type === 'order') { // 여러 발령 파일 누적
+          store.order = (store.order || []).concat(res.data);
+          store.fileCounts.order = (store.fileCounts.order || 0) + 1;
+          store.files.order = store.fileCounts.order > 1 ? `${store.fileCounts.order}개 파일` : f.name;
+        } else if (res.type === 'holiday') {
+          store.holiday = [...new Set([...(store.holiday || []), ...res.data])]; store.files.holiday = f.name;
+        } else { store[res.type] = res.data; store.files[res.type] = f.name; }
+        ok++;
       } catch (err) { console.error(f.name, err); }
     }
+    // 전월 처리 아카이브
+    const arch = [];
+    for (const f of jsons) { try { const t = JSON.parse(await f.text()); if (t && t.type === 'pv-archive') arch.push(t); } catch (e) {} }
+    if (arch.length) { arch.sort((a, b) => (a.ym < b.ym ? 1 : -1)); applyArchive(arch[0]); }
+
     $('#folderBadge').textContent = '연결됨'; $('#folderBadge').className = 'badge g';
-    renderFolder(); detectCarry(); updatePayday(); refresh();
-    toast(`폴더 인식 완료 · ${ok}개 기준 파일`, 'ok');
+    renderFolder(); detectCarry(); renderDiscipline(); updatePayday(); refresh();
+    toast(`폴더 인식 완료 · ${ok}개 기준 파일` + (arch.length ? ` · 전월 처리내역 불러옴` : ''), 'ok');
   };
+
+  function applyArchive(a) {
+    store.carry = new Map(a.carry || []);
+    store.discipline = (a.discipline || []).map(d => Object.assign({}, d));
+    store.overrides.unpaidVac = new Map((a.overrides && a.overrides.unpaidVac) || []);
+    toast(`전월(${a.ym}) 처리내역 불러옴 — 이월휴직·징계 자동 반영`, 'ok');
+  }
+
   function renderFolder() {
     const wrap = $('#folderFiles'); wrap.innerHTML = '';
     ['salary', 'roster', 'order', 'vacation', 'holiday'].forEach(type => {
-      const lab = PV.FILE_LABELS[type], loaded = store[type] != null;
+      const lab = PV.FILE_LABELS[type], loaded = store[type] != null && (type !== 'holiday' || store.holiday.length);
       const cnt = type === 'holiday' ? (store.holiday || []).length : (store[type] ? store[type].length : 0);
       const it = el('div', 'fileitem ' + (loaded ? 'ok' : 'miss'));
       it.innerHTML = `<span class="dot"></span>
-        <div><div class="fi-name">${lab.name}</div><div class="fi-sub">${lab.sub}</div></div>
+        <div><div class="fi-name">${lab.name}${type === 'order' && store.fileCounts.order > 1 ? ` <span class="badge g" style="font-size:9px">${store.fileCounts.order}개 합침</span>` : ''}</div><div class="fi-sub">${lab.sub}</div></div>
         <div class="fi-meta">${loaded ? `<span class="badge g">${cnt}${type === 'holiday' ? '일' : '건'}</span>` : '<span class="badge n">미인식</span>'}
         <div class="fi-file">${esc(store.files[type] || '')}</div></div>`;
       wrap.appendChild(it);
@@ -150,16 +175,14 @@
     t.appendChild(tb); box.appendChild(t);
   }
 
-  /* ---------- enable buttons ---------- */
+  /* ---------- enable ---------- */
   function refresh() {
     $('#calcBtn').disabled = !(store.salary && store.roster && store.order);
     $('#verifyBtn').disabled = !(payrollResult && !payrollResult.blocked && store.ledger);
   }
+  const storeForEngine = () => ({ salary: store.salary, roster: store.roster, order: store.order, vacation: store.vacation, holiday: store.holiday, ledger: store.ledger, uploads: store.uploads, discipline: store.discipline, carry: store.carry, overrides: store.overrides });
 
-  function storeForEngine() {
-    return { salary: store.salary, roster: store.roster, order: store.order, vacation: store.vacation, holiday: store.holiday, ledger: store.ledger, uploads: store.uploads, discipline: store.discipline, carry: store.carry };
-  }
-
+  /* ---------- alerts ---------- */
   const ALERT_ICON = {
     block: '<path d="M12 9v4m0 4h.01M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
     bad: '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M15 9l-6 6M9 9l6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
@@ -171,158 +194,281 @@
     box.innerHTML = '';
     if (!alerts.length) { box.innerHTML = '<div class="empty">특이사항 없음</div>'; return; }
     alerts.forEach(a => {
-      const d = el('div', 'alert ' + a.level);
+      const clickable = a.kind && a.사번;
+      const d = el('div', 'alert ' + a.level + (clickable ? ' clickable' : ''));
       d.innerHTML = `<div class="a-ic"><svg viewBox="0 0 24 24">${ALERT_ICON[a.level] || ALERT_ICON.info}</svg></div>
-        <div><div class="a-t">${esc(a.title)}</div><div class="a-d">${esc(a.desc || '')}</div></div>`;
+        <div><div class="a-t">${esc(a.title)}</div><div class="a-d">${esc(a.desc || '')}</div></div>
+        ${clickable ? '<span class="a-go">입력 →</span>' : ''}`;
+      if (clickable) d.onclick = () => openFixModal(a);
       box.appendChild(d);
     });
   }
 
+  /* ---------- 담당자 입력 모달 ---------- */
+  function openFixModal(a) {
+    if (a.kind === 'carry') {
+      openModal({
+        title: '이월 휴직 정보 입력', sub: `${a.사번}`,
+        fields: [
+          { key: '시작일', label: '휴직 시작일', type: 'date', value: (store.carry.get(a.사번) || {}).시작일 || '' },
+          { key: '종류', label: '휴직 종류', type: 'select', options: ['육아휴직', '무급휴직', '가족돌봄휴직', '난임휴직', '의병휴직'], value: (store.carry.get(a.사번) || {}).종류 || '' },
+        ],
+        onSubmit: v => { store.carry.set(a.사번, { 시작일: v.시작일, 종류: v.종류 }); detectCarry(); runCalc(false); toast('반영 완료 — 재계산됨', 'ok'); },
+      });
+    } else if (a.kind === 'maternity') {
+      openModal({
+        title: '출산휴가 무급일수 입력', sub: `${a.사번} · ${target().m}월`,
+        fields: [{ key: '무급일수', label: '이번달 무급 일수 (일)', type: 'number', value: store.overrides.unpaidVac.get(a.사번) || '' }],
+        onSubmit: v => { store.overrides.unpaidVac.set(a.사번, +v.무급일수 || 0); runCalc(false); toast('반영 완료 — 재계산됨', 'ok'); },
+      });
+    }
+  }
+  function openModal(cfg) {
+    const root = $('#modalRoot');
+    const fields = cfg.fields.map(f => {
+      let inp;
+      if (f.type === 'select') inp = `<select class="inp" data-k="${f.key}"><option value="">선택</option>${f.options.map(o => `<option ${f.value === o ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+      else inp = `<input type="${f.type}" data-k="${f.key}" value="${esc(f.value)}">`;
+      return `<div class="m-field"><label>${esc(f.label)}</label>${inp}</div>`;
+    }).join('');
+    const ov = el('div', 'modal-ov');
+    ov.innerHTML = `<div class="modal"><div class="m-head"><div class="m-ic"><svg viewBox="0 0 24 24" width="16" height="16">${ALERT_ICON.warn}</svg></div>
+      <div><h3>${esc(cfg.title)}</h3><div class="m-sub">${esc(cfg.sub || '')}</div></div></div>
+      <div class="m-body">${fields}</div>
+      <div class="m-foot"><button class="btn btn-ghost btn-sm" data-x>취소</button><button class="btn btn-primary btn-sm" data-ok>적용</button></div></div>`;
+    const close = () => ov.remove();
+    ov.onclick = e => { if (e.target === ov) close(); };
+    ov.querySelector('[data-x]').onclick = close;
+    ov.querySelector('[data-ok]').onclick = () => { const v = {}; ov.querySelectorAll('[data-k]').forEach(i => v[i.dataset.k] = i.value); cfg.onSubmit(v); close(); };
+    root.appendChild(ov);
+  }
+
   /* ---------- STEP A: 급여계산 ---------- */
-  $('#calcBtn').onclick = () => {
-    try {
-      const res = PV.computePayroll(storeForEngine(), target());
-      payrollResult = res; verifyResult = null;
-      $('#calcTiles').classList.remove('hidden');
-      $('#tiTotal').textContent = res.summary.total; $('#tiIlhal').textContent = res.summary.ilhal;
-      $('#tiSpecial').textContent = res.summary.special; $('#tiWarn').textContent = res.summary.warn;
-      $('#tiBlock').textContent = res.summary.block;
-      renderAlerts($('#calcAlerts'), res.alerts);
-      $('#calcActions').classList.toggle('hidden', res.blocked);
-      ensureExtraButtons();
-      refresh();
-      if (res.blocked) { toast('연봉 미입력 — 전체 계산 차단', 'bad'); }
-      else { openPayrollWindow(); toast(`급여계산 완료 · ${res.summary.total}명`, 'ok'); }
-    } catch (err) { console.error(err); toast('오류: ' + err.message, 'bad'); }
-  };
+  function runCalc(openWindow) {
+    const res = PV.computePayroll(storeForEngine(), target());
+    payrollResult = res; verifyResult = null;
+    $('#verifyTiles').classList.add('hidden'); $('#verifyActions').classList.add('hidden'); $('#verifyAlerts').innerHTML = '';
+    const ve = $('#verifyExcel'); if (ve) ve.remove(); const sv = $('#saveBtn'); if (sv) sv.remove();
+    $('#calcTiles').classList.remove('hidden');
+    $('#tiTotal').textContent = res.summary.total; $('#tiIlhal').textContent = res.summary.ilhal;
+    $('#tiSpecial').textContent = res.summary.special; $('#tiWarn').textContent = res.summary.warn; $('#tiBlock').textContent = res.summary.block;
+    renderAlerts($('#calcAlerts'), res.alerts);
+    $('#calcActions').classList.toggle('hidden', res.blocked);
+    ensureExtraButtons(); refresh();
+    if (res.blocked) { toast('연봉 미입력 — 전체 계산 차단', 'bad'); }
+    else if (openWindow) { openPayrollWindow(); toast(`급여계산 완료 · ${res.summary.total}명`, 'ok'); }
+  }
+  $('#calcBtn').onclick = () => { try { runCalc(true); } catch (e) { console.error(e); toast('오류: ' + e.message, 'bad'); } };
   $('#openCalcBtn').onclick = openPayrollWindow;
 
   /* ---------- STEP B: 검증 ---------- */
-  $('#verifyBtn').onclick = () => {
-    if (!payrollResult) { toast('먼저 급여계산을 실행하세요', 'bad'); return; }
-    try {
-      const res = PV.compareLedger(payrollResult, storeForEngine());
-      verifyResult = res;
-      $('#verifyTiles').classList.remove('hidden');
-      $('#tiOk').textContent = res.summary.ok; $('#tiBad').textContent = res.summary.bad;
-      renderAlerts($('#verifyAlerts'), res.alerts);
-      $('#verifyActions').classList.remove('hidden');
-      ensureExtraButtons();
-      openVerifyWindow();
-      toast(res.summary.bad ? `검증 완료 · 불일치 ${res.summary.bad}명` : '전원 완전일치', res.summary.bad ? '' : 'ok');
-    } catch (err) { console.error(err); toast('오류: ' + err.message, 'bad'); }
-  };
+  function runVerify(openWindow) {
+    const res = PV.compareLedger(payrollResult, storeForEngine());
+    verifyResult = res;
+    $('#verifyTiles').classList.remove('hidden');
+    $('#tiOk').textContent = res.summary.ok; $('#tiBad').textContent = res.summary.bad;
+    renderAlerts($('#verifyAlerts'), res.alerts);
+    $('#verifyActions').classList.remove('hidden');
+    ensureExtraButtons();
+    if (openWindow) openVerifyWindow();
+    toast(res.summary.bad ? `검증 완료 · 불일치 ${res.summary.bad}명` : '전원 완전일치 · 최종저장 가능', res.summary.bad ? '' : 'ok');
+  }
+  $('#verifyBtn').onclick = () => { if (!payrollResult) { toast('먼저 급여계산을 실행하세요', 'bad'); return; } try { runVerify(true); } catch (e) { console.error(e); toast('오류: ' + e.message, 'bad'); } };
   $('#openVerifyBtn').onclick = openVerifyWindow;
 
-  // 엑셀 버튼 동적 추가
   function ensureExtraButtons() {
     if (!$('#calcExcel') && payrollResult && !payrollResult.blocked) {
       const b = el('button', 'btn btn-ghost btn-block', '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> 급여명세 엑셀');
       b.id = 'calcExcel'; b.style.marginTop = '8px'; b.onclick = exportPayroll; $('#calcActions').appendChild(b);
     }
-    if (!$('#verifyExcel') && verifyResult) {
+    if (verifyResult && !$('#verifyExcel')) {
       const b = el('button', 'btn btn-ghost btn-block', '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> 검증결과 엑셀');
       b.id = 'verifyExcel'; b.style.marginTop = '8px'; b.onclick = exportVerify; $('#verifyActions').appendChild(b);
     }
+    // 최종저장: 검증 완료 & 불일치 0
+    if (verifyResult && verifyResult.summary.bad === 0 && !$('#saveBtn')) {
+      const b = el('button', 'btn btn-save btn-block', '<svg viewBox="0 0 24 24" fill="none"><path d="M5 3h11l3 3v13a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 3v5h7M8 21v-6h8v6" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg> 최종 저장 (폴더 보관용)');
+      b.id = 'saveBtn'; b.style.marginTop = '10px'; b.onclick = saveArchive; $('#verifyActions').appendChild(b);
+    }
   }
 
-  /* ================= 새 창 렌더 ================= */
+  function saveArchive() {
+    const { y, m } = payrollResult.target, ym = `${y}-${String(m).padStart(2, '0')}`;
+    const a = {
+      type: 'pv-archive', ym, savedAt: new Date().toISOString(),
+      carry: [...store.carry.entries()], discipline: store.discipline,
+      overrides: { unpaidVac: [...store.overrides.unpaidVac.entries()] },
+      summary: payrollResult.summary,
+      rows: payrollResult.rows.map(r => ({ 사번: r.사번, 성명: r.성명, 소속: r.소속, pay: r.pay, total: r.total, notes: r.notes })),
+    };
+    const blob = new Blob([JSON.stringify(a, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob), link = document.createElement('a');
+    link.href = url; link.download = `급여처리_${ym}.json`; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+    toast(`급여처리_${ym}.json 저장 — 기준 폴더에 넣어두면 다음달 자동 로드`, 'ok');
+  }
+
+  /* ================= 새 창 (검색기) ================= */
   const WIN_CSS = `
   *{box-sizing:border-box}body{margin:0;font-family:-apple-system,"Segoe UI","Apple SD Gothic Neo","Noto Sans KR",sans-serif;background:var(--bg);color:var(--tx);font-size:12.5px}
   :root{--bg:#eef1f7;--su:#fff;--su2:#f5f8fd;--bd:#e2e8f2;--tx:#1c2436;--tx2:#5a6579;--tx3:#8a94a8;--br:#4f6bff;--ok:#12b76a;--bad:#f04438;--warn:#f79009;--info:#2e90fa;--oks:#e5f7ee;--bads:#fdeceb;--warns:#fdf1df}
   [data-theme=dark]{--bg:#0c0f17;--su:#161b28;--su2:#1b2130;--bd:#252c3c;--tx:#eef2fb;--tx2:#a4afc4;--tx3:#6f7a91;--br:#6d84ff;--ok:#3ddc90;--bad:#ff6b60;--warn:#ffb454;--info:#5aa9ff;--oks:#123123;--bads:#331715;--warns:#33260f}
-  .top{background:var(--su);border-bottom:1px solid var(--bd);padding:14px 22px;display:flex;align-items:center;gap:14px}
+  .top{background:var(--su);border-bottom:1px solid var(--bd);padding:13px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   .top h1{font-size:16px;margin:0;font-weight:800}.top .m{color:var(--tx3);font-size:12px;font-weight:600}
-  .top .sp{flex:1}
+  .top .sp{flex:1}.top .cnt{font-size:12px;color:var(--tx2);font-weight:700}
+  .search2 input{width:220px;font-family:inherit;font-size:12.5px;padding:8px 12px;border:1px solid var(--bd);border-radius:9px;background:var(--su2);color:var(--tx)}
   .top button{font-family:inherit;font-weight:700;font-size:12px;border:1px solid var(--bd);background:var(--su2);color:var(--tx2);border-radius:9px;padding:8px 14px;cursor:pointer}
   .top button:hover{border-color:var(--br);color:var(--br)}
-  .wrap{padding:18px 22px 60px}
-  .tbl{border:1px solid var(--bd);border-radius:12px;overflow:hidden}
+  .wrap{padding:16px 22px 70px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:13px}
+  .chip{border:1px solid var(--bd);background:var(--su);color:var(--tx2);font-weight:750;font-size:12px;padding:7px 14px;border-radius:20px;cursor:pointer;font-family:inherit;display:flex;gap:7px;align-items:center;transition:all .15s}
+  .chip:hover{border-color:var(--br)}
+  .chip.on{background:var(--br);color:#fff;border-color:var(--br)}
+  .chip .c-n{font-weight:850;opacity:.9}
+  .sum{display:flex;gap:12px;margin-bottom:13px;flex-wrap:wrap}
+  .sc{background:var(--su);border:1px solid var(--bd);border-radius:10px;padding:9px 15px}
+  .sc .k{font-size:10px;color:var(--tx3);font-weight:700}.sc .v{font-size:19px;font-weight:850}
+  .tbl{border:1px solid var(--bd);border-radius:12px;overflow:auto;max-height:calc(100vh - 210px)}
   table{width:100%;border-collapse:collapse;background:var(--su)}
-  th{background:var(--su2);color:var(--tx3);font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;padding:10px 10px;text-align:right;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--bd);white-space:nowrap}
-  th.l{text-align:left}
-  td{padding:9px 10px;border-bottom:1px solid var(--bd);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  th{background:var(--su2);color:var(--tx3);font-size:10.5px;text-transform:uppercase;letter-spacing:.02em;padding:10px 10px;text-align:right;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--bd);white-space:nowrap;cursor:pointer;user-select:none}
+  th.l{text-align:left}th:hover{color:var(--br)}th .ar{font-size:9px;margin-left:3px;color:var(--br)}
+  th.filtered{color:var(--br)}th.filtered::after{content:"⚲";margin-left:3px}
+  td{padding:8px 10px;border-bottom:1px solid var(--bd);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   td.l{text-align:left}tr:last-child td{border-bottom:none}
   tbody tr:hover{background:var(--su2)}
   .rbad{background:var(--bads)}.rbad:hover{background:var(--bads)}
   .tot{font-weight:800}
-  .note{color:var(--tx2);font-size:11px;text-align:left;white-space:normal;max-width:320px;line-height:1.45}
+  .note{color:var(--tx2);font-size:11px;text-align:left;white-space:normal;min-width:220px;max-width:360px;line-height:1.5}
   .tag{display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:800;margin:1px 2px 1px 0}
   .tag.ilhal{background:var(--warns);color:var(--warn)}.tag.sp{background:#eef;color:var(--br)}
   .tag.warn{background:var(--warns);color:var(--warn)}.tag.diff{background:var(--bads);color:var(--bad)}
-  .pill{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:800}
-  .pill.ok{background:var(--oks);color:var(--ok)}.pill.bad{background:var(--bads);color:var(--bad)}
-  .sum{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap}
-  .sc{background:var(--su);border:1px solid var(--bd);border-radius:10px;padding:10px 16px}
-  .sc .k{font-size:10.5px;color:var(--tx3);font-weight:700}.sc .v{font-size:20px;font-weight:850}
+  .pill{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:800}.pill.ok{background:var(--oks);color:var(--ok)}.pill.bad{background:var(--bads);color:var(--bad)}
   .dpos{color:var(--bad);font-weight:800}.dneg{color:var(--info);font-weight:800}
-  @media print{.top button{display:none}.top{position:static}}
+  .ctx{position:fixed;z-index:60;background:var(--su);border:1px solid var(--bd);border-radius:10px;box-shadow:0 14px 34px rgba(0,0,0,.28);padding:6px;min-width:200px}
+  .ctx button{display:block;width:100%;text-align:left;border:none;background:none;color:var(--tx);font-family:inherit;font-size:12.5px;padding:8px 10px;border-radius:7px;cursor:pointer;font-weight:650}
+  .ctx button:hover{background:var(--su2)}
+  .ctx .cf{padding:7px 8px}.ctx .cf label{font-size:10px;color:var(--tx3);font-weight:700;display:block;margin-bottom:5px}
+  .ctx .cf input{width:100%;font-family:inherit;font-size:12px;padding:7px 9px;border:1px solid var(--bd);border-radius:7px;background:var(--su2);color:var(--tx)}
+  .empty2{padding:40px;text-align:center;color:var(--tx3);font-weight:600}
+  @media print{.top button,.chips,.search2{display:none}.tbl{max-height:none;overflow:visible}th{position:static}}
   `;
-  function openWin(title, bodyHTML) {
+
+  // 팝업 내부 런타임(문자열로 주입되어 팝업 컨텍스트에서 실행)
+  function popupRuntime() {
+    const D = window.__D, doc = document;
+    const st = { chip: null, q: '', sort: null, dir: 1, colf: {} };
+    const norm = v => (v == null ? '' : '' + v).toLowerCase();
+    const tb = doc.getElementById('tb'), thead = doc.getElementById('thead');
+    function match(r) {
+      if (st.chip && !r.flags[st.chip]) return false;
+      if (st.q) { const s = st.q.toLowerCase(); if (!D.columns.some(c => norm(r.vals[c.key]).includes(s))) return false; }
+      for (const k in st.colf) { if (st.colf[k] && !norm(r.vals[k]).includes(st.colf[k].toLowerCase())) return false; }
+      return true;
+    }
+    function render() {
+      let rows = D.rows.filter(match);
+      if (st.sort) { const c = D.columns.find(x => x.key === st.sort); rows = rows.slice().sort((a, b) => { let x = a.vals[st.sort], y = b.vals[st.sort]; if (c && c.kind === 'num') return ((+x || 0) - (+y || 0)) * st.dir; return norm(x) < norm(y) ? -st.dir : norm(x) > norm(y) ? st.dir : 0; }); }
+      tb.innerHTML = rows.length ? rows.map(r => '<tr class="' + (r.cls || '') + '">' + D.columns.map(c => {
+        if (c.kind === 'tags') return '<td class="l note">' + (r.tagsHtml || '') + '</td>';
+        let v = r.vals[c.key];
+        let disp = c.kind === 'num' ? (v ? (+v).toLocaleString('ko-KR') : '<span style="color:var(--tx3)">·</span>') : (v == null ? '' : ('' + v));
+        return '<td class="' + (c.align === 'l' ? 'l' : '') + (c.tot ? ' tot' : '') + (c.cls ? ' ' + c.cls(r) : '') + '">' + disp + '</td>';
+      }).join('') + '</tr>').join('') : '<tr><td class="empty2" colspan="' + D.columns.length + '">일치하는 항목이 없습니다</td></tr>';
+      doc.getElementById('cnt').textContent = rows.length + '명';
+      D.chips.forEach(ch => { const e = doc.getElementById('chip-' + ch.k); if (e) e.querySelector('.c-n').textContent = (ch.k === 'all' ? D.rows.length : D.rows.filter(r => r.flags[ch.flag]).length); });
+      thead.querySelectorAll('th').forEach(th => { const k = th.dataset.key; const ar = th.querySelector('.ar'); if (ar) ar.textContent = k === st.sort ? (st.dir > 0 ? '▲' : '▼') : ''; th.classList.toggle('filtered', !!st.colf[k]); });
+    }
+    thead.querySelectorAll('th').forEach(th => {
+      const k = th.dataset.key; if (!k) return;
+      th.onclick = () => { if (st.sort === k) st.dir = -st.dir; else { st.sort = k; st.dir = 1; } render(); };
+      th.oncontextmenu = e => { e.preventDefault(); showCtx(e.clientX, e.clientY, k, th.textContent.replace(/[▲▼⚲]/g, '').trim()); };
+    });
+    function closeCtx() { const e = doc.getElementById('ctx'); if (e) e.remove(); }
+    function showCtx(x, y, k, label) {
+      closeCtx();
+      const m = doc.createElement('div'); m.className = 'ctx'; m.id = 'ctx';
+      m.innerHTML = '<button data-a="asc">▲ 오름차순 정렬</button><button data-a="desc">▼ 내림차순 정렬</button>'
+        + '<div class="cf"><label>필터검색 (부분일치)</label><input id="cfi" placeholder="' + label + ' 검색" value="' + (st.colf[k] || '') + '"></div>'
+        + '<button data-a="clear">✕ 이 열 필터 해제</button>';
+      doc.body.appendChild(m);
+      const rc = m.getBoundingClientRect();
+      m.style.left = Math.min(x, innerWidth - rc.width - 8) + 'px'; m.style.top = Math.min(y, innerHeight - rc.height - 8) + 'px';
+      m.querySelector('[data-a=asc]').onclick = () => { st.sort = k; st.dir = 1; render(); closeCtx(); };
+      m.querySelector('[data-a=desc]').onclick = () => { st.sort = k; st.dir = -1; render(); closeCtx(); };
+      m.querySelector('[data-a=clear]').onclick = () => { delete st.colf[k]; render(); closeCtx(); };
+      const inp = m.querySelector('#cfi'); inp.oninput = () => { st.colf[k] = inp.value; render(); }; setTimeout(() => inp.focus(), 10);
+    }
+    doc.addEventListener('click', e => { if (!e.target.closest('.ctx') && !e.target.closest('th')) closeCtx(); });
+    doc.getElementById('gs').oninput = e => { st.q = e.target.value; render(); };
+    doc.querySelectorAll('.chip').forEach(c => c.onclick = () => { const k = c.dataset.k; st.chip = (k === 'all' ? null : k); doc.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x.dataset.k === (st.chip || 'all'))); render(); });
+    render();
+  }
+
+  function openSearchWin(title, meta, columns, rows, chips, sumHTML) {
     const w = window.open('', '_blank');
     if (!w) { toast('팝업이 차단되었습니다. 팝업 허용 후 다시 시도하세요.', 'bad'); return; }
-    w.document.write(`<!DOCTYPE html><html data-theme="${curTheme()}"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${WIN_CSS}</style></head><body>${bodyHTML}</body></html>`);
+    const head = '<tr>' + columns.map(c => `<th class="${c.align === 'l' ? 'l' : ''}" data-key="${c.key}">${esc(c.label)}<span class="ar"></span></th>`).join('') + '</tr>';
+    const chipHTML = chips.map(ch => `<button class="chip${ch.k === 'all' ? ' on' : ''}" data-k="${ch.k}" id="chip-${ch.k}">${esc(ch.label)} <span class="c-n"></span></button>`).join('');
+    const payload = { columns, rows, chips };
+    const body = `<div class="top"><h1>${esc(title)}</h1><span class="m">${esc(meta)}</span><span class="cnt" id="cnt"></span><span class="sp"></span>
+        <div class="search2"><input id="gs" placeholder="🔍 전체 검색 (부분일치)"></div>
+        <button onclick="window.print()">인쇄 / PDF</button></div>
+      <div class="wrap">${sumHTML || ''}<div class="chips">${chipHTML}</div>
+      <div class="tbl"><table><thead id="thead">${head}</thead><tbody id="tb"></tbody></table></div>
+      <div style="margin-top:10px;font-size:11px;color:var(--tx3)">헤더 <b>우클릭</b> = 정렬·열 필터검색 · 헤더 클릭 = 정렬 · 상단 칩/검색 = 필터</div></div>
+      <script>window.__D=${JSON.stringify(payload)};(${popupRuntime.toString()})();<\/script>`;
+    w.document.write(`<!DOCTYPE html><html data-theme="${curTheme()}"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${WIN_CSS}</style></head><body>${body}</body></html>`);
     w.document.close();
   }
 
   function usedItemCols(rows) {
     const set = new Set();
-    rows.forEach(r => Object.keys(r.pay || r.ours || {}).forEach(k => { const v = (r.pay || r.ours)[k]; if (v) set.add(k); }));
-    const order = PV.LEDGER_ITEMS.slice();
-    const cols = order.filter(c => set.has(c));
+    rows.forEach(r => Object.keys(r.pay || {}).forEach(k => { if (r.pay[k]) set.add(k); }));
+    const cols = PV.LEDGER_ITEMS.filter(c => set.has(c));
     [...set].forEach(c => { if (!cols.includes(c)) cols.push(c); });
     return cols;
   }
+  const tagHTML = notes => (notes || []).map(n => `<span class="tag ${n.startsWith('일할') ? 'ilhal' : n.includes('확인') ? 'warn' : 'sp'}">${esc(n)}</span>`).join('');
+  const flagsOf = r => ({ ilhal: (r.notes || []).some(n => n.startsWith('일할')), special: (r.notes || []).some(n => n.includes('특례') || n.includes('소급') || n.includes('임금피크') || n.includes('정직') || n.includes('감봉')), warn: !!r.warn });
 
   function openPayrollWindow() {
     const res = payrollResult; if (!res) { toast('먼저 급여계산을 실행하세요', 'bad'); return; }
-    if (res.blocked) { openWin('급여계산 차단', `<div class="top"><h1>급여계산 차단</h1></div><div class="wrap"><table><thead><tr><th class="l">사번</th><th class="l">사유</th><th class="l">필요 연봉일자</th></tr></thead><tbody>${res.block.map(b => `<tr class="rbad"><td class="l">${esc(b.사번)}</td><td class="l">${esc(b.reason)}</td><td class="l">${esc(b.일자)}</td></tr>`).join('')}</tbody></table></div>`); return; }
-    const cols = usedItemCols(res.rows);
+    if (res.blocked) { const w = window.open('', '_blank'); if (w) { w.document.write(`<!DOCTYPE html><html data-theme="${curTheme()}"><head><meta charset="utf-8"><style>${WIN_CSS}</style></head><body><div class="top"><h1>급여계산 차단</h1></div><div class="wrap"><div class="tbl"><table><thead><tr><th class="l">사번</th><th class="l">사유</th><th class="l">필요 연봉일자</th></tr></thead><tbody>${res.block.map(b => `<tr class="rbad"><td class="l">${esc(b.사번)}</td><td class="l">${esc(b.reason)}</td><td class="l">${esc(b.일자)}</td></tr>`).join('')}</tbody></table></div></div></body></html>`); w.document.close(); } return; }
+    const items = usedItemCols(res.rows);
     const ym = `${res.target.y}-${String(res.target.m).padStart(2, '0')}`;
-    const head = `<tr><th class="l">No</th><th class="l">사번</th><th class="l">성명</th><th class="l">소속</th>${cols.map(c => `<th>${esc(c)}</th>`).join('')}<th>총액</th><th class="l">비고</th></tr>`;
-    const body = res.rows.map((r, i) => {
-      const tags = (r.notes || []).map(n => `<span class="tag ${n.startsWith('일할') ? 'ilhal' : n.includes('확인') ? 'warn' : 'sp'}">${esc(n)}</span>`).join('');
-      return `<tr><td class="l">${i + 1}</td><td class="l">${esc(r.사번)}</td><td class="l">${esc(r.성명)}</td><td class="l">${esc(r.소속)}</td>
-        ${cols.map(c => `<td>${r.pay[c] ? won(r.pay[c]) : '<span style="color:var(--tx3)">·</span>'}</td>`).join('')}
-        <td class="tot">${won(r.total)}</td><td class="note">${tags || '<span style="color:var(--tx3)">—</span>'}</td></tr>`;
-    }).join('');
-    const sum = `<div class="sum">
-      <div class="sc"><div class="k">대상 인원</div><div class="v">${res.summary.total}</div></div>
-      <div class="sc"><div class="k">일할</div><div class="v">${res.summary.ilhal}</div></div>
-      <div class="sc"><div class="k">특이</div><div class="v">${res.summary.special}</div></div>
-      <div class="sc"><div class="k">점검</div><div class="v">${res.summary.warn}</div></div></div>`;
-    openWin(`급여명세 ${ym}`, `<div class="top"><h1>급여명세 리스트</h1><span class="m">${ym} · 지급일 ${res.payday}</span><span class="sp"></span><button onclick="window.print()">인쇄 / PDF</button></div><div class="wrap">${sum}<div class="tbl"><table><thead>${head}</thead><tbody>${body}</tbody></table></div></div>`);
+    const columns = [{ key: 'no', label: 'No', align: 'l' }, { key: '사번', label: '사번', align: 'l' }, { key: '성명', label: '성명', align: 'l' }, { key: '소속', label: '소속', align: 'l' },
+      ...items.map(c => ({ key: c, label: c, kind: 'num' })), { key: 'total', label: '총액', kind: 'num', tot: true }, { key: '비고', label: '비고', align: 'l', kind: 'tags' }];
+    const rows = res.rows.map((r, i) => ({ vals: Object.assign({ no: i + 1, 사번: r.사번, 성명: r.성명, 소속: r.소속, total: r.total, 비고: (r.notes || []).join(' ') }, items.reduce((o, c) => (o[c] = r.pay[c] || 0, o), {})), tagsHtml: tagHTML(r.notes) || '<span style="color:var(--tx3)">—</span>', flags: flagsOf(r) }));
+    const chips = [{ k: 'all', label: '전체' }, { k: 'ilhal', label: '일할', flag: 'ilhal' }, { k: 'special', label: '특이', flag: 'special' }, { k: 'warn', label: '점검', flag: 'warn' }];
+    const sumHTML = `<div class="sum"><div class="sc"><div class="k">대상</div><div class="v">${res.summary.total}</div></div><div class="sc"><div class="k">일할</div><div class="v">${res.summary.ilhal}</div></div><div class="sc"><div class="k">특이</div><div class="v">${res.summary.special}</div></div><div class="sc"><div class="k">점검</div><div class="v">${res.summary.warn}</div></div></div>`;
+    openSearchWin(`급여명세 ${ym}`, `${ym} · 지급일 ${res.payday}`, columns, rows, chips, sumHTML);
   }
 
   function openVerifyWindow() {
     const res = verifyResult; if (!res) { toast('먼저 검증을 실행하세요', 'bad'); return; }
     const ym = `${res.target.y}-${String(res.target.m).padStart(2, '0')}`;
-    const body = res.rows.map((r, i) => {
+    const columns = [{ key: 'no', label: 'No', align: 'l' }, { key: '사번', label: '사번', align: 'l' }, { key: '성명', label: '성명', align: 'l' }, { key: '소속', label: '소속', align: 'l' },
+      { key: 'ourTotal', label: '계산총액', kind: 'num' }, { key: 'ledTotal', label: '대장총액', kind: 'num' }, { key: 'diff', label: '차이', kind: 'num', cls: r => r.vals.diff > 0 ? 'dpos' : r.vals.diff < 0 ? 'dneg' : '' },
+      { key: '상태', label: '상태', align: 'l' }, { key: '비고', label: '비고 (특이/불일치)', align: 'l', kind: 'tags' }];
+    const rows = res.rows.map((r, i) => {
       const diff = r.ourTotal - r.ledTotal;
       const diffTags = (r.diffs || []).filter(d => d.col !== '—').map(d => `<span class="tag diff">${esc(d.col)} ${d.diff > 0 ? '+' : ''}${won(d.diff)}</span>`).join('');
       const noteTags = (r.notes || []).filter(n => !n.startsWith('불일치')).map(n => `<span class="tag ${n.startsWith('일할') ? 'ilhal' : 'sp'}">${esc(n)}</span>`).join('');
-      return `<tr class="${r.status === 'bad' ? 'rbad' : ''}"><td class="l">${i + 1}</td><td class="l">${esc(r.사번)}</td><td class="l">${esc(r.성명)}</td><td class="l">${esc(r.소속)}</td>
-        <td>${won(r.ourTotal)}</td><td>${won(r.ledTotal)}</td>
-        <td class="${diff > 0 ? 'dpos' : diff < 0 ? 'dneg' : ''}">${diff === 0 ? '0' : (diff > 0 ? '+' : '') + won(diff)}</td>
-        <td class="l"><span class="pill ${r.status}">${r.status === 'ok' ? '일치' : '불일치'}</span></td>
-        <td class="note">${diffTags}${noteTags || (r.status === 'ok' && !diffTags ? '<span style="color:var(--tx3)">—</span>' : '')}</td></tr>`;
-    }).join('');
-    const sum = `<div class="sum">
-      <div class="sc"><div class="k">대상</div><div class="v">${res.summary.total}</div></div>
-      <div class="sc"><div class="k" style="color:var(--ok)">일치</div><div class="v" style="color:var(--ok)">${res.summary.ok}</div></div>
-      <div class="sc"><div class="k" style="color:var(--bad)">불일치</div><div class="v" style="color:var(--bad)">${res.summary.bad}</div></div></div>`;
-    openWin(`검증결과 ${ym}`, `<div class="top"><h1>검증 결과</h1><span class="m">${ym} · 계산 vs 급여대장(세전)</span><span class="sp"></span><button onclick="window.print()">인쇄 / PDF</button></div><div class="wrap">${sum}<div class="tbl"><table><thead><tr><th class="l">No</th><th class="l">사번</th><th class="l">성명</th><th class="l">소속</th><th>계산총액</th><th>대장총액</th><th>차이</th><th class="l">상태</th><th class="l">비고 (특이/불일치)</th></tr></thead><tbody>${body}</tbody></table></div></div>`);
+      return { cls: r.status === 'bad' ? 'rbad' : '', vals: { no: i + 1, 사번: r.사번, 성명: r.성명, 소속: r.소속, ourTotal: r.ourTotal, ledTotal: r.ledTotal, diff, 상태: r.status === 'ok' ? '일치' : '불일치', 비고: ((r.diffs || []).map(d => d.col).join(' ') + ' ' + (r.notes || []).join(' ')) },
+        tagsHtml: (diffTags + noteTags) || (r.status === 'ok' ? '<span class="pill ok">일치</span>' : ''), flags: { bad: r.status === 'bad', ok: r.status === 'ok', warn: !!r.warn } };
+    });
+    const chips = [{ k: 'all', label: '전체' }, { k: 'bad', label: '불일치', flag: 'bad' }, { k: 'ok', label: '일치', flag: 'ok' }, { k: 'warn', label: '점검', flag: 'warn' }];
+    const sumHTML = `<div class="sum"><div class="sc"><div class="k">대상</div><div class="v">${res.summary.total}</div></div><div class="sc"><div class="k" style="color:var(--ok)">일치</div><div class="v" style="color:var(--ok)">${res.summary.ok}</div></div><div class="sc"><div class="k" style="color:var(--bad)">불일치</div><div class="v" style="color:var(--bad)">${res.summary.bad}</div></div></div>`;
+    openSearchWin(`검증결과 ${ym}`, `${ym} · 계산 vs 급여대장(세전)`, columns, rows, chips, sumHTML);
   }
 
   /* ================= 엑셀 export ================= */
   function exportPayroll() {
     const res = payrollResult; if (!res || res.blocked) return;
-    const cols = usedItemCols(res.rows), wb = XLSX.utils.book_new();
-    const ym = `${res.target.y}-${String(res.target.m).padStart(2, '0')}`;
+    const cols = usedItemCols(res.rows), wb = XLSX.utils.book_new(), ym = `${res.target.y}-${String(res.target.m).padStart(2, '0')}`;
     const aoa = [['No', '사번', '성명', '소속', ...cols, '총액', '비고']];
     res.rows.forEach((r, i) => aoa.push([i + 1, r.사번, r.성명, r.소속, ...cols.map(c => r.pay[c] || 0), r.total, (r.notes || []).join(' / ')]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), '급여명세');
-    const alr = [['구분', '제목', '내용']]; const lv = { block: '차단', warn: '점검', info: '내역', ok: '정상', bad: '불일치' };
+    const alr = [['구분', '제목', '내용']], lv = { block: '차단', warn: '점검', info: '내역', ok: '정상', bad: '불일치' };
     res.alerts.forEach(a => alr.push([lv[a.level] || a.level, a.title, a.desc || '']));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(alr), '점검·특이');
     XLSX.writeFile(wb, `급여명세_${ym}.xlsx`); toast('급여명세 엑셀 저장', 'ok');

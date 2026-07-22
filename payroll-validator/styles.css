@@ -351,5 +351,37 @@ table.result tbody tr.rowbad:hover{background:var(--bad-soft)}
 .chip-add{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:750;color:var(--brand);cursor:pointer;padding:6px 10px;border-radius:9px;border:1px dashed var(--brand);background:var(--brand-soft);transition:all .2s}
 .chip-add:hover{filter:brightness(.98);transform:translateY(-1px)}
 .hidden{display:none!important}
+
+/* 포커스 점선 링 제거 (업로드 라벨/버튼 점선 네모 방지) */
+button:focus,label:focus,.dropzone:focus,a:focus{outline:none}
+button:focus-visible,label.dropzone:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.uprow{border-bottom:1px solid var(--border)}
+
+/* 초기화 버튼 */
+.btn-reset{background:var(--surface);color:var(--text-2);border:1px solid var(--border);box-shadow:var(--shadow-sm)}
+.btn-reset:hover{color:var(--bad);border-color:var(--bad);transform:translateY(-1px)}
+
+/* 클릭 가능한 알림 */
+.alert.clickable{cursor:pointer}
+.alert.clickable:hover{transform:translateX(3px);box-shadow:var(--shadow-md)}
+.alert .a-go{margin-left:auto;align-self:center;color:var(--text-3);font-size:11px;font-weight:800;white-space:nowrap}
+.alert.clickable:hover .a-go{color:var(--brand)}
+
+/* 저장 버튼 */
+.btn-save{background:linear-gradient(135deg,var(--ok),#0ea15c);color:#fff;box-shadow:0 8px 22px rgba(18,183,106,.35)}
+.btn-save:hover{transform:translateY(-2px);filter:brightness(1.05)}
+
+/* ---------- Modal ---------- */
+.modal-ov{position:fixed;inset:0;z-index:90;background:rgba(15,20,35,.5);backdrop-filter:blur(4px);display:grid;place-items:center;animation:cardIn .25s var(--ease)}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);width:min(420px,92vw);overflow:hidden;animation:modalPop .35s var(--ease-bounce)}
+@keyframes modalPop{from{opacity:0;transform:scale(.94) translateY(10px)}to{opacity:1;transform:none}}
+.modal .m-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.modal .m-head .m-ic{width:30px;height:30px;border-radius:9px;background:var(--warn-soft);color:var(--warn);display:grid;place-items:center}
+.modal .m-head h3{margin:0;font-size:15px;font-weight:800}
+.modal .m-head .m-sub{font-size:11px;color:var(--text-3);font-weight:600}
+.modal .m-body{padding:18px 20px;display:flex;flex-direction:column;gap:13px}
+.modal .m-field label{font-size:11.5px;font-weight:750;color:var(--text-2);display:block;margin-bottom:5px}
+.modal .m-field input,.modal .m-field select{width:100%}
+.modal .m-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end}
 .fade-swap{animation:cardIn .4s var(--ease)}
 kbd{font-family:var(--mono);background:var(--surface-inset);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:700}

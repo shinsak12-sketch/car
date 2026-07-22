@@ -23,12 +23,16 @@ window.PV = window.PV || {};
   // 정직 제외(=역량가급류) 항목
   const SUSPEND_EXCL = new Set(['변동역량가급1', '변동역량가급2', '고정역량가급']);
 
+  // 성과가급 = 분기 지급(1·4·7·10월에 연액 ¼), 그 외 항목은 12개월 분할
+  const QUARTER_MONTHS = new Set([1, 4, 7, 10]);
+  const monthlyBase = (srcK, annual, m) => srcK === '성과가급' ? (QUARTER_MONTHS.has(m) ? annual / 4 : 0) : annual / 12;
+
   const UNPAID_LEAVE = ['육아휴직', '무급휴직', '가족돌봄휴직', '난임휴직'];
   const FULLY_UNPAID_VAC = ['가족돌봄휴가', '보건(생리)휴가(무급)', '무급휴가'];
 
   // ---------- 날짜 유틸 ----------
   // 십원단위 절상 (마지막 자릿수 올림 → 끝자리 0)
-  const ceilU = x => Math.ceil((x - 1e-6) / 10) * 10;
+  const ceilU = x => (Math.ceil((x - 1e-6) / 10) * 10) || 0;
   const P = s => { if (!s) return null; const [y, m, d] = s.split('-').map(Number); return { y, m, d }; };
   const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   const dim = (y, m) => new Date(y, m, 0).getDate();          // 실제 달력 일수
@@ -65,6 +69,7 @@ window.PV = window.PV || {};
       uploads: store.uploads || { annual: new Map(), prod: new Map(), etc: new Map() },
       discipline: store.discipline || [],
       carry: store.carry || new Map(),
+      overrides: store.overrides || { unpaidVac: new Map() },
       ledgerBy: (() => { const m = new Map(); (store.ledger || []).forEach(r => { if (!m.has(r.사번)) m.set(r.사번, []); m.get(r.사번).push(r); }); return m; })(),
     };
   };
@@ -191,9 +196,12 @@ window.PV = window.PV || {};
     // 출산 계열
     const mat = rows.filter(v => /출산|유사산/.test(v.휴가종류));
     if (mat.length) {
+      const ov = ctx.overrides && ctx.overrides.unpaidVac && ctx.overrides.unpaidVac.get(sabun);
       const hasSplit = mat.some(v => /출산전휴가|출산후휴가/.test(v.휴가종류));
-      if (hasSplit) {
-        exc && exc.push({ 사번: sabun, type: 'warn', title: '출산휴가 분리행 — 담당자 확인', desc: '출산전/출산후가 분리 입력되어 자동 유급·무급 판정을 보류했습니다. 수동 확인이 필요합니다.' });
+      if (ov != null) {
+        days += Number(ov) || 0; // 담당자 수동 입력 무급일수
+      } else if (hasSplit) {
+        exc && exc.push({ 사번: sabun, type: 'warn', kind: 'maternity', title: '출산휴가 분리행 — 담당자 확인', desc: '출산전/출산후 분리 입력. 이번달 무급일수를 직접 입력하세요.' });
       } else {
         // 누적 유급한도
         const 다태아 = mat.some(v => v.휴가종류.includes('다태아'));
@@ -233,14 +241,15 @@ window.PV = window.PV || {};
     seg.segments.forEach(s => {
       const c = s.contract; if (!c) return;
       const days = s.days || 0;
-      // 기본 6항목
+      // 기본 6항목 (성과가급은 분기 지급: 1·4·7·10월에 연액 ¼)
       for (const [srcK, colK] of Object.entries(ITEMMAP)) {
         const annual = c.items[srcK] || 0;
+        const mbase = monthlyBase(srcK, annual, m);
         let rate = 0;
         if (s.payType === 'normal' || s.payType === 'short') rate = 1;
         else if (s.payType === 'sick') rate = SICK_EXCL.has(colK) ? 0 : 0.8;
         else rate = 0; // unpaid
-        real[colK] += (annual / 12 / 30) * days * rate;
+        real[colK] += (mbase / 30) * days * rate;
       }
       if (s.payType === 'normal' || s.payType === 'short') paidUnits += days;
     });
@@ -249,7 +258,7 @@ window.PV = window.PV || {};
     const uvac = unpaidVacInMonth(ctx, sabun, y, m, exc);
     if (uvac > 0) {
       const c = effContract(ctx, sabun, monthEnd);
-      if (c) for (const [srcK, colK] of Object.entries(ITEMMAP)) real[colK] -= (c.items[srcK] || 0) / 12 / 30 * uvac;
+      if (c) for (const [srcK, colK] of Object.entries(ITEMMAP)) real[colK] -= monthlyBase(srcK, c.items[srcK] || 0, m) / 30 * uvac;
       paidUnits -= uvac;
     }
     if (paidUnits < 0) paidUnits = 0;
@@ -304,7 +313,7 @@ window.PV = window.PV || {};
     const roster = ctx.rosterBy.get(sabun);
     const orders = ctx.ordersBy.get(sabun) || [];
     if (roster && (roster.직무 || '').includes('(휴직)') && !orders.some(o => payTypeOf(o.발령구분) === 'unpaid' || payTypeOf(o.발령구분) === 'sick')) {
-      if (!ctx.carry.get(sabun) || !ctx.carry.get(sabun).종류) exc.push({ 사번: sabun, type: 'warn', title: '이월 휴직 종류 확인 필요', desc: '명부상 (휴직) 상태이나 종류 미입력 → 무급으로 계산했습니다.' });
+      if (!ctx.carry.get(sabun) || !ctx.carry.get(sabun).종류) exc.push({ 사번: sabun, type: 'warn', kind: 'carry', title: '이월 휴직 종류 확인 필요', desc: '명부상 (휴직) 상태이나 종류 미입력 → 무급으로 계산했습니다.' });
     }
 
     // 업로드 변동항목
@@ -389,7 +398,7 @@ window.PV = window.PV || {};
     const ilhal = rows.filter(r => (r.notes || []).some(n => n.startsWith('일할'))).length;
     if (ilhal) alerts.push({ level: 'info', title: `일할계산 ${ilhal}명`, desc: '휴직·복직·단축 등으로 일할 적용된 인원' });
     const seen = new Set();
-    allExc.forEach(e => { const k = e.사번 + e.title; if (seen.has(k)) return; seen.add(k); alerts.push({ level: e.type || 'warn', title: `${e.title} — ${e.사번}`, desc: e.desc }); });
+    allExc.forEach(e => { const k = e.사번 + e.title; if (seen.has(k)) return; seen.add(k); alerts.push({ level: e.type || 'warn', title: `${e.title} — ${e.사번}`, desc: e.desc, 사번: e.사번, kind: e.kind }); });
 
     return {
       target, blocked, block, payday: payday(y, m, ctx.holidays),
