@@ -157,7 +157,8 @@
 
   /* ---------- 휴직 확인 (이월 + 무급·의병휴직 종료일 체크) ---------- */
   const needsEnd = 종류 => /무급휴직|의병휴직/.test(종류 || '');
-  function orderLeaveType(g) { if (/의병/.test(g || '')) return '의병휴직'; if (/무급휴직/.test(g || '')) return '무급휴직'; return null; }
+  // 무급휴직 발령구분값 = '기타휴직(무급)'
+  function orderLeaveType(g) { g = g || ''; if (/의병/.test(g)) return '의병휴직'; if (/무급/.test(g)) return '무급휴직'; return null; }
   function detectLeaves() {
     if (!store.roster) return;
     const orderBy = new Map(); (store.order || []).forEach(o => { if (!orderBy.has(o.사번)) orderBy.set(o.사번, []); orderBy.get(o.사번).push(o); });
@@ -168,11 +169,15 @@
       if ((r.직무 || '').includes('(휴직)') && !(orderBy.get(r.사번) || []).some(o => /휴직/.test(o.발령구분 || '')))
         cand.set(r.사번, { 성명: r.성명, source: 'carry' });
     });
-    // 발령상 무급·의병휴직 (종료일 체크 대상)
-    (store.order || []).forEach(o => {
-      const t = orderLeaveType(o.발령구분); if (!t) return;
-      const prev = cand.get(o.사번);
-      if (!prev || prev.source === 'order') cand.set(o.사번, { 성명: nameOf(o.사번) || o.성명 || '', source: 'order', 종류fix: t, 시작일fix: o.발령시작일 });
+    // 발령상 "현재" 무급·의병휴직자만 (최신 휴직/복직 발령 기준 — 복직했거나 다른 휴직으로 넘어갔으면 제외)
+    orderBy.forEach((os, sabun) => {
+      const chain = os.filter(o => /휴직|복직/.test(o.발령구분 || '') && o.발령시작일).slice().sort((a, b) => a.발령시작일 < b.발령시작일 ? -1 : 1);
+      if (!chain.length) return;
+      const last = chain[chain.length - 1];
+      const t = orderLeaveType(last.발령구분); // 복직·육아휴직 등이 최신이면 null → 제외
+      if (!t) return;
+      const prev = cand.get(sabun);
+      if (!prev || prev.source === 'order') cand.set(sabun, { 성명: nameOf(sabun) || last.성명 || '', source: 'order', 종류fix: t, 시작일fix: last.발령시작일 });
     });
     const box = $('#carryList'); box.innerHTML = '';
     const list = [...cand.entries()];

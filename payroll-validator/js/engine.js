@@ -103,11 +103,11 @@ window.PV = window.PV || {};
     if (!roster) return 0;
     const 직책 = roster.직책 || '', 직급 = roster.직급 || '';
     if (직책.includes('센터장')) return 100000;
-    if (직책.includes('부서장') || 직책.includes('파트장')) return 1500000;
     if (직책.includes('본부장')) {
       if (직급 === 'L') return 2000000;
       return 0; // 이사 등
     }
+    if (직책.includes('보상부장') || 직책.includes('부서장') || 직책.includes('파트장')) return 1500000;
     return 0;
   }
   // 무급휴가 판정(보건·생리·가족돌봄·무급 포함, 표기 편차 허용)
