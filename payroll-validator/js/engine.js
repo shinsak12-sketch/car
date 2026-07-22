@@ -263,8 +263,9 @@ window.PV = window.PV || {};
     // 항목별 마지막 절상
     LEDGER_ITEMS.forEach(k => pay[k] = Math.ceil(real[k] - 1e-6));
 
-    return { retired: false, pay, paidUnits, is14: applied14, segments: seg.segments };
+    return { retired: false, pay, paidUnits, is14: applied14, segments: seg.segments, uvac, peakApplied: (roster && (roster.피크적용 || '').includes('적용') && roster.피크예상일 && P(roster.피크예상일).m === m && y >= P(roster.피크예상일).y) };
   }
+  const PT_LABEL = { normal: '정상근무', unpaid: '무급휴직', sick: '의병휴직(80%)', short: '육아기단축' };
 
   // 소급용: 항목 diff (actual − aspaid) for month
   function monthDiff(ctx, sabun, y, m, block) {
@@ -339,76 +340,102 @@ window.PV = window.PV || {};
       }
     }
 
+    // 비고(특이사항) 구성
+    const segNote = base.segments && (base.segments.length > 1 || (base.segments[0] && base.segments[0].payType !== 'normal'));
+    if (segNote) notes.unshift('일할 · ' + base.segments.map(s => `${s.gubun || PT_LABEL[s.payType]} ${s.days}일`).join(' → '));
+    if (base.uvac > 0) notes.push(`무급휴가 ${base.uvac}일 공제`);
+    if (base.peakApplied) notes.push('임금피크 해당월');
+
     return { retired: false, pay, notes, exc, paidUnits: base.paidUnits, segments: base.segments };
   }
 
-  // ---------- 전체 검증 ----------
-  PV.validate = function (store, target) {
+  // ---------- 급여계산 (급여대장 불필요) ----------
+  // 대상 = 연봉내역 보유 전 직원(퇴직 제외)
+  PV.computePayroll = function (store, target) {
     const ctx = PV.buildContext(store);
     const { y, m } = target;
     const block = [];
-    const alerts = [];
-    const rows = [];
-
-    // 대상자 = 급여대장 지급유형='급여'
-    const ledger = (store.ledger || []).filter(r => (r.지급유형 || '').includes('급여') && !(r.지급유형 || '').includes('퇴직'));
-
-    // 먼저 차단검증 (임피/단축) 전수
-    ledger.forEach(L => { computeBase(ctx, L.사번, y, m, 'actual', block, null); });
+    // 대상자 수집
+    const ids = new Set([...ctx.salaryBy.keys()]);
+    // 차단검증 전수
+    ids.forEach(id => computeBase(ctx, id, y, m, 'actual', block, null));
     const blocked = block.length > 0;
 
-    let okCnt = 0, badCnt = 0, warnPeople = 0;
-    const allExc = [];
-
-    ledger.forEach(L => {
-      const r = computePerson(ctx, L.사번, y, m, []);
-      if (r.retired) return;
-      // 항목 비교 (우리가 가진 항목만)
-      const diffs = [];
-      const compareCols = new Set(Object.keys(r.pay).filter(k => r.pay[k] !== 0 || (L.pay && L.pay[k]) ));
-      // 우리가 계산/보유한 항목만 비교: LEDGER_ITEMS + 업로드로 채운 항목
-      const ourCols = new Set(LEDGER_ITEMS);
-      Object.keys(r.pay).forEach(k => { if (r.pay[k] !== 0) ourCols.add(k); });
-      ourCols.forEach(col => {
-        const ours = Math.round(r.pay[col] || 0);
-        const led = Math.round((L.pay && L.pay[col]) || 0);
-        if (ours !== led) diffs.push({ col, ours, led, diff: ours - led });
+    const rows = [], alerts = [], allExc = [];
+    if (!blocked) {
+      ids.forEach(id => {
+        const r = computePerson(ctx, id, y, m, []);
+        if (r.retired) return;
+        const roster = ctx.rosterBy.get(id);
+        const sal = (ctx.salaryBy.get(id) || []).slice(-1)[0] || {};
+        (r.exc || []).forEach(e => allExc.push(e));
+        rows.push({
+          사번: id, 성명: (roster && roster.성명) || sal.성명 || '', 소속: (roster && roster.소속) || sal.소속 || '',
+          pay: r.pay, notes: r.notes || [], warn: (r.exc || []).length > 0,
+          total: Math.round(Object.values(r.pay).reduce((a, b) => a + b, 0)),
+        });
       });
-      const hasWarn = (r.exc || []).length > 0;
-      if (hasWarn) { warnPeople++; (r.exc || []).forEach(e => allExc.push(e)); }
-      const status = diffs.length ? 'bad' : 'ok';
-      if (status === 'ok') okCnt++; else badCnt++;
-      rows.push({
-        사번: L.사번, 성명: L.성명 || r.성명 || '', 소속: L.소속 || '',
-        status, diffs, ours: r.pay, led: L.pay || {}, notes: r.notes || [], warn: hasWarn,
-        ourTotal: Math.round(Object.values(r.pay).reduce((a, b) => a + b, 0)),
-        ledTotal: Math.round(L.총지급액 || Object.values(L.pay || {}).reduce((a, b) => a + b, 0)),
-      });
-    });
-
-    // 알림 구성
-    if (blocked) {
-      const names = block.map(b => `${b.사번}(${b.reason})`);
-      alerts.push({ level: 'block', title: `연봉 미입력 — 전체 계산 차단 (${block.length}건)`, desc: names.join(', ') + ' · 인사시스템에 연봉 입력 후 재실행하세요.' });
+      rows.sort((a, b) => (a.소속 || '').localeCompare(b.소속 || '') || a.사번.localeCompare(b.사번));
     }
-    // 14명
+
+    // 알림
+    if (blocked) alerts.push({ level: 'block', title: `연봉 미입력 — 전체 계산 차단 (${block.length}건)`, desc: block.map(b => `${b.사번}(${b.reason} ${b.일자})`).join(', ') + ' · 인사시스템에 연봉 입력 후 재실행하세요.' });
     const cnt14 = rows.filter(r => (r.notes || []).some(n => n.includes('14명특례'))).length;
-    if (cnt14) alerts.push({ level: 'info', title: `직무변경 특례 처리 ${cnt14}명`, desc: 'JA·소액전담→대물보상(26-07-01) 대상자에 변동역량가급1 월 500,000원을 가산했습니다.' });
-    // 소급
+    if (cnt14) alerts.push({ level: 'info', title: `직무변경 특례 ${cnt14}명`, desc: 'JA·소액전담→대물보상(26-07-01) 변동역량가급1 +월 50만원' });
     const retroP = rows.filter(r => (r.notes || []).some(n => n.includes('소급') || n.includes('복직 정산')));
     if (retroP.length) alerts.push({ level: 'info', title: `소급정산 반영 ${retroP.length}명`, desc: retroP.map(r => r.성명 || r.사번).join(', ') });
-    // 예외(warn)
+    const ilhal = rows.filter(r => (r.notes || []).some(n => n.startsWith('일할'))).length;
+    if (ilhal) alerts.push({ level: 'info', title: `일할계산 ${ilhal}명`, desc: '휴직·복직·단축 등으로 일할 적용된 인원' });
     const seen = new Set();
     allExc.forEach(e => { const k = e.사번 + e.title; if (seen.has(k)) return; seen.add(k); alerts.push({ level: e.type || 'warn', title: `${e.title} — ${e.사번}`, desc: e.desc }); });
-    // 불일치 요약
-    if (badCnt) alerts.push({ level: 'bad', title: `불일치 ${badCnt}명`, desc: '계산값과 급여대장이 일치하지 않는 인원이 있습니다. 아래 표에서 항목별 차이를 확인하세요.' });
-    if (!blocked && !badCnt && rows.length) alerts.push({ level: 'ok', title: '전원 완전일치', desc: `${rows.length}명 전원 계산값과 급여대장이 일치합니다.` });
 
     return {
-      target, blocked, block,
-      summary: { total: rows.length, ok: okCnt, bad: badCnt, warn: warnPeople, block: block.length },
-      rows, alerts, payday: payday(y, m, ctx.holidays),
+      target, blocked, block, payday: payday(y, m, ctx.holidays),
+      rows, alerts,
+      summary: { total: rows.length, block: block.length, warn: rows.filter(r => r.warn).length, ilhal, special: cnt14 + retroP.length },
     };
+  };
+
+  // ---------- 검증 (계산결과 vs 급여대장) ----------
+  PV.compareLedger = function (payroll, store) {
+    const ledger = (store.ledger || []).filter(r => (r.지급유형 || '').includes('급여') && !(r.지급유형 || '').includes('퇴직'));
+    const byId = new Map(); payroll.rows.forEach(r => byId.set(r.사번, r));
+    const rows = [], alerts = [];
+    let okCnt = 0, badCnt = 0;
+    const ledgerIds = new Set();
+
+    ledger.forEach(L => {
+      ledgerIds.add(L.사번);
+      const r = byId.get(L.사번);
+      if (!r) {
+        rows.push({ 사번: L.사번, 성명: L.성명, 소속: L.소속, status: 'bad', diffs: [{ col: '—', ours: 0, led: Math.round(L.총지급액 || 0), diff: -Math.round(L.총지급액 || 0) }], ours: {}, led: L.pay || {}, notes: ['계산 대상에 없음(연봉/재직 확인)'], warn: true, ourTotal: 0, ledTotal: Math.round(L.총지급액 || 0) });
+        badCnt++; return;
+      }
+      const ourCols = new Set(PV.LEDGER_ITEMS);
+      Object.keys(r.pay).forEach(k => { if (r.pay[k] !== 0) ourCols.add(k); });
+      const diffs = [];
+      ourCols.forEach(col => {
+        const ours = Math.round(r.pay[col] || 0), led = Math.round((L.pay && L.pay[col]) || 0);
+        if (ours !== led) diffs.push({ col, ours, led, diff: ours - led });
+      });
+      const status = diffs.length ? 'bad' : 'ok';
+      status === 'ok' ? okCnt++ : badCnt++;
+      const notes = (r.notes || []).slice();
+      if (diffs.length) notes.unshift('불일치: ' + diffs.map(d => d.col).join(', '));
+      rows.push({
+        사번: L.사번, 성명: L.성명 || r.성명, 소속: L.소속 || r.소속, status, diffs,
+        ours: r.pay, led: L.pay || {}, notes, warn: r.warn,
+        ourTotal: r.total, ledTotal: Math.round(L.총지급액 || 0),
+      });
+    });
+    // 계산엔 있으나 대장에 없는 사람
+    payroll.rows.forEach(r => { if (!ledgerIds.has(r.사번)) { /* 대장 미포함(참고) */ } });
+
+    rows.sort((a, b) => (a.status === b.status ? 0 : a.status === 'bad' ? -1 : 1));
+    if (badCnt) alerts.push({ level: 'bad', title: `불일치 ${badCnt}명`, desc: '계산값과 급여대장이 다른 인원입니다.' });
+    if (!badCnt && rows.length) alerts.push({ level: 'ok', title: '전원 완전일치', desc: `${rows.length}명 전원 일치` });
+
+    return { target: payroll.target, rows, alerts, summary: { total: rows.length, ok: okCnt, bad: badCnt } };
   };
 
   PV.LEDGER_ITEMS = LEDGER_ITEMS;
