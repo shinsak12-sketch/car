@@ -386,14 +386,21 @@
   .empty2{padding:40px;text-align:center;color:var(--tx3);font-weight:600}
   tr.clickrow{cursor:pointer}
   .dov{position:fixed;inset:0;z-index:80;background:rgba(10,15,25,.5);display:grid;place-items:center;padding:20px}
-  .dcard{background:var(--su);border:1px solid var(--bd);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.4);width:min(560px,94vw);max-height:88vh;overflow:auto}
-  .dhead{padding:14px 18px;border-bottom:1px solid var(--bd);font-size:14px;color:var(--tx2);display:flex;align-items:center;gap:8px}
-  .dhead b{color:var(--tx);font-size:15px}.dhead .dx{margin-left:auto;cursor:pointer;color:var(--tx3);font-weight:800;font-size:15px}
+  .dcard{background:var(--su);border:1px solid var(--bd);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.4);width:min(760px,96vw);max-height:90vh;overflow:auto}
+  .dhead{padding:14px 18px;border-bottom:1px solid var(--bd);font-size:13px;color:var(--tx2);display:flex;align-items:center;gap:8px;position:sticky;top:0;background:var(--su)}
+  .dhead b{color:var(--tx);font-size:15px}.dhead .dx{margin-left:auto;cursor:pointer;color:var(--tx3);font-weight:800;font-size:16px}
   .dbody{padding:14px 18px}
+  .dcontract{background:var(--su2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11.5px;color:var(--tx2);line-height:1.7}
+  .dcontract b{color:var(--tx)}
+  .dseg{font-size:11.5px;color:var(--warn);font-weight:700;margin-bottom:10px}
+  .dsub{font-size:11px;color:var(--tx3);font-weight:800;margin:14px 0 6px;text-transform:uppercase;letter-spacing:.03em}
   table.dt{width:100%;border-collapse:collapse;border:1px solid var(--bd);border-radius:10px;overflow:hidden}
-  table.dt th{position:static;background:var(--su2);padding:8px 10px}
+  table.dt th{position:static;background:var(--su2);padding:8px 10px;font-size:10px}
   table.dt td{padding:8px 10px}
+  table.dt td.fm{color:var(--tx3);font-size:11px;white-space:normal}
   table.dt tr.dd td{background:var(--bads)}
+  .dtot{display:flex;justify-content:space-between;margin-top:12px;padding:11px 13px;background:var(--su2);border-radius:10px;font-weight:800;font-size:13px}
+  .dtot .dpos{color:var(--bad)}.dtot .dneg{color:var(--info)}
   .dnote{margin-top:12px;font-size:12px;color:var(--tx2);background:var(--su2);border-radius:9px;padding:10px 12px}
   @media print{.top button,.chips,.search2{display:none}.tbl{max-height:none;overflow:visible}th{position:static}}
   `;
@@ -447,10 +454,20 @@
     // 행 클릭 → 상세(계산 vs 대장)
     tb.onclick = e => { const tr = e.target.closest('tr[data-i]'); if (!tr) return; const r = D.rows[+tr.dataset.i]; if (r && r.detail) openDetail(r.detail); };
     function openDetail(d) {
-      const ov = doc.createElement('div'); ov.className = 'dov';
-      const rowsH = d.items.map(it => { const diff = it.ours - it.led; return '<tr class="' + (diff ? 'dd' : '') + '"><td class="l">' + it.col + '</td><td>' + (it.ours ? it.ours.toLocaleString('ko-KR') : '·') + '</td><td>' + (it.led ? it.led.toLocaleString('ko-KR') : '·') + '</td><td class="' + (diff > 0 ? 'dpos' : diff < 0 ? 'dneg' : '') + '">' + (diff ? (diff > 0 ? '+' : '') + diff.toLocaleString('ko-KR') : '0') + '</td></tr>'; }).join('');
+      const nf = n => n == null ? '' : (+n).toLocaleString('ko-KR');
+      const 연봉H = Object.keys(d.연봉 || {}).filter(k => d.연봉[k]).map(k => k + ' <b>' + nf(d.연봉[k]) + '</b>').join(' · ') || '연봉정보 없음';
+      const segH = (d.ilhal && d.segments && d.segments.length) ? '<div class="dseg">⏱ 일할 근무구간: ' + d.segments.map(s => s.label + ' ' + s.days + '일').join(' → ') + '</div>' : '';
+      const itemsH = d.items.map(it => { const diff = it.ours - it.led; return '<tr class="' + (diff ? 'dd' : '') + '"><td class="l">' + it.col + '</td><td class="l fm">' + (it.formula || '') + '</td><td>' + (it.ours ? nf(it.ours) : '·') + '</td><td>' + (it.led ? nf(it.led) : '·') + '</td><td class="' + (diff > 0 ? 'dpos' : diff < 0 ? 'dneg' : '') + '">' + (diff ? (diff > 0 ? '+' : '') + nf(diff) : '0') + '</td></tr>'; }).join('');
+      const extraH = (d.extras && d.extras.length) ? '<div class="dsub">조정·가감 내역</div><table class="dt"><tbody>' + d.extras.map(e => '<tr><td class="l">' + e.label + '</td><td>' + (e.amount == null ? '—' : nf(e.amount)) + '</td></tr>').join('') + '</tbody></table>' : '';
+      const totDiff = d.ourTotal - d.ledTotal;
+      const totH = '<div class="dtot"><span>총액 (세전)</span><span>계산 ' + nf(d.ourTotal) + ' &nbsp;/&nbsp; 대장 ' + nf(d.ledTotal) + ' &nbsp; <span class="' + (totDiff > 0 ? 'dpos' : totDiff < 0 ? 'dneg' : '') + '">' + (totDiff ? (totDiff > 0 ? '+' : '') + nf(totDiff) : '일치') + '</span></span></div>';
       const notesH = (d.notes && d.notes.length) ? '<div class="dnote">📌 ' + d.notes.join(' · ') + '</div>' : '';
-      ov.innerHTML = '<div class="dcard"><div class="dhead"><b>' + d.사번 + ' ' + (d.성명 || '') + '</b> 계산 vs 급여대장 (세전)<span class="dx">✕</span></div><div class="dbody"><table class="dt"><thead><tr><th class="l">항목</th><th>계산</th><th>대장</th><th>차이</th></tr></thead><tbody>' + rowsH + '</tbody></table>' + notesH + '</div></div>';
+      const ov = doc.createElement('div'); ov.className = 'dov';
+      ov.innerHTML = '<div class="dcard"><div class="dhead"><b>' + d.사번 + ' ' + (d.성명 || '') + '</b> 계산 근거 (연봉 → 월급여 · 세전)<span class="dx">✕</span></div><div class="dbody">'
+        + '<div class="dcontract">📄 적용 연봉계약 <b>' + (d.연봉일자 || '-') + '</b><br>' + 연봉H + '</div>'
+        + segH
+        + '<div class="dsub">항목별 계산</div><table class="dt"><thead><tr><th class="l">항목</th><th class="l">계산식</th><th>계산</th><th>대장</th><th>차이</th></tr></thead><tbody>' + itemsH + '</tbody></table>'
+        + extraH + totH + notesH + '</div></div>';
       ov.onclick = e => { if (e.target === ov || e.target.className === 'dx') ov.remove(); };
       doc.body.appendChild(ov);
     }
@@ -483,6 +500,27 @@
     [...set].forEach(c => { if (!cols.includes(c)) cols.push(c); });
     return cols;
   }
+  // 검증 상세: 계산 근거(연봉→계산식→값) 구성
+  const SRC_OF = { 기본급: '기본급', 능력급: '실적급', 성과급: '성과급', 성과가급: '성과가급', 변동역량가급1: '변동역량1', 변동역량가급2: '변동역량2' };
+  function buildDetail(r) {
+    const t = r.trace || {}, 연봉 = t.연봉 || {}, nf = n => Math.round(n || 0).toLocaleString('ko-KR');
+    const cols = [...new Set([...PV.LEDGER_ITEMS, ...Object.keys(r.ours || {}), ...Object.keys(r.led || {})])].filter(c => ((r.ours && r.ours[c]) || (r.led && r.led[c])));
+    const items = cols.map(c => {
+      const ours = Math.round((r.ours && r.ours[c]) || 0), led = Math.round((r.led && r.led[c]) || 0);
+      let f = '';
+      if (SRC_OF[c]) {
+        const ann = 연봉[SRC_OF[c]] || 0;
+        if (c === '성과가급') f = t.quarterMonth ? `${nf(ann)} ÷ 4 (분기지급)` : '분기 비지급월';
+        else f = `${nf(ann)} ÷ 12`;
+        if (t.ilhal && c !== '성과가급') f += ' × 일할';
+        if (c === '변동역량가급1' && t.is14) f += ' + 14명특례 500,000';
+      } else if (c === '고정역량가급') f = `직책수당 ${t.dutyLabel || ''} ${nf(t.dutyFlat || 0)}` + (t.ilhal ? ' × 일할' : '');
+      else if (c === '감액') f = (t.uvac ? `무급휴가 ${t.uvac}일 −${nf(t.uvacDeduct)}` : '') + ((r.notes || []).some(n => n.includes('감봉')) ? ' + 감봉' : '');
+      else f = '업로드/기타 항목';
+      return { col: c, ours, led, formula: f };
+    });
+    return { 사번: r.사번, 성명: r.성명, 연봉일자: t.연봉일자, 연봉: 연봉, quarterMonth: t.quarterMonth, ilhal: t.ilhal, segments: t.segments || [], items, extras: t.extras || [], dutyLabel: t.dutyLabel, dutyFlat: t.dutyFlat, uvac: t.uvac, uvacDeduct: t.uvacDeduct, ourTotal: r.ourTotal, ledTotal: r.ledTotal, notes: r.notes || [] };
+  }
   const tagHTML = notes => (notes || []).map(n => `<span class="tag ${n.startsWith('일할') ? 'ilhal' : n.includes('확인') ? 'warn' : 'sp'}">${esc(n)}</span>`).join('');
   const flagsOf = r => ({ ilhal: (r.notes || []).some(n => n.startsWith('일할')), special: (r.notes || []).some(n => n.includes('특례') || n.includes('소급') || n.includes('임금피크') || n.includes('정직') || n.includes('감봉')), warn: !!r.warn });
 
@@ -510,11 +548,9 @@
       const diff = r.ourTotal - r.ledTotal;
       const diffTags = (r.diffs || []).filter(d => d.col !== '—').map(d => `<span class="tag diff">${esc(d.col)} ${d.diff > 0 ? '+' : ''}${won(d.diff)}</span>`).join('');
       const noteTags = (r.notes || []).filter(n => !n.startsWith('불일치')).map(n => `<span class="tag ${n.startsWith('일할') ? 'ilhal' : 'sp'}">${esc(n)}</span>`).join('');
-      const dcols = [...new Set([...PV.LEDGER_ITEMS, ...Object.keys(r.ours || {}), ...Object.keys(r.led || {})])].filter(c => ((r.ours && r.ours[c]) || (r.led && r.led[c])));
-      const ditems = dcols.map(c => ({ col: c, ours: Math.round((r.ours && r.ours[c]) || 0), led: Math.round((r.led && r.led[c]) || 0) }));
       return { cls: r.status === 'bad' ? 'rbad' : '', vals: { no: i + 1, 사번: r.사번, 성명: r.성명, 소속: r.소속, ourTotal: r.ourTotal, ledTotal: r.ledTotal, diff, 상태: r.status === 'ok' ? '일치' : '불일치', 비고: ((r.diffs || []).map(d => d.col).join(' ') + ' ' + (r.notes || []).join(' ')) },
         tagsHtml: (diffTags + noteTags) || (r.status === 'ok' ? '<span class="pill ok">일치</span>' : ''), flags: { bad: r.status === 'bad', ok: r.status === 'ok', warn: !!r.warn },
-        detail: { 사번: r.사번, 성명: r.성명, items: ditems, notes: r.notes || [] } };
+        detail: buildDetail(r) };
     });
     const chips = [{ k: 'all', label: '전체' }, { k: 'bad', label: '불일치', flag: 'bad' }, { k: 'ok', label: '일치', flag: 'ok' }, { k: 'warn', label: '점검', flag: 'warn' }];
     const sumHTML = `<div class="sum"><div class="sc"><div class="k">대상</div><div class="v">${res.summary.total}</div></div><div class="sc"><div class="k" style="color:var(--ok)">일치</div><div class="v" style="color:var(--ok)">${res.summary.ok}</div></div><div class="sc"><div class="k" style="color:var(--bad)">불일치</div><div class="v" style="color:var(--bad)">${res.summary.bad}</div></div></div>`;

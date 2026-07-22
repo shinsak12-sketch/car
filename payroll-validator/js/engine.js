@@ -220,8 +220,8 @@ window.PV = window.PV || {};
   }
 
   // ---------- 한 사람·한 달 base 계산 ----------
-  // cutoff: 'actual'|'pay'
-  function computeBase(ctx, sabun, y, m, cutoff, block, exc) {
+  // cutoff: 'actual'|'pay' · trace: 있으면 계산근거 채움
+  function computeBase(ctx, sabun, y, m, cutoff, block, exc, trace) {
     const monthEnd = iso(y, m, dim(y, m));
     const cutoffISO = cutoff === 'pay' ? payday(y, m, ctx.holidays) : monthEnd;
     const roster = ctx.rosterBy.get(sabun);
@@ -259,17 +259,11 @@ window.PV = window.PV || {};
       if (s.payType === 'normal' || s.payType === 'short') paidUnits += days;
     });
 
-    // 무급휴가 공제 (전월분을 이번달에, 현재 유효계약 기준 일당)
-    const uvac = unpaidVacInMonth(ctx, sabun, y, m, exc);
-    if (uvac > 0) {
-      const c = effContract(ctx, sabun, monthEnd);
-      if (c) for (const [srcK, colK] of Object.entries(ITEMMAP)) real[colK] -= monthlyBase(srcK, c.items[srcK] || 0, m) / 30 * uvac;
-      paidUnits -= uvac;
-    }
     if (paidUnits < 0) paidUnits = 0;
 
     // 직책수당(고정역량가급): 월고정 flat + 본점 예외(10만), 유급근로단위로 프로레이션
-    const flat = dutyAllowance(roster) + (ctx.dutyExtra.has(sabun) ? 100000 : 0);
+    const dutyBase = dutyAllowance(roster), dutyExtra = ctx.dutyExtra.has(sabun) ? 100000 : 0;
+    const flat = dutyBase + dutyExtra;
     if (flat > 0) real['고정역량가급'] += flat / 30 * paidUnits;
 
     // 14명 특례: 변동역량가급1 +500,000 (프로레이션)
@@ -279,7 +273,28 @@ window.PV = window.PV || {};
     // 항목별 마지막 절상 (십원단위 절상)
     LEDGER_ITEMS.forEach(k => pay[k] = ceilU(real[k]));
 
-    return { retired: false, pay, paidUnits, is14: applied14, segments: seg.segments, uvac, peakApplied: (roster && (roster.피크적용 || '').includes('적용') && roster.피크예상일 && P(roster.피크예상일).m === m && y >= P(roster.피크예상일).y) };
+    // 무급휴가 공제: 각 항목에서 빼지 않고 **감액 항목에 총액을 마이너스**로
+    const uvac = unpaidVacInMonth(ctx, sabun, y, m, exc);
+    let uvacDeduct = 0;
+    if (uvac > 0) {
+      const gross = ['기본급', '능력급', '성과급', '성과가급', '변동역량가급1', '변동역량가급2', '고정역량가급'].reduce((a, k) => a + (pay[k] || 0), 0);
+      uvacDeduct = ceilU(gross / 30 * uvac);
+      pay['감액'] = (pay['감액'] || 0) - uvacDeduct;
+    }
+
+    const peakApplied = roster && (roster.피크적용 || '').includes('적용') && roster.피크예상일 && P(roster.피크예상일).m === m && y >= P(roster.피크예상일).y;
+    if (trace) {
+      const ec = effContract(ctx, sabun, monthEnd) || { items: {} };
+      trace.연봉일자 = ec.연봉일자; trace.연봉 = Object.assign({}, ec.items);
+      trace.month = m; trace.quarterMonth = QUARTER_MONTHS.has(m);
+      trace.segments = seg.segments.map(s => ({ label: s.gubun || PT_LABEL[s.payType], days: s.days, payType: s.payType }));
+      trace.ilhal = seg.segments.length > 1 || (seg.segments[0] && seg.segments[0].payType !== 'normal');
+      trace.paidUnits = paidUnits;
+      trace.dutyLabel = dutyBase ? (roster && roster.직책 || '') : (dutyExtra ? '본점 예외' : '');
+      trace.dutyFlat = flat; trace.is14 = applied14; trace.uvac = uvac; trace.uvacDeduct = uvacDeduct;
+      trace.peakApplied = peakApplied; trace.pay = Object.assign({}, pay);
+    }
+    return { retired: false, pay, paidUnits, is14: applied14, segments: seg.segments, uvac, peakApplied };
   }
   const PT_LABEL = { normal: '정상근무', unpaid: '무급휴직', sick: '의병휴직(80%)', short: '육아기단축' };
 
@@ -308,7 +323,8 @@ window.PV = window.PV || {};
   // ---------- 최종: 한 사람 종합 ----------
   function computePerson(ctx, sabun, y, m, block) {
     const exc = [];
-    const base = computeBase(ctx, sabun, y, m, 'actual', block, exc);
+    const trace = { extras: [] };
+    const base = computeBase(ctx, sabun, y, m, 'actual', block, exc, trace);
     if (base.retired) return { retired: true };
     const pay = Object.assign({}, base.pay);
     const notes = [];
@@ -322,19 +338,21 @@ window.PV = window.PV || {};
     }
 
     // 업로드 변동항목
-    if (m === 1 && ctx.uploads.annual.has(sabun)) pay['연차수당'] = (pay['연차수당'] || 0) + num(ctx.uploads.annual.get(sabun));
-    if (ctx.uploads.prod.has(sabun)) pay['생산성향상격려금'] = (pay['생산성향상격려금'] || 0) + num(ctx.uploads.prod.get(sabun));
-    if (ctx.uploads.etc.has(sabun)) ctx.uploads.etc.get(sabun).forEach(e => { if (e.구분) pay[e.구분] = (pay[e.구분] || 0) + num(e.금액); });
+    if (m === 1 && ctx.uploads.annual.has(sabun)) { const v = num(ctx.uploads.annual.get(sabun)); pay['연차수당'] = (pay['연차수당'] || 0) + v; trace.extras.push({ label: '연차수당(업로드·1월)', amount: v }); }
+    if (ctx.uploads.prod.has(sabun)) { const v = num(ctx.uploads.prod.get(sabun)); pay['생산성향상격려금'] = (pay['생산성향상격려금'] || 0) + v; trace.extras.push({ label: '생산성향상격려금(업로드)', amount: v }); }
+    if (ctx.uploads.etc.has(sabun)) ctx.uploads.etc.get(sabun).forEach(e => { if (e.구분) { pay[e.구분] = (pay[e.구분] || 0) + num(e.금액); trace.extras.push({ label: `${e.구분}(기타 업로드)`, amount: num(e.금액) }); } });
 
     // 징계
     ctx.discipline.filter(d => d.사번 === sabun).forEach(d => {
       if ((d.종류 || '').includes('감봉')) {
-        pay['감액'] = (pay['감액'] || 0) - Math.abs(num(d.금액));
-        notes.push('감봉 감액 ' + Math.abs(num(d.금액)).toLocaleString());
+        const amt = Math.abs(num(d.금액));
+        pay['감액'] = (pay['감액'] || 0) - amt;
+        notes.push('감봉 감액 ' + amt.toLocaleString());
+        trace.extras.push({ label: '감봉(감액)', amount: -amt });
       } else if ((d.종류 || '').includes('정직')) {
-        // (급여 − 변동1 − 변동2 − 고정역량) × 50%
         LEDGER_ITEMS.forEach(k => { if (k === '감액') return; if (SUSPEND_EXCL.has(k)) pay[k] = 0; else pay[k] = ceilU(pay[k] * 0.5); });
         notes.push('정직 50% (역량가급 제외)');
+        trace.extras.push({ label: '정직 50% (역량가급·고정역량가급 제외)', amount: null });
       }
     });
 
@@ -342,8 +360,9 @@ window.PV = window.PV || {};
     const pm = prevMonth(y, m);
     const d1 = monthDiff(ctx, sabun, pm.y, pm.m, block);
     if (d1 && base.paidUnits > 0) {
-      let s = 0; LEDGER_ITEMS.forEach(k => { if (k === '감액') { pay[k] += d1[k]; } else { pay[k] += d1[k]; } s += d1[k]; });
+      let s = 0; LEDGER_ITEMS.forEach(k => { pay[k] += d1[k]; s += d1[k]; });
       notes.push(`전월 소급 ${s >= 0 ? '+' : ''}${s.toLocaleString()}`);
+      trace.extras.push({ label: `전월(${pm.y}-${String(pm.m).padStart(2, '0')}) 소급정산`, amount: s });
     }
     // 복직월 육아휴직 초과분 일괄공제
     const ri = returnInfo(ctx, sabun, y, m);
@@ -352,7 +371,7 @@ window.PV = window.PV || {};
       const dl = monthDiff(ctx, sabun, lm.y, lm.m, block); // actual−aspaid (음수=과지급)
       if (dl) {
         let s = 0; LEDGER_ITEMS.forEach(k => { pay[k] += dl[k]; s += dl[k]; });
-        if (s !== 0) notes.push(`복직 정산(육아휴직 과지급 회수) ${s.toLocaleString()}`);
+        if (s !== 0) { notes.push(`복직 정산(육아휴직 과지급 회수) ${s.toLocaleString()}`); trace.extras.push({ label: '복직 정산(육아휴직 과지급 회수)', amount: s }); }
       }
     }
 
@@ -361,8 +380,9 @@ window.PV = window.PV || {};
     if (segNote) notes.unshift('일할 · ' + base.segments.map(s => `${s.gubun || PT_LABEL[s.payType]} ${s.days}일`).join(' → '));
     if (base.uvac > 0) notes.push(`전월 무급휴가 ${base.uvac}일 공제`);
     if (base.peakApplied) notes.push('임금피크 해당월');
+    trace.finalPay = Object.assign({}, pay);
 
-    return { retired: false, pay, notes, exc, paidUnits: base.paidUnits, segments: base.segments };
+    return { retired: false, pay, notes, exc, paidUnits: base.paidUnits, segments: base.segments, trace };
   }
 
   // ---------- 급여계산 (급여대장 불필요) ----------
@@ -387,7 +407,7 @@ window.PV = window.PV || {};
         (r.exc || []).forEach(e => allExc.push(e));
         rows.push({
           사번: id, 성명: (roster && roster.성명) || sal.성명 || '', 소속: (roster && roster.소속) || sal.소속 || '',
-          pay: r.pay, notes: r.notes || [], warn: (r.exc || []).length > 0,
+          pay: r.pay, notes: r.notes || [], warn: (r.exc || []).length > 0, trace: r.trace,
           total: Math.round(Object.values(r.pay).reduce((a, b) => a + b, 0)),
         });
       });
@@ -414,7 +434,8 @@ window.PV = window.PV || {};
 
   // ---------- 검증 (계산결과 vs 급여대장) ----------
   PV.compareLedger = function (payroll, store) {
-    const ledger = (store.ledger || []).filter(r => (r.지급유형 || '').includes('급여') && !(r.지급유형 || '').includes('퇴직'));
+    // 지급유형이 정확히 '급여'인 행만 검증 (퇴직급여·급여환수 등 제외)
+    const ledger = (store.ledger || []).filter(r => (r.지급유형 || '').trim() === '급여');
     const byId = new Map(); payroll.rows.forEach(r => byId.set(r.사번, r));
     const rows = [], alerts = [];
     let okCnt = 0, badCnt = 0;
@@ -440,7 +461,7 @@ window.PV = window.PV || {};
       if (diffs.length) notes.unshift('불일치: ' + diffs.map(d => d.col).join(', '));
       rows.push({
         사번: L.사번, 성명: L.성명 || r.성명, 소속: L.소속 || r.소속, status, diffs,
-        ours: r.pay, led: L.pay || {}, notes, warn: r.warn,
+        ours: r.pay, led: L.pay || {}, notes, warn: r.warn, trace: r.trace,
         ourTotal: r.total, ledTotal: Math.round(L.총지급액 || 0),
       });
     });
