@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>급여검증 · 오프라인 급여계산 검증</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ================= HEADER ================= -->
+<header class="appbar">
+  <div class="brand">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4v6c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div>
+      <h1>급여검증</h1>
+      <div class="sub">OFFLINE PAYROLL VALIDATOR</div>
+    </div>
+  </div>
+
+  <div class="center">
+    <div class="period">
+      <label>대상</label>
+      <select id="selYear"></select>
+      <select id="selMonth"></select>
+    </div>
+    <div class="paybadge" id="payBadge" title="임금지급일 (20일, 공휴일이면 앞선 근무일)">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      지급일 <b id="payDate">–</b>
+    </div>
+  </div>
+
+  <div class="spacer"></div>
+
+  <button class="iconbtn" id="themeBtn" title="라이트/다크 전환">
+    <svg class="theme-moon" viewBox="0 0 24 24" fill="none"><path d="M21 12.8A8.5 8.5 0 1111.2 3a6.6 6.6 0 009.8 9.8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    <svg class="theme-sun" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8L6 18M18 6l1.8-1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+  </button>
+  <button class="btn btn-primary btn-run" id="runBtn" disabled>
+    <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7-11-7z" fill="currentColor"/></svg>
+    검증 실행
+  </button>
+</header>
+
+<!-- ================= STAGE ================= -->
+<main class="stage">
+
+  <!-- ---------- LEFT ---------- -->
+  <section class="col left">
+
+    <!-- 1. 기준 데이터 폴더 -->
+    <div class="card">
+      <div class="head">
+        <span class="num">1</span><h2>기준 데이터 폴더</h2>
+        <span class="hint">매달 안 바뀌는 데이터</span>
+        <div class="tail"><span class="badge n" id="folderBadge">미연결</span></div>
+      </div>
+      <div class="body">
+        <label class="dropzone" id="folderDrop">
+          <div class="dz-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></div>
+          <div class="dz-t">폴더 선택</div>
+          <div class="dz-s">연봉·명부·발령·휴가·공휴일 파일이 든 폴더를 지정하세요<br>파일명/내용으로 자동 인식합니다</div>
+          <input type="file" id="folderInput" webkitdirectory directory multiple>
+        </label>
+        <div class="filelist" id="folderFiles"></div>
+      </div>
+    </div>
+
+    <!-- 2. 급여대장 -->
+    <div class="card">
+      <div class="head">
+        <span class="num">2</span><h2>급여대장 <span class="hint">검증 대상 (세전)</span></h2>
+        <div class="tail"><span class="badge n" id="ledgerBadge">미첨부</span></div>
+      </div>
+      <div class="body">
+        <label class="dropzone" id="ledgerDrop">
+          <div class="dz-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M6 2h9l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M14 2v6h6M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+          <div class="dz-t">급여대장 업로드</div>
+          <div class="dz-s">실제 지급된 급여대장 엑셀을 올리세요</div>
+          <input type="file" id="ledgerInput" accept=".xlsx,.xls">
+        </label>
+      </div>
+    </div>
+
+    <!-- 3. 변동 항목 업로드 -->
+    <div class="card">
+      <div class="head"><span class="num">3</span><h2>변동 항목 업로드</h2><span class="hint">사번·금액 양식</span></div>
+      <div class="body tight">
+        <div class="uprow" data-up="annual" id="up-annual">
+          <div class="u-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v18M5 8l7-5 7 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div><div class="u-name">연차수당 <span class="badge n" style="font-size:9px">1월만</span></div><div class="u-sub" id="sub-annual">사번 · 금액</div></div>
+          <div class="u-act"><label class="btn btn-ghost btn-sm">첨부<input type="file" class="hidden upfile" data-up="annual" accept=".xlsx,.xls"></label></div>
+        </div>
+        <div class="uprow" data-up="prod" id="up-prod">
+          <div class="u-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M13 3L4 14h7l-1 7 9-11h-7l1-7z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></div>
+          <div><div class="u-name">생산성향상격려금</div><div class="u-sub" id="sub-prod">사번 · 금액</div></div>
+          <div class="u-act"><label class="btn btn-ghost btn-sm">첨부<input type="file" class="hidden upfile" data-up="prod" accept=".xlsx,.xls"></label></div>
+        </div>
+        <div class="uprow" data-up="etc" id="up-etc">
+          <div class="u-ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg></div>
+          <div><div class="u-name">기타</div><div class="u-sub" id="sub-etc">사번 · 구분값 · 금액</div></div>
+          <div class="u-act"><label class="btn btn-ghost btn-sm">첨부<input type="file" class="hidden upfile" data-up="etc" accept=".xlsx,.xls"></label></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. 징계 입력 -->
+    <div class="card">
+      <div class="head"><span class="num">4</span><h2>징계 입력</h2><span class="hint">수기</span>
+        <div class="tail"><span class="chip-add" id="addDiscipline">+ 추가</span></div>
+      </div>
+      <div class="body">
+        <div id="disciplineList"></div>
+      </div>
+    </div>
+
+    <!-- 5. 이월 휴직 확인 -->
+    <div class="card">
+      <div class="head"><span class="num">5</span><h2>이월 휴직 확인</h2><span class="hint">발령 이전부터 휴직</span>
+        <div class="tail"><span class="badge n" id="carryBadge">0</span></div>
+      </div>
+      <div class="body">
+        <div id="carryList"><div class="empty">폴더 연결 후 자동 감지됩니다</div></div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ---------- RIGHT ---------- -->
+  <section class="col right">
+
+    <div class="tiles" id="tiles">
+      <div class="tile"><div class="t-k">대상 인원</div><div class="t-v" id="tiTotal">–</div><div class="t-s">급여 지급유형</div></div>
+      <div class="tile ok"><div class="t-k">일치</div><div class="t-v" id="tiOk">–</div><div class="t-s">완전일치</div></div>
+      <div class="tile bad"><div class="t-k">불일치</div><div class="t-v" id="tiBad">–</div><div class="t-s">1원이라도 차이</div></div>
+      <div class="tile warn"><div class="t-k">점검필요</div><div class="t-v" id="tiWarn">–</div><div class="t-s">담당자 확인</div></div>
+      <div class="tile block"><div class="t-k">계산차단</div><div class="t-v" id="tiBlock">–</div><div class="t-s">연봉 누락</div></div>
+    </div>
+
+    <div class="card">
+      <div class="head">
+        <span class="num" style="background:var(--warn-soft);color:var(--warn)">!</span>
+        <h2>점검 · 예외 사항</h2>
+        <div class="tail"><span class="badge n" id="alertBadge">0</span></div>
+      </div>
+      <div class="body">
+        <div class="alerts" id="alerts">
+          <div class="empty">검증을 실행하면 표시됩니다</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="head">
+        <span class="num" style="background:var(--info-soft);color:var(--info)">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </span>
+        <h2>검증 결과</h2>
+        <div class="tail">
+          <button class="btn btn-ghost btn-sm" id="exportBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            엑셀 다운로드
+          </button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="resulttools hidden" id="resultTools">
+          <div class="seg" id="filterSeg">
+            <button data-f="all" class="on">전체</button>
+            <button data-f="bad">불일치</button>
+            <button data-f="ok">일치</button>
+          </div>
+          <div class="search"><input type="text" id="searchInp" placeholder="사번 · 성명 검색"></div>
+        </div>
+        <div id="resultArea">
+          <div class="placeholder">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M9 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M21 3l-9 9M15 3h6v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="ph-t">아직 결과가 없습니다</div>
+            <div class="ph-s">좌측에서 폴더·급여대장을 연결한 뒤 우측 상단 <b>검증 실행</b>을 눌러주세요.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<div class="toasts" id="toasts"></div>
+
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="js/recognize.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
