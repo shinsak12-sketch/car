@@ -27,6 +27,8 @@ window.PV = window.PV || {};
   const FULLY_UNPAID_VAC = ['가족돌봄휴가', '보건(생리)휴가(무급)', '무급휴가'];
 
   // ---------- 날짜 유틸 ----------
+  // 십원단위 절상 (마지막 자릿수 올림 → 끝자리 0)
+  const ceilU = x => Math.ceil((x - 1e-6) / 10) * 10;
   const P = s => { if (!s) return null; const [y, m, d] = s.split('-').map(Number); return { y, m, d }; };
   const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   const dim = (y, m) => new Date(y, m, 0).getDate();          // 실제 달력 일수
@@ -260,8 +262,8 @@ window.PV = window.PV || {};
     const applied14 = is14(ctx, sabun, monthEnd);
     if (applied14) real['변동역량가급1'] += 500000 / 30 * paidUnits;
 
-    // 항목별 마지막 절상
-    LEDGER_ITEMS.forEach(k => pay[k] = Math.ceil(real[k] - 1e-6));
+    // 항목별 마지막 절상 (십원단위 절상)
+    LEDGER_ITEMS.forEach(k => pay[k] = ceilU(real[k]));
 
     return { retired: false, pay, paidUnits, is14: applied14, segments: seg.segments, uvac, peakApplied: (roster && (roster.피크적용 || '').includes('적용') && roster.피크예상일 && P(roster.피크예상일).m === m && y >= P(roster.피크예상일).y) };
   }
@@ -317,7 +319,7 @@ window.PV = window.PV || {};
         notes.push('감봉 감액 ' + Math.abs(num(d.금액)).toLocaleString());
       } else if ((d.종류 || '').includes('정직')) {
         // (급여 − 변동1 − 변동2 − 고정역량) × 50%
-        LEDGER_ITEMS.forEach(k => { if (k === '감액') return; if (SUSPEND_EXCL.has(k)) pay[k] = 0; else pay[k] = Math.ceil(pay[k] * 0.5 - 1e-6); });
+        LEDGER_ITEMS.forEach(k => { if (k === '감액') return; if (SUSPEND_EXCL.has(k)) pay[k] = 0; else pay[k] = ceilU(pay[k] * 0.5); });
         notes.push('정직 50% (역량가급 제외)');
       }
     });
