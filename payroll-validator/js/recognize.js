@@ -74,6 +74,7 @@ window.PV = window.PV || {};
     if (some('공휴일', '휴일') && some('일자', '날짜', '날') ) return 'holiday';
     // filename fallback
     const fn = (fname || '');
+    if (/직책수당|본점/i.test(fn)) return 'dutyextra';
     if (/급여대장|payroll|ledger/i.test(fn)) return 'ledger';
     if (/연봉/i.test(fn)) return 'salary';
     if (/명부/i.test(fn)) return 'roster';
@@ -192,6 +193,20 @@ window.PV = window.PV || {};
     return out;
   }
 
+  // 직책수당(본점) 예외자: 사번·성명 (사번만 사용)
+  function parseDutyExtra(rows) {
+    let start = 0;
+    const first = (rows[0] || []).map(txt);
+    if (first.some(t => /사번|성명|이름/.test(t))) start = 1;
+    const out = [];
+    for (let r = start; r < rows.length; r++) {
+      const row = rows[r]; if (!row) continue;
+      const sabun = txt(row[0]); if (!sabun || sabun === 'Σ') continue;
+      out.push(sabun);
+    }
+    return out;
+  }
+
   function parseHoliday(rows) {
     // 어떤 열이든 날짜로 해석되면 공휴일로 수집
     const set = new Set();
@@ -260,6 +275,7 @@ window.PV = window.PV || {};
       case 'vacation': data = parseVacation(rows); break;
       case 'holiday': data = parseHoliday(rows); break;
       case 'ledger': data = parseLedger(rows); break;
+      case 'dutyextra': data = parseDutyExtra(rows); break;
       default: data = null;
     }
     return { type, data, rowsCount: Array.isArray(data) ? data.length : 0, rawRows: rows };
@@ -278,6 +294,7 @@ window.PV = window.PV || {};
     order: { name: '발령정보', sub: '퇴직/휴직/복직/직무변경 (누적)' },
     vacation: { name: '휴가데이터', sub: '무급휴가 공제 (결재완료)' },
     holiday: { name: '공휴일', sub: '실제 지급일 산출' },
+    dutyextra: { name: '직책수당(본점)', sub: '직책 없는 월 10만 예외자' },
     ledger: { name: '급여대장', sub: '검증 대상 (세전)' },
   };
 

@@ -70,6 +70,7 @@ window.PV = window.PV || {};
       discipline: store.discipline || [],
       carry: store.carry || new Map(),
       overrides: store.overrides || { unpaidVac: new Map() },
+      dutyExtra: new Set(store.dutyExtra || []), // 본점 직책수당(월 10만) 예외 사번
       ledgerBy: (() => { const m = new Map(); (store.ledger || []).forEach(r => { if (!m.has(r.사번)) m.set(r.사번, []); m.get(r.사번).push(r); }); return m; })(),
     };
   };
@@ -102,14 +103,15 @@ window.PV = window.PV || {};
     if (!roster) return 0;
     const 직책 = roster.직책 || '', 직급 = roster.직급 || '';
     if (직책.includes('센터장')) return 100000;
-    if (직책.includes('부서장')) return 1500000;
+    if (직책.includes('부서장') || 직책.includes('파트장')) return 1500000;
     if (직책.includes('본부장')) {
       if (직급 === 'L') return 2000000;
-      if (직급.includes('이사')) return 0;
-      return 0;
+      return 0; // 이사 등
     }
     return 0;
   }
+  // 무급휴가 판정(보건·생리·가족돌봄·무급 포함, 표기 편차 허용)
+  const isUnpaidVac = t => /무급휴가|가족돌봄|보건|생리/.test(t || '');
 
   // 14명 특례 대상 여부 (직무변경 26-07-01 · JA · 소액전담→대물보상, 상태 유지)
   function is14(ctx, sabun, monthEnd) {
@@ -155,7 +157,7 @@ window.PV = window.PV || {};
       let contract;
       if (pt === 'short') {
         contract = contractExactOn(ctx, sabun, o.발령시작일);
-        if (!contract && block) block.push({ 사번: sabun, reason: '육아기단축 연봉 미입력', 일자: o.발령시작일 });
+        if (!contract && block) block.push({ 사번: sabun, 성명: (ctx.rosterBy.get(sabun) || {}).성명 || '', reason: '육아기단축 연봉 미입력', 일자: o.발령시작일 });
         contract = contract || effContract(ctx, sabun, o.발령시작일);
       } else {
         contract = effContract(ctx, sabun, o.발령시작일);
@@ -184,16 +186,19 @@ window.PV = window.PV || {};
     return { segments: merged, retired: false, monthEnd };
   }
 
-  // 무급휴가/출산 무급일수(대상월)
+  // 무급휴가/출산 무급일수
+  // 무급휴가류(보건·생리·가족돌봄·무급휴가): 20일 따지지 않고 **전월분을 이번달에 공제**
   function unpaidVacInMonth(ctx, sabun, y, m, exc) {
     const rows = ctx.vacBy.get(sabun) || [];
-    const ym = `${y}-${String(m).padStart(2, '0')}`;
+    const pm = prevMonth(y, m);
+    const pym = `${pm.y}-${String(pm.m).padStart(2, '0')}`; // 전월
+    const ym = `${y}-${String(m).padStart(2, '0')}`;        // 당월
     let days = 0;
-    // 완전 무급
+    // 완전 무급: 전월에 쓴 것을 이번달 공제
     rows.forEach(v => {
-      if (FULLY_UNPAID_VAC.includes(v.휴가종류) && (v.시작일 || '').startsWith(ym)) days += (v.휴가일수 || 1);
+      if (isUnpaidVac(v.휴가종류) && (v.시작일 || '').startsWith(pym)) days += (v.휴가일수 || 1);
     });
-    // 출산 계열
+    // 출산 계열 (당월 기준, 누적 유급/무급)
     const mat = rows.filter(v => /출산|유사산/.test(v.휴가종류));
     if (mat.length) {
       const ov = ctx.overrides && ctx.overrides.unpaidVac && ctx.overrides.unpaidVac.get(sabun);
@@ -201,9 +206,9 @@ window.PV = window.PV || {};
       if (ov != null) {
         days += Number(ov) || 0; // 담당자 수동 입력 무급일수
       } else if (hasSplit) {
-        exc && exc.push({ 사번: sabun, type: 'warn', kind: 'maternity', title: '출산휴가 분리행 — 담당자 확인', desc: '출산전/출산후 분리 입력. 이번달 무급일수를 직접 입력하세요.' });
+        const nm = (ctx.rosterBy.get(sabun) || {}).성명 || '';
+        exc && exc.push({ 사번: sabun, 성명: nm, type: 'warn', kind: 'maternity', title: '출산휴가 분리행 — 담당자 확인', desc: '출산전/출산후 분리 입력. 이번달 무급일수를 직접 입력하세요.' });
       } else {
-        // 누적 유급한도
         const 다태아 = mat.some(v => v.휴가종류.includes('다태아'));
         const 유사산 = mat.some(v => v.휴가종류.includes('유사산'));
         const limit = 다태아 ? 75 : (유사산 ? 60 : 60);
@@ -226,7 +231,7 @@ window.PV = window.PV || {};
       const pk = P(roster.피크예상일);
       if (pk && pk.m === m && y >= pk.y) {
         const need = iso(y, m, 1);
-        if (!contractExactOn(ctx, sabun, need) && block) block.push({ 사번: sabun, reason: '임금피크 연봉 미입력', 일자: need });
+        if (!contractExactOn(ctx, sabun, need) && block) block.push({ 사번: sabun, 성명: (roster && roster.성명) || '', reason: '임금피크 연봉 미입력', 일자: need });
       }
     }
 
@@ -254,7 +259,7 @@ window.PV = window.PV || {};
       if (s.payType === 'normal' || s.payType === 'short') paidUnits += days;
     });
 
-    // 무급휴가 공제 (현재 유효계약 기준 일당)
+    // 무급휴가 공제 (전월분을 이번달에, 현재 유효계약 기준 일당)
     const uvac = unpaidVacInMonth(ctx, sabun, y, m, exc);
     if (uvac > 0) {
       const c = effContract(ctx, sabun, monthEnd);
@@ -263,8 +268,8 @@ window.PV = window.PV || {};
     }
     if (paidUnits < 0) paidUnits = 0;
 
-    // 직책수당(고정역량가급): 월고정 flat, 유급근로단위로 프로레이션
-    const flat = dutyAllowance(roster);
+    // 직책수당(고정역량가급): 월고정 flat + 본점 예외(10만), 유급근로단위로 프로레이션
+    const flat = dutyAllowance(roster) + (ctx.dutyExtra.has(sabun) ? 100000 : 0);
     if (flat > 0) real['고정역량가급'] += flat / 30 * paidUnits;
 
     // 14명 특례: 변동역량가급1 +500,000 (프로레이션)
@@ -313,7 +318,7 @@ window.PV = window.PV || {};
     const roster = ctx.rosterBy.get(sabun);
     const orders = ctx.ordersBy.get(sabun) || [];
     if (roster && (roster.직무 || '').includes('(휴직)') && !orders.some(o => payTypeOf(o.발령구분) === 'unpaid' || payTypeOf(o.발령구분) === 'sick')) {
-      if (!ctx.carry.get(sabun) || !ctx.carry.get(sabun).종류) exc.push({ 사번: sabun, type: 'warn', kind: 'carry', title: '이월 휴직 종류 확인 필요', desc: '명부상 (휴직) 상태이나 종류 미입력 → 무급으로 계산했습니다.' });
+      if (!ctx.carry.get(sabun) || !ctx.carry.get(sabun).종류) exc.push({ 사번: sabun, 성명: (roster && roster.성명) || '', type: 'warn', kind: 'carry', title: '휴직 종류 확인 필요', desc: '명부상 (휴직) 상태이나 종류 미입력 → 무급으로 계산했습니다.' });
     }
 
     // 업로드 변동항목
@@ -354,7 +359,7 @@ window.PV = window.PV || {};
     // 비고(특이사항) 구성
     const segNote = base.segments && (base.segments.length > 1 || (base.segments[0] && base.segments[0].payType !== 'normal'));
     if (segNote) notes.unshift('일할 · ' + base.segments.map(s => `${s.gubun || PT_LABEL[s.payType]} ${s.days}일`).join(' → '));
-    if (base.uvac > 0) notes.push(`무급휴가 ${base.uvac}일 공제`);
+    if (base.uvac > 0) notes.push(`전월 무급휴가 ${base.uvac}일 공제`);
     if (base.peakApplied) notes.push('임금피크 해당월');
 
     return { retired: false, pay, notes, exc, paidUnits: base.paidUnits, segments: base.segments };
@@ -390,7 +395,7 @@ window.PV = window.PV || {};
     }
 
     // 알림
-    if (blocked) alerts.push({ level: 'block', title: `연봉 미입력 — 전체 계산 차단 (${block.length}건)`, desc: block.map(b => `${b.사번}(${b.reason} ${b.일자})`).join(', ') + ' · 인사시스템에 연봉 입력 후 재실행하세요.' });
+    if (blocked) alerts.push({ level: 'block', title: `연봉 미입력 — 전체 계산 차단 (${block.length}건)`, desc: block.map(b => `${b.사번} ${b.성명 || ''}(${b.reason} ${b.일자})`).join(', ') + ' · 인사시스템에 연봉 입력 후 재실행하세요.' });
     const cnt14 = rows.filter(r => (r.notes || []).some(n => n.includes('14명특례'))).length;
     if (cnt14) alerts.push({ level: 'info', title: `직무변경 특례 ${cnt14}명`, desc: 'JA·소액전담→대물보상(26-07-01) 변동역량가급1 +월 50만원' });
     const retroP = rows.filter(r => (r.notes || []).some(n => n.includes('소급') || n.includes('복직 정산')));
@@ -398,7 +403,7 @@ window.PV = window.PV || {};
     const ilhal = rows.filter(r => (r.notes || []).some(n => n.startsWith('일할'))).length;
     if (ilhal) alerts.push({ level: 'info', title: `일할계산 ${ilhal}명`, desc: '휴직·복직·단축 등으로 일할 적용된 인원' });
     const seen = new Set();
-    allExc.forEach(e => { const k = e.사번 + e.title; if (seen.has(k)) return; seen.add(k); alerts.push({ level: e.type || 'warn', title: `${e.title} — ${e.사번}`, desc: e.desc, 사번: e.사번, kind: e.kind }); });
+    allExc.forEach(e => { const k = e.사번 + e.title; if (seen.has(k)) return; seen.add(k); alerts.push({ level: e.type || 'warn', title: `${e.title} — ${e.사번} ${e.성명 || ''}`, desc: e.desc, 사번: e.사번, 성명: e.성명, kind: e.kind }); });
 
     return {
       target, blocked, block, payday: payday(y, m, ctx.holidays),
@@ -419,7 +424,7 @@ window.PV = window.PV || {};
       ledgerIds.add(L.사번);
       const r = byId.get(L.사번);
       if (!r) {
-        rows.push({ 사번: L.사번, 성명: L.성명, 소속: L.소속, status: 'bad', diffs: [{ col: '—', ours: 0, led: Math.round(L.총지급액 || 0), diff: -Math.round(L.총지급액 || 0) }], ours: {}, led: L.pay || {}, notes: ['계산 대상에 없음(연봉/재직 확인)'], warn: true, ourTotal: 0, ledTotal: Math.round(L.총지급액 || 0) });
+        rows.push({ 사번: L.사번, 성명: L.성명, 소속: L.소속, status: 'bad', diffs: [{ col: '—', ours: 0, led: Math.round(L.총지급액 || 0), diff: -Math.round(L.총지급액 || 0) }], ours: {}, led: L.pay || {}, notes: ['급여대장엔 있으나 계산 대상 아님 (연봉내역에 사번 없음 또는 퇴직/제외)'], warn: true, ourTotal: 0, ledTotal: Math.round(L.총지급액 || 0) });
         badCnt++; return;
       }
       const ourCols = new Set(PV.LEDGER_ITEMS);

@@ -13,7 +13,7 @@
   const store = {
     salary: null, roster: null, order: null, vacation: null, holiday: [], ledger: null,
     files: {}, fileCounts: {}, uploads: { annual: new Map(), prod: new Map(), etc: new Map() },
-    discipline: [], carry: new Map(), overrides: { unpaidVac: new Map() },
+    discipline: [], carry: new Map(), overrides: { unpaidVac: new Map() }, dutyextra: [],
   };
   let payrollResult = null, verifyResult = null;
 
@@ -52,7 +52,7 @@
     const jsons = all.filter(f => /\.json$/i.test(f.name));
     if (!xls.length && !jsons.length) { toast('엑셀 파일이 없습니다', 'bad'); return; }
     // 기준 데이터 리셋(재선택 시 중복 방지)
-    store.salary = store.roster = store.order = store.vacation = null; store.holiday = []; store.files = {}; store.fileCounts = {};
+    store.salary = store.roster = store.order = store.vacation = null; store.holiday = []; store.dutyextra = []; store.files = {}; store.fileCounts = {};
     let ok = 0;
     for (const f of xls) {
       try {
@@ -65,6 +65,8 @@
           store.files.order = store.fileCounts.order > 1 ? `${store.fileCounts.order}개 파일` : f.name;
         } else if (res.type === 'holiday') {
           store.holiday = [...new Set([...(store.holiday || []), ...res.data])]; store.files.holiday = f.name;
+        } else if (res.type === 'dutyextra') {
+          store.dutyextra = res.data; store.files.dutyextra = f.name;
         } else { store[res.type] = res.data; store.files[res.type] = f.name; }
         ok++;
       } catch (err) { console.error(f.name, err); }
@@ -75,7 +77,7 @@
     if (arch.length) { arch.sort((a, b) => (a.ym < b.ym ? 1 : -1)); applyArchive(arch[0]); }
 
     $('#folderBadge').textContent = '연결됨'; $('#folderBadge').className = 'badge g';
-    renderFolder(); detectCarry(); renderDiscipline(); updatePayday(); refresh();
+    renderFolder(); detectLeaves(); renderDiscipline(); updatePayday(); refresh();
     toast(`폴더 인식 완료 · ${ok}개 기준 파일` + (arch.length ? ` · 전월 처리내역 불러옴` : ''), 'ok');
   };
 
@@ -88,13 +90,16 @@
 
   function renderFolder() {
     const wrap = $('#folderFiles'); wrap.innerHTML = '';
-    ['salary', 'roster', 'order', 'vacation', 'holiday'].forEach(type => {
-      const lab = PV.FILE_LABELS[type], loaded = store[type] != null && (type !== 'holiday' || store.holiday.length);
-      const cnt = type === 'holiday' ? (store.holiday || []).length : (store[type] ? store[type].length : 0);
+    const unit = { holiday: '일', dutyextra: '명' };
+    ['salary', 'roster', 'order', 'vacation', 'holiday', 'dutyextra'].forEach(type => {
+      const lab = PV.FILE_LABELS[type];
+      const arr = type === 'dutyextra' ? store.dutyextra : store[type];
+      const loaded = Array.isArray(arr) ? arr.length > 0 : arr != null;
+      const cnt = Array.isArray(arr) ? arr.length : 0;
       const it = el('div', 'fileitem ' + (loaded ? 'ok' : 'miss'));
       it.innerHTML = `<span class="dot"></span>
         <div><div class="fi-name">${lab.name}${type === 'order' && store.fileCounts.order > 1 ? ` <span class="badge g" style="font-size:9px">${store.fileCounts.order}개 합침</span>` : ''}</div><div class="fi-sub">${lab.sub}</div></div>
-        <div class="fi-meta">${loaded ? `<span class="badge g">${cnt}${type === 'holiday' ? '일' : '건'}</span>` : '<span class="badge n">미인식</span>'}
+        <div class="fi-meta">${loaded ? `<span class="badge g">${cnt}${unit[type] || '건'}</span>` : `<span class="badge n">${type === 'dutyextra' ? '없음' : '미인식'}</span>`}
         <div class="fi-file">${esc(store.files[type] || '')}</div></div>`;
       wrap.appendChild(it);
     });
@@ -150,29 +155,54 @@
   $('#addDiscipline').onclick = () => { store.discipline.push({ 사번: '', 성명: '', 종류: '감봉', 금액: 0 }); renderDiscipline(); };
   renderDiscipline();
 
-  /* ---------- 이월 휴직 감지 ---------- */
-  function detectCarry() {
+  /* ---------- 휴직 확인 (이월 + 무급·의병휴직 종료일 체크) ---------- */
+  const needsEnd = 종류 => /무급휴직|의병휴직/.test(종류 || '');
+  function orderLeaveType(g) { if (/의병/.test(g || '')) return '의병휴직'; if (/무급휴직/.test(g || '')) return '무급휴직'; return null; }
+  function detectLeaves() {
     if (!store.roster) return;
     const orderBy = new Map(); (store.order || []).forEach(o => { if (!orderBy.has(o.사번)) orderBy.set(o.사번, []); orderBy.get(o.사번).push(o); });
-    const cands = store.roster.filter(r => (r.직무 || '').includes('(휴직)') && !(orderBy.get(r.사번) || []).some(o => /휴직/.test(o.발령구분 || '')));
+    const nameOf = sabun => (store.roster.find(x => x.사번 === sabun) || {}).성명 || '';
+    const cand = new Map(); // 사번 → {성명, source, 종류fix, 시작일fix}
+    // 이월 휴직 (명부 (휴직) & 발령에 휴직 없음)
+    store.roster.forEach(r => {
+      if ((r.직무 || '').includes('(휴직)') && !(orderBy.get(r.사번) || []).some(o => /휴직/.test(o.발령구분 || '')))
+        cand.set(r.사번, { 성명: r.성명, source: 'carry' });
+    });
+    // 발령상 무급·의병휴직 (종료일 체크 대상)
+    (store.order || []).forEach(o => {
+      const t = orderLeaveType(o.발령구분); if (!t) return;
+      const prev = cand.get(o.사번);
+      if (!prev || prev.source === 'order') cand.set(o.사번, { 성명: nameOf(o.사번) || o.성명 || '', source: 'order', 종류fix: t, 시작일fix: o.발령시작일 });
+    });
     const box = $('#carryList'); box.innerHTML = '';
-    $('#carryBadge').textContent = cands.length; $('#carryBadge').className = 'badge ' + (cands.length ? 'g' : 'n');
-    if (!cands.length) { box.innerHTML = '<div class="empty">이월 휴직 대상자가 없습니다</div>'; return; }
+    const list = [...cand.entries()];
+    let missing = 0;
+    if (!list.length) { $('#carryBadge').textContent = '0'; $('#carryBadge').className = 'badge n'; box.innerHTML = '<div class="empty">휴직 확인 대상자가 없습니다</div>'; return; }
     const t = el('table', 'mini');
-    t.innerHTML = '<thead><tr><th>사번</th><th>성명</th><th>휴직시작일</th><th>종류</th></tr></thead>';
+    t.innerHTML = '<thead><tr><th>사번</th><th>성명</th><th>종류</th><th>시작일</th><th>종료일</th></tr></thead>';
     const tb = el('tbody');
-    cands.forEach(r => {
-      const cur = store.carry.get(r.사번) || {};
+    list.forEach(([sabun, c]) => {
+      const cur = store.carry.get(sabun) || {};
+      const 종류 = c.source === 'order' ? c.종류fix : (cur.종류 || '');
+      const endReq = needsEnd(종류);
+      if (endReq && !cur.종료일) missing++;
+      const 종류Cell = c.source === 'order'
+        ? `<span class="badge ${c.종류fix === '의병휴직' ? 'g' : 'n'}" style="font-size:10px">${c.종류fix}</span>`
+        : `<select class="inp" data-k="종류"><option value="">선택</option>${['육아휴직', '무급휴직', '가족돌봄휴직', '난임휴직', '의병휴직'].map(x => `<option ${cur.종류 === x ? 'selected' : ''}>${x}</option>`).join('')}</select>`;
+      const 시작Cell = c.source === 'order' ? `<span class="muted" style="font-size:11px">${c.시작일fix || ''}</span>` : `<input type="date" data-k="시작일" value="${cur.시작일 || ''}" style="width:130px">`;
       const tr = el('tr');
-      tr.innerHTML = `<td>${esc(r.사번)}</td><td>${esc(r.성명)}</td>
-        <td><input type="date" data-k="시작일" value="${cur.시작일 || ''}"></td>
-        <td><select class="inp" data-k="종류"><option value="">선택</option>
-          ${['육아휴직', '무급휴직', '가족돌봄휴직', '난임휴직', '의병휴직'].map(x => `<option ${cur.종류 === x ? 'selected' : ''}>${x}</option>`).join('')}
-        </select></td>`;
-      tr.querySelectorAll('[data-k]').forEach(inp => inp.onchange = () => { const o = store.carry.get(r.사번) || {}; o[inp.dataset.k] = inp.value; store.carry.set(r.사번, o); });
+      tr.innerHTML = `<td>${esc(sabun)}</td><td>${esc(c.성명)}</td><td>${종류Cell}</td><td>${시작Cell}</td>
+        <td><input type="date" data-k="종료일" value="${cur.종료일 || ''}" style="width:130px${endReq && !cur.종료일 ? ';border-color:var(--bad);box-shadow:0 0 0 2px var(--bad-soft)' : ''}" ${endReq ? 'title="무급·의병휴직은 종료일 필수"' : ''}></td>`;
+      tr.querySelectorAll('[data-k]').forEach(inp => inp.onchange = () => {
+        const o = store.carry.get(sabun) || {}; if (c.source === 'order') o.종류 = c.종류fix; o[inp.dataset.k] = inp.value; store.carry.set(sabun, o);
+        if (inp.dataset.k !== '종료일') detectLeaves();
+        else detectLeaves();
+      });
       tb.appendChild(tr);
     });
     t.appendChild(tb); box.appendChild(t);
+    $('#carryBadge').textContent = missing ? `종료일 ${missing}` : String(list.length);
+    $('#carryBadge').className = 'badge ' + (missing ? 'g' : 'n');
   }
 
   /* ---------- enable ---------- */
@@ -180,7 +210,7 @@
     $('#calcBtn').disabled = !(store.salary && store.roster && store.order);
     $('#verifyBtn').disabled = !(payrollResult && !payrollResult.blocked && store.ledger);
   }
-  const storeForEngine = () => ({ salary: store.salary, roster: store.roster, order: store.order, vacation: store.vacation, holiday: store.holiday, ledger: store.ledger, uploads: store.uploads, discipline: store.discipline, carry: store.carry, overrides: store.overrides });
+  const storeForEngine = () => ({ salary: store.salary, roster: store.roster, order: store.order, vacation: store.vacation, holiday: store.holiday, ledger: store.ledger, uploads: store.uploads, discipline: store.discipline, carry: store.carry, overrides: store.overrides, dutyExtra: store.dutyextra });
 
   /* ---------- alerts ---------- */
   const ALERT_ICON = {
@@ -213,7 +243,7 @@
           { key: '시작일', label: '휴직 시작일', type: 'date', value: (store.carry.get(a.사번) || {}).시작일 || '' },
           { key: '종류', label: '휴직 종류', type: 'select', options: ['육아휴직', '무급휴직', '가족돌봄휴직', '난임휴직', '의병휴직'], value: (store.carry.get(a.사번) || {}).종류 || '' },
         ],
-        onSubmit: v => { store.carry.set(a.사번, { 시작일: v.시작일, 종류: v.종류 }); detectCarry(); runCalc(false); toast('반영 완료 — 재계산됨', 'ok'); },
+        onSubmit: v => { store.carry.set(a.사번, { 시작일: v.시작일, 종류: v.종류 }); detectLeaves(); runCalc(false); toast('반영 완료 — 재계산됨', 'ok'); },
       });
     } else if (a.kind === 'maternity') {
       openModal({
@@ -349,6 +379,17 @@
   .ctx .cf{padding:7px 8px}.ctx .cf label{font-size:10px;color:var(--tx3);font-weight:700;display:block;margin-bottom:5px}
   .ctx .cf input{width:100%;font-family:inherit;font-size:12px;padding:7px 9px;border:1px solid var(--bd);border-radius:7px;background:var(--su2);color:var(--tx)}
   .empty2{padding:40px;text-align:center;color:var(--tx3);font-weight:600}
+  tr.clickrow{cursor:pointer}
+  .dov{position:fixed;inset:0;z-index:80;background:rgba(10,15,25,.5);display:grid;place-items:center;padding:20px}
+  .dcard{background:var(--su);border:1px solid var(--bd);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.4);width:min(560px,94vw);max-height:88vh;overflow:auto}
+  .dhead{padding:14px 18px;border-bottom:1px solid var(--bd);font-size:14px;color:var(--tx2);display:flex;align-items:center;gap:8px}
+  .dhead b{color:var(--tx);font-size:15px}.dhead .dx{margin-left:auto;cursor:pointer;color:var(--tx3);font-weight:800;font-size:15px}
+  .dbody{padding:14px 18px}
+  table.dt{width:100%;border-collapse:collapse;border:1px solid var(--bd);border-radius:10px;overflow:hidden}
+  table.dt th{position:static;background:var(--su2);padding:8px 10px}
+  table.dt td{padding:8px 10px}
+  table.dt tr.dd td{background:var(--bads)}
+  .dnote{margin-top:12px;font-size:12px;color:var(--tx2);background:var(--su2);border-radius:9px;padding:10px 12px}
   @media print{.top button,.chips,.search2{display:none}.tbl{max-height:none;overflow:visible}th{position:static}}
   `;
 
@@ -367,7 +408,7 @@
     function render() {
       let rows = D.rows.filter(match);
       if (st.sort) { const c = D.columns.find(x => x.key === st.sort); rows = rows.slice().sort((a, b) => { let x = a.vals[st.sort], y = b.vals[st.sort]; if (c && c.kind === 'num') return ((+x || 0) - (+y || 0)) * st.dir; return norm(x) < norm(y) ? -st.dir : norm(x) > norm(y) ? st.dir : 0; }); }
-      tb.innerHTML = rows.length ? rows.map(r => '<tr class="' + (r.cls || '') + '">' + D.columns.map(c => {
+      tb.innerHTML = rows.length ? rows.map(r => '<tr class="' + (r.cls || '') + (r.detail ? ' clickrow' : '') + '" data-i="' + D.rows.indexOf(r) + '">' + D.columns.map(c => {
         if (c.kind === 'tags') return '<td class="l note">' + (r.tagsHtml || '') + '</td>';
         let v = r.vals[c.key];
         let disp = c.kind === 'num' ? (v ? (+v).toLocaleString('ko-KR') : '<span style="color:var(--tx3)">·</span>') : (v == null ? '' : ('' + v));
@@ -398,6 +439,16 @@
       const inp = m.querySelector('#cfi'); inp.oninput = () => { st.colf[k] = inp.value; render(); }; setTimeout(() => inp.focus(), 10);
     }
     doc.addEventListener('click', e => { if (!e.target.closest('.ctx') && !e.target.closest('th')) closeCtx(); });
+    // 행 클릭 → 상세(계산 vs 대장)
+    tb.onclick = e => { const tr = e.target.closest('tr[data-i]'); if (!tr) return; const r = D.rows[+tr.dataset.i]; if (r && r.detail) openDetail(r.detail); };
+    function openDetail(d) {
+      const ov = doc.createElement('div'); ov.className = 'dov';
+      const rowsH = d.items.map(it => { const diff = it.ours - it.led; return '<tr class="' + (diff ? 'dd' : '') + '"><td class="l">' + it.col + '</td><td>' + (it.ours ? it.ours.toLocaleString('ko-KR') : '·') + '</td><td>' + (it.led ? it.led.toLocaleString('ko-KR') : '·') + '</td><td class="' + (diff > 0 ? 'dpos' : diff < 0 ? 'dneg' : '') + '">' + (diff ? (diff > 0 ? '+' : '') + diff.toLocaleString('ko-KR') : '0') + '</td></tr>'; }).join('');
+      const notesH = (d.notes && d.notes.length) ? '<div class="dnote">📌 ' + d.notes.join(' · ') + '</div>' : '';
+      ov.innerHTML = '<div class="dcard"><div class="dhead"><b>' + d.사번 + ' ' + (d.성명 || '') + '</b> 계산 vs 급여대장 (세전)<span class="dx">✕</span></div><div class="dbody"><table class="dt"><thead><tr><th class="l">항목</th><th>계산</th><th>대장</th><th>차이</th></tr></thead><tbody>' + rowsH + '</tbody></table>' + notesH + '</div></div>';
+      ov.onclick = e => { if (e.target === ov || e.target.className === 'dx') ov.remove(); };
+      doc.body.appendChild(ov);
+    }
     doc.getElementById('gs').oninput = e => { st.q = e.target.value; render(); };
     doc.querySelectorAll('.chip').forEach(c => c.onclick = () => { const k = c.dataset.k; st.chip = (k === 'all' ? null : k); doc.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x.dataset.k === (st.chip || 'all'))); render(); });
     render();
@@ -434,6 +485,7 @@
     const res = payrollResult; if (!res) { toast('먼저 급여계산을 실행하세요', 'bad'); return; }
     if (res.blocked) { const w = window.open('', '_blank'); if (w) { w.document.write(`<!DOCTYPE html><html data-theme="${curTheme()}"><head><meta charset="utf-8"><style>${WIN_CSS}</style></head><body><div class="top"><h1>급여계산 차단</h1></div><div class="wrap"><div class="tbl"><table><thead><tr><th class="l">사번</th><th class="l">사유</th><th class="l">필요 연봉일자</th></tr></thead><tbody>${res.block.map(b => `<tr class="rbad"><td class="l">${esc(b.사번)}</td><td class="l">${esc(b.reason)}</td><td class="l">${esc(b.일자)}</td></tr>`).join('')}</tbody></table></div></div></body></html>`); w.document.close(); } return; }
     const items = usedItemCols(res.rows);
+    if (!items.includes('감액')) items.push('감액'); // 감액 컬럼 항상 표시
     const ym = `${res.target.y}-${String(res.target.m).padStart(2, '0')}`;
     const columns = [{ key: 'no', label: 'No', align: 'l' }, { key: '사번', label: '사번', align: 'l' }, { key: '성명', label: '성명', align: 'l' }, { key: '소속', label: '소속', align: 'l' },
       ...items.map(c => ({ key: c, label: c, kind: 'num' })), { key: 'total', label: '총액', kind: 'num', tot: true }, { key: '비고', label: '비고', align: 'l', kind: 'tags' }];
@@ -453,8 +505,11 @@
       const diff = r.ourTotal - r.ledTotal;
       const diffTags = (r.diffs || []).filter(d => d.col !== '—').map(d => `<span class="tag diff">${esc(d.col)} ${d.diff > 0 ? '+' : ''}${won(d.diff)}</span>`).join('');
       const noteTags = (r.notes || []).filter(n => !n.startsWith('불일치')).map(n => `<span class="tag ${n.startsWith('일할') ? 'ilhal' : 'sp'}">${esc(n)}</span>`).join('');
+      const dcols = [...new Set([...PV.LEDGER_ITEMS, ...Object.keys(r.ours || {}), ...Object.keys(r.led || {})])].filter(c => ((r.ours && r.ours[c]) || (r.led && r.led[c])));
+      const ditems = dcols.map(c => ({ col: c, ours: Math.round((r.ours && r.ours[c]) || 0), led: Math.round((r.led && r.led[c]) || 0) }));
       return { cls: r.status === 'bad' ? 'rbad' : '', vals: { no: i + 1, 사번: r.사번, 성명: r.성명, 소속: r.소속, ourTotal: r.ourTotal, ledTotal: r.ledTotal, diff, 상태: r.status === 'ok' ? '일치' : '불일치', 비고: ((r.diffs || []).map(d => d.col).join(' ') + ' ' + (r.notes || []).join(' ')) },
-        tagsHtml: (diffTags + noteTags) || (r.status === 'ok' ? '<span class="pill ok">일치</span>' : ''), flags: { bad: r.status === 'bad', ok: r.status === 'ok', warn: !!r.warn } };
+        tagsHtml: (diffTags + noteTags) || (r.status === 'ok' ? '<span class="pill ok">일치</span>' : ''), flags: { bad: r.status === 'bad', ok: r.status === 'ok', warn: !!r.warn },
+        detail: { 사번: r.사번, 성명: r.성명, items: ditems, notes: r.notes || [] } };
     });
     const chips = [{ k: 'all', label: '전체' }, { k: 'bad', label: '불일치', flag: 'bad' }, { k: 'ok', label: '일치', flag: 'ok' }, { k: 'warn', label: '점검', flag: 'warn' }];
     const sumHTML = `<div class="sum"><div class="sc"><div class="k">대상</div><div class="v">${res.summary.total}</div></div><div class="sc"><div class="k" style="color:var(--ok)">일치</div><div class="v" style="color:var(--ok)">${res.summary.ok}</div></div><div class="sc"><div class="k" style="color:var(--bad)">불일치</div><div class="v" style="color:var(--bad)">${res.summary.bad}</div></div></div>`;
