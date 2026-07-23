@@ -115,7 +115,9 @@ window.PV = window.PV || {};
 
   const PT_LABEL = { normal: '정상근무', unpaid: '무급휴직', sick: '의병휴직(80%)', short: '육아기단축' };
 
-  // 출산휴가 무급기간 {start,end} (유급 60/75일 이후). split이면 {split:true}
+  // 출산휴가 무급기간 {start,end} (유급 60/75일 이후).
+  // 출산전휴가/출산후휴가로 분리 입력돼 있어도 모든 날짜를 병합해 자동 계산.
+  // (담당자 수동입력 override가 있으면 그걸 우선 사용)
   function maternityUnpaid(ctx, sabun) {
     const rows = (ctx.vacBy.get(sabun) || []).filter(v => /출산|유사산/.test(v.휴가종류));
     if (!rows.length) return null;
@@ -124,11 +126,15 @@ window.PV = window.PV || {};
     if (mo) {
       limit = mo.유형 === '다태아' ? 75 : 60;
       dates = [...dateRange(mo.전시작, mo.전종료), ...dateRange(mo.후시작, mo.후종료)].sort();
-    } else if (rows.some(v => /출산전휴가|출산후휴가/.test(v.휴가종류))) {
-      return { split: true };
     } else {
-      limit = rows.some(v => v.휴가종류.includes('다태아')) ? 75 : 60;
-      dates = rows.filter(v => v.시작일).map(v => v.시작일).sort();
+      limit = rows.some(v => /다태아/.test(v.휴가종류)) ? 75 : 60;
+      // 일자별 누적형·기간형 모두 지원: 각 행의 시작~종료를 펼쳐 중복 제거 후 병합
+      const set = new Set();
+      rows.forEach(v => {
+        if (v.시작일 && v.종료일 && v.종료일 > v.시작일) dateRange(v.시작일, v.종료일).forEach(d => set.add(d));
+        else if (v.시작일) set.add(v.시작일);
+      });
+      dates = [...set].sort();
     }
     const unpaid = dates.slice(limit);
     if (!unpaid.length) return null;
@@ -146,7 +152,7 @@ window.PV = window.PV || {};
     );
     // 출산휴가 무급기간을 '무급 세그먼트'로 편입 (휴직 발령과 동일 취급 → 지급일 커트라인/소급 정확)
     const mu = maternityUnpaid(ctx, sabun);
-    if (mu && !mu.split) {
+    if (mu) {
       orders = orders.concat([
         { 발령구분: '출산휴가(무급)', 발령시작일: mu.start, _pt: 'unpaid', _pseudo: true },
         { 발령구분: '출산휴가 복귀', 발령시작일: addDay(mu.end), _pt: 'normal', _pseudo: true },
@@ -224,9 +230,6 @@ window.PV = window.PV || {};
     const pym = `${pm.y}-${String(pm.m).padStart(2, '0')}`;
     let days = 0;
     rows.forEach(v => { if (isUnpaidVac(v.휴가종류) && (v.시작일 || '').startsWith(pym)) days += (v.휴가일수 || 1); });
-    // 출산 분리건 → 담당자 확인 경고 (기간 입력 시 세그먼트로 자동 반영)
-    const mu = maternityUnpaid(ctx, sabun);
-    if (mu && mu.split && exc) exc.push({ 사번: sabun, 성명: (ctx.rosterBy.get(sabun) || {}).성명 || '', type: 'warn', kind: 'maternity', title: '출산휴가 분리행 — 담당자 확인', desc: '출산전/출산후 분리 입력. 출산전·후 기간을 입력하면 무급기간이 자동 반영됩니다.' });
     return days;
   }
 
