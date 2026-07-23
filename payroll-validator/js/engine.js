@@ -115,30 +115,46 @@ window.PV = window.PV || {};
 
   const PT_LABEL = { normal: '정상근무', unpaid: '무급휴직', sick: '의병휴직(80%)', short: '육아기단축' };
 
-  // 출산휴가 무급기간 {start,end} (유급 60/75일 이후).
-  // 출산전휴가/출산후휴가로 분리 입력돼 있어도 모든 날짜를 병합해 자동 계산.
-  // (담당자 수동입력 override가 있으면 그걸 우선 사용)
+  // 모든 출산/유사산 휴가 날짜(유급+무급) Set — 일자별·기간형·override 모두 지원
+  function maternityDates(ctx, sabun) {
+    const rows = (ctx.vacBy.get(sabun) || []).filter(v => /출산|유사산/.test(v.휴가종류));
+    const mo = ctx.overrides.maternity.get(sabun);
+    const set = new Set();
+    if (mo) [...dateRange(mo.전시작, mo.전종료), ...dateRange(mo.후시작, mo.후종료)].forEach(d => set.add(d));
+    else rows.forEach(v => {
+      if (v.시작일 && v.종료일 && v.종료일 > v.시작일) dateRange(v.시작일, v.종료일).forEach(d => set.add(d));
+      else if (v.시작일) set.add(v.시작일);
+    });
+    return set;
+  }
+
+  // 출산휴가 무급기간 {start,end} (유급 60/75일 이후). 분리 입력·기간형 자동 병합.
+  //  - 단일(연속) 블록: 유급이 앞·무급이 뒤 (최초 60일 유급)
+  //  - 분리 블록(출산전 사용 후 임신중육아휴직 등으로 끊긴 뒤 출산후): 앞 블록에서 유급을
+  //    소진했으면 뒤(출산후) 블록은 무급이 앞·유급이 뒤 (남은 유급이 출산후휴가 뒷부분)
   function maternityUnpaid(ctx, sabun) {
     const rows = (ctx.vacBy.get(sabun) || []).filter(v => /출산|유사산/.test(v.휴가종류));
     if (!rows.length) return null;
     const mo = ctx.overrides.maternity.get(sabun);
-    let dates, limit;
-    if (mo) {
-      limit = mo.유형 === '다태아' ? 75 : 60;
-      dates = [...dateRange(mo.전시작, mo.전종료), ...dateRange(mo.후시작, mo.후종료)].sort();
-    } else {
-      limit = rows.some(v => /다태아/.test(v.휴가종류)) ? 75 : 60;
-      // 일자별 누적형·기간형 모두 지원: 각 행의 시작~종료를 펼쳐 중복 제거 후 병합
-      const set = new Set();
-      rows.forEach(v => {
-        if (v.시작일 && v.종료일 && v.종료일 > v.시작일) dateRange(v.시작일, v.종료일).forEach(d => set.add(d));
-        else if (v.시작일) set.add(v.시작일);
-      });
-      dates = [...set].sort();
+    const limit = ((mo && mo.유형 === '다태아') || rows.some(v => /다태아/.test(v.휴가종류))) ? 75 : 60;
+    const dates = [...maternityDates(ctx, sabun)].sort();
+    if (!dates.length) return null;
+    // 연속 블록 분리(하루 초과 간격 = 새 블록)
+    const blocks = []; let cur = [dates[0]];
+    for (let i = 1; i < dates.length; i++) { if (dates[i] === addDay(dates[i - 1])) cur.push(dates[i]); else { blocks.push(cur); cur = [dates[i]]; } }
+    blocks.push(cur);
+    let used = 0; const unpaidDates = [];
+    for (const blk of blocks) {
+      if (used >= limit) { unpaidDates.push(...blk); continue; }
+      if (used + blk.length <= limit) { used += blk.length; continue; }
+      const paidInBlk = limit - used;
+      if (used === 0) unpaidDates.push(...blk.slice(paidInBlk));           // 유급 먼저 → 무급 뒤
+      else unpaidDates.push(...blk.slice(0, blk.length - paidInBlk));      // 유급 나중 → 무급 앞
+      used = limit;
     }
-    const unpaid = dates.slice(limit);
-    if (!unpaid.length) return null;
-    return { start: unpaid[0], end: unpaid[unpaid.length - 1] };
+    if (!unpaidDates.length) return null;
+    unpaidDates.sort();
+    return { start: unpaidDates[0], end: unpaidDates[unpaidDates.length - 1], matEnd: dates[dates.length - 1] };
   }
 
   // ---------- 월 세그먼트(일할) ----------
@@ -158,9 +174,12 @@ window.PV = window.PV || {};
         { 발령구분: '출산휴가 복귀', 발령시작일: addDay(mu.end), _pt: 'normal', _pseudo: true },
       ]);
     }
-    // 같은 날 충돌 시 가짜(출산복귀) 이벤트를 앞에 두어 실제 발령이 이기도록 정렬
-    orders = orders.slice().sort((a, b) => cmp(a.발령시작일 || '', b.발령시작일 || '') || ((a._pseudo ? 0 : 1) - (b._pseudo ? 0 : 1)));
     const PT = o => o._pt || payTypeOf(o.발령구분);
+    // 같은 날 충돌 시 '더 제한적인(낮은 지급) 상태'가 이기도록 정렬(날짜 asc, 지급순위 desc → 무급이 뒤).
+    // 무급휴직 = 정상복귀·복직보다 우선(출산무급/육아휴직이 같은 날 복직/복귀를 이긴다).
+    const payRank = { unpaid: 0, retire: 0, sick: 1, short: 2, normal: 3 };
+    orders = orders.slice().sort((a, b) => cmp(a.발령시작일 || '', b.발령시작일 || '') || ((payRank[PT(b)] ?? 3) - (payRank[PT(a)] ?? 3)) || ((a._pseudo ? 0 : 1) - (b._pseudo ? 0 : 1)));
+    const matDates = maternityDates(ctx, sabun);
     const prior = orders.filter(o => o.발령시작일 && cmp(o.발령시작일, monthStart) < 0);
     let baseType = 'normal', baseGubun = '';
     if (prior.length) { baseGubun = prior[prior.length - 1].발령구분; baseType = PT(prior[prior.length - 1]); }
@@ -184,14 +203,25 @@ window.PV = window.PV || {};
     if (baseType === 'retire') return { retired: true };
     const baseContract = effContract(ctx, sabun, monthStart);
 
-    const inMonth = orders.filter(o => o.발령시작일 && cmp(o.발령시작일, monthStart) >= 0 && cmp(o.발령시작일, cutoffISO) <= 0);
+    // 지급일 커트라인. 단, 출산휴가 종료 직후 이어지는 휴직(육아 등)은 지급일 이후라도 이번달에 반영
+    // (출산휴가 유급은 휴가 종료일까지만 → 이후 휴직이 유급구간을 여기서 잘라줌).
+    const matEnd = mu ? mu.matEnd : null;
+    const monthEndISO = iso(y, m, monthEndDay);
+    const matNext = (matEnd && cmp(addDay(matEnd), monthStart) >= 0 && cmp(addDay(matEnd), monthEndISO) <= 0) ? addDay(matEnd) : null;
+    const inMonth = orders.filter(o => o.발령시작일 && cmp(o.발령시작일, monthStart) >= 0 &&
+      (cmp(o.발령시작일, cutoffISO) <= 0 || (matNext && o.발령시작일 === matNext && ['unpaid', 'sick'].includes(PT(o)))));
     const segs = [{ startDay: 1, payType: baseType, contract: baseContract, gubun: baseGubun }];
     for (const o of inMonth) {
       const pt = PT(o);
       // 복직=발령일 당일부터 정상 / 단축근로종료=발령일 다음날부터 정상
-      // 휴직 시작(무급·의병)=발령일 당일은 근무(유급), 무급은 다음날부터 (휴직은 시작일 제외)
+      // 휴직 시작(무급·의병)=발령일 당일은 근무(유급), 무급은 다음날부터 (휴직은 시작일 제외).
+      // 단, 전날이 이미 휴가/휴직(출산휴가 등)이면 근무한 날이 아니므로 시작일 제외 미적용.
       const endNextDay = /단축/.test(o.발령구분 || '') && /종료/.test(o.발령구분 || '');
-      const leaveNextDay = (pt === 'unpaid' || pt === 'sick') && !o._pseudo;
+      const _pd = P(o.발령시작일), _pdt = _pd ? new Date(_pd.y, _pd.m - 1, _pd.d - 1) : null;
+      const prevDayISO = _pdt ? iso(_pdt.getFullYear(), _pdt.getMonth() + 1, _pdt.getDate()) : '';
+      const prevSeg = segs[segs.length - 1];
+      const workingBefore = !matDates.has(prevDayISO) && !(prevSeg && ['unpaid', 'sick'].includes(prevSeg.payType));
+      const leaveNextDay = (pt === 'unpaid' || pt === 'sick') && !o._pseudo && workingBefore;
       const startDay = P(o.발령시작일).d + (endNextDay || leaveNextDay ? 1 : 0);
       if (startDay > monthEndDay) continue;
       const segStartISO = iso(y, m, startDay);
@@ -207,13 +237,11 @@ window.PV = window.PV || {};
       segs.push({ startDay, payType: pt, contract, gubun: o.발령구분, pseudo: !!o._pseudo });
     }
     const merged = [];
-    // 같은 날 충돌 시 실제 발령이 가짜(출산휴가 복귀) 이벤트를 이긴다.
-    // (출산 무급 종료 다음날 = 육아휴직 시작일이 겹치면, '정상복귀'가 육아휴직을 덮어쓰지 않도록)
+    // 같은 날 충돌 시 정렬상 뒤(더 제한적인 상태)가 이긴다. (무급이 정상복귀·복직을 덮어씀)
     segs.forEach(s => {
       const last = merged[merged.length - 1];
-      if (last && last.startDay === s.startDay) {
-        if (!(s.pseudo && !last.pseudo)) merged[merged.length - 1] = s;
-      } else merged.push(s);
+      if (last && last.startDay === s.startDay) merged[merged.length - 1] = s;
+      else merged.push(s);
     });
     merged.sort((a, b) => a.startDay - b.startDay);
 
