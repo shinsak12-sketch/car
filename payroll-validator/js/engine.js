@@ -169,6 +169,12 @@ window.PV = window.PV || {};
         baseType = (c && c.종류) ? (c.종류.includes('의병') ? 'sick' : 'unpaid') : 'unpaid';
       }
     }
+    // 퇴직: goneDate(=퇴직일 다음날)부터 퇴직상태. 이번달 시작 전(goneDate<=월초)이면 이미 퇴직 → 제외.
+    // 이번달에 퇴직하면 제외하지 않고 세그먼트로 처리:
+    //  · 퇴직일 >= 급여일 → 퇴직발령이 급여일 커트라인 밖 → 당월 전체 지급
+    //  · 퇴직일 <  급여일 → 퇴직발령이 커트라인 안 → 근무일까지 일할계산
+    const retOrder = orders.find(o => PT(o) === 'retire');
+    if (retOrder && cmp(retOrder.발령시작일 || '', monthStart) <= 0) return { retired: true };
     if (baseType === 'retire') return { retired: true };
     const baseContract = effContract(ctx, sabun, monthStart);
 
@@ -176,7 +182,6 @@ window.PV = window.PV || {};
     const segs = [{ startDay: 1, payType: baseType, contract: baseContract, gubun: baseGubun }];
     for (const o of inMonth) {
       const pt = PT(o);
-      if (pt === 'retire') return { retired: true };
       // 복직=발령일 당일부터 정상 / 단축근로종료=발령일 다음날부터 정상
       const endNextDay = /단축/.test(o.발령구분 || '') && /종료/.test(o.발령구분 || '');
       const startDay = P(o.발령시작일).d + (endNextDay ? 1 : 0);
@@ -276,7 +281,8 @@ window.PV = window.PV || {};
       const ec = effContract(ctx, sabun, monthEnd);
       let fullGross = flat + (applied14 ? 500000 : 0);
       if (ec) for (const srcK of Object.keys(ITEMMAP)) fullGross += (ec.items[srcK] || 0) / 12;
-      uvacDeduct = floorU(fullGross / 30 * uvac);
+      // 1일 급여를 십원 절하한 뒤 일수를 곱한다(대장 방식). (일당절하 × 일수)
+      uvacDeduct = floorU(fullGross / 30) * uvac;
       pay['감액'] = (pay['감액'] || 0) - uvacDeduct;
     }
 
