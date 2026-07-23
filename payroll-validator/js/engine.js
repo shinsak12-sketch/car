@@ -41,6 +41,7 @@ window.PV = window.PV || {};
     }
     return out;
   }
+  function addDay(isoStr) { const [y, m, d] = isoStr.split('-').map(Number); const dt = new Date(y, m - 1, d + 1); return iso(dt.getFullYear(), dt.getMonth() + 1, dt.getDate()); }
   PV.dim = dim;
 
   function payday(y, m, holidays) {
@@ -114,20 +115,49 @@ window.PV = window.PV || {};
 
   const PT_LABEL = { normal: '정상근무', unpaid: '무급휴직', sick: '의병휴직(80%)', short: '육아기단축' };
 
+  // 출산휴가 무급기간 {start,end} (유급 60/75일 이후). split이면 {split:true}
+  function maternityUnpaid(ctx, sabun) {
+    const rows = (ctx.vacBy.get(sabun) || []).filter(v => /출산|유사산/.test(v.휴가종류));
+    if (!rows.length) return null;
+    const mo = ctx.overrides.maternity.get(sabun);
+    let dates, limit;
+    if (mo) {
+      limit = mo.유형 === '다태아' ? 75 : 60;
+      dates = [...dateRange(mo.전시작, mo.전종료), ...dateRange(mo.후시작, mo.후종료)].sort();
+    } else if (rows.some(v => /출산전휴가|출산후휴가/.test(v.휴가종류))) {
+      return { split: true };
+    } else {
+      limit = rows.some(v => v.휴가종류.includes('다태아')) ? 75 : 60;
+      dates = rows.filter(v => v.시작일).map(v => v.시작일).sort();
+    }
+    const unpaid = dates.slice(limit);
+    if (!unpaid.length) return null;
+    return { start: unpaid[0], end: unpaid[unpaid.length - 1] };
+  }
+
   // ---------- 월 세그먼트(일할) ----------
   function buildSegments(ctx, sabun, y, m, cutoffISO, block) {
     const monthStart = iso(y, m, 1);
     const monthEndDay = dim(y, m);
-    const orders = ctx.ordersBy.get(sabun) || [];
+    let orders = ctx.ordersBy.get(sabun) || [];
+    // 출산휴가 무급기간을 '무급 세그먼트'로 편입 (휴직 발령과 동일 취급 → 지급일 커트라인/소급 정확)
+    const mu = maternityUnpaid(ctx, sabun);
+    if (mu && !mu.split) {
+      orders = orders.concat([
+        { 발령구분: '출산휴가(무급)', 발령시작일: mu.start, _pt: 'unpaid' },
+        { 발령구분: '출산휴가 복귀', 발령시작일: addDay(mu.end), _pt: 'normal' },
+      ]).sort((a, b) => cmp(a.발령시작일 || '', b.발령시작일 || ''));
+    }
+    const PT = o => o._pt || payTypeOf(o.발령구분);
     const prior = orders.filter(o => o.발령시작일 && cmp(o.발령시작일, monthStart) < 0);
     let baseType = 'normal', baseGubun = '';
-    if (prior.length) { baseGubun = prior[prior.length - 1].발령구분; baseType = payTypeOf(baseGubun); }
+    if (prior.length) { baseGubun = prior[prior.length - 1].발령구분; baseType = PT(prior[prior.length - 1]); }
     else {
       // 월초 이전 발령이 없음. 명부 '(휴직)' 스냅샷은, 올해 '휴직 시작' 발령이 하나도 없을 때만
       // 이월휴직으로 인정. (의병/육아/무급 등 휴직시작 발령이 있으면 그 발령일부터가 휴직이므로
       //  월초부터 휴직으로 깔면 안 됨 → 지급일 상태 우선 원칙)
       const roster = ctx.rosterBy.get(sabun);
-      const hasLeaveStart = orders.some(o => ['unpaid', 'sick', 'short'].includes(payTypeOf(o.발령구분)));
+      const hasLeaveStart = orders.some(o => ['unpaid', 'sick', 'short'].includes(PT(o)));
       if (roster && (roster.직무 || '').includes('(휴직)') && !hasLeaveStart) {
         const c = ctx.carry.get(sabun);
         baseType = (c && c.종류) ? (c.종류.includes('의병') ? 'sick' : 'unpaid') : 'unpaid';
@@ -139,7 +169,7 @@ window.PV = window.PV || {};
     const inMonth = orders.filter(o => o.발령시작일 && cmp(o.발령시작일, monthStart) >= 0 && cmp(o.발령시작일, cutoffISO) <= 0);
     const segs = [{ startDay: 1, payType: baseType, contract: baseContract, gubun: baseGubun }];
     for (const o of inMonth) {
-      const pt = payTypeOf(o.발령구분);
+      const pt = PT(o);
       if (pt === 'retire') return { retired: true };
       // 복직=발령일 당일부터 정상 / 단축근로종료=발령일 다음날부터 정상
       const endNextDay = /단축/.test(o.발령구분 || '') && /종료/.test(o.발령구분 || '');
@@ -169,31 +199,16 @@ window.PV = window.PV || {};
     return { segments: merged, retired: false };
   }
 
-  // 무급휴가/출산 무급일수. 무급휴가류=전월분 이번달 공제, 출산=당월 누적/기간입력
+  // 무급휴가류(보건·생리·가족돌봄·무급휴가) = 전월분 이번달 공제(감액). 출산휴가는 세그먼트로 처리.
   function unpaidVacInMonth(ctx, sabun, y, m, exc) {
     const rows = ctx.vacBy.get(sabun) || [];
     const pm = prevMonth(y, m);
     const pym = `${pm.y}-${String(pm.m).padStart(2, '0')}`;
-    const ym = `${y}-${String(m).padStart(2, '0')}`;
     let days = 0;
     rows.forEach(v => { if (isUnpaidVac(v.휴가종류) && (v.시작일 || '').startsWith(pym)) days += (v.휴가일수 || 1); });
-
-    const mat = rows.filter(v => /출산|유사산/.test(v.휴가종류));
-    if (mat.length) {
-      const mo = ctx.overrides.maternity.get(sabun); // {유형,전시작,전종료,후시작,후종료}
-      const hasSplit = mat.some(v => /출산전휴가|출산후휴가/.test(v.휴가종류));
-      if (mo) {
-        const limit = mo.유형 === '다태아' ? 75 : 60; // 일반·미숙아 60, 다태아 75 유급
-        const all = [...dateRange(mo.전시작, mo.전종료), ...dateRange(mo.후시작, mo.후종료)];
-        all.slice(limit).forEach(dt => { if (dt.startsWith(ym)) days += 1; });
-      } else if (hasSplit) {
-        exc && exc.push({ 사번: sabun, 성명: (ctx.rosterBy.get(sabun) || {}).성명 || '', type: 'warn', kind: 'maternity', title: '출산휴가 분리행 — 담당자 확인', desc: '출산전/출산후 분리 입력. 출산전·후 기간을 입력하면 무급일수를 자동 계산합니다.' });
-      } else {
-        const limit = mat.some(v => v.휴가종류.includes('다태아')) ? 75 : 60;
-        const dates = mat.filter(v => v.시작일).map(v => v.시작일).sort();
-        dates.forEach((dt, idx) => { if (idx >= limit && dt.startsWith(ym)) days += 1; });
-      }
-    }
+    // 출산 분리건 → 담당자 확인 경고 (기간 입력 시 세그먼트로 자동 반영)
+    const mu = maternityUnpaid(ctx, sabun);
+    if (mu && mu.split && exc) exc.push({ 사번: sabun, 성명: (ctx.rosterBy.get(sabun) || {}).성명 || '', type: 'warn', kind: 'maternity', title: '출산휴가 분리행 — 담당자 확인', desc: '출산전/출산후 분리 입력. 출산전·후 기간을 입력하면 무급기간이 자동 반영됩니다.' });
     return days;
   }
 
