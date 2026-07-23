@@ -396,7 +396,8 @@
   .dov{position:fixed;inset:0;z-index:80;background:rgba(10,15,25,.5);display:grid;place-items:center;padding:20px}
   .dcard{background:var(--su);border:1px solid var(--bd);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.4);width:min(760px,96vw);max-height:90vh;overflow:auto}
   .dhead{padding:14px 18px;border-bottom:1px solid var(--bd);font-size:13px;color:var(--tx2);display:flex;align-items:center;gap:8px;position:sticky;top:0;background:var(--su)}
-  .dhead b{color:var(--tx);font-size:15px}.dhead .dx{margin-left:auto;cursor:pointer;color:var(--tx3);font-weight:800;font-size:16px}
+  .dhead b{color:var(--tx);font-size:15px}.dhead .dx{margin-left:10px;cursor:pointer;color:var(--tx3);font-weight:800;font-size:16px}
+  .dhead .dexp{margin-left:auto;cursor:pointer;color:var(--br);font-weight:700;font-size:12px;padding:4px 10px;border:1px solid var(--br);border-radius:7px}.dhead .dexp:hover{background:var(--br);color:#fff}
   .dbody{padding:14px 18px}
   .dcontract{background:var(--su2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11.5px;color:var(--tx2);line-height:1.7}
   .dcontract b{color:var(--tx)}
@@ -420,6 +421,36 @@
     const st = { chip: null, q: '', sort: null, dir: 1, colf: {} };
     const norm = v => (v == null ? '' : '' + v).toLowerCase();
     const tb = doc.getElementById('tb'), thead = doc.getElementById('thead');
+    // ── 계산근거 텍스트 리포트 (캡쳐 대체용 내보내기) ──
+    function repText(d) {
+      const nf = n => n == null ? '' : (+n).toLocaleString('ko-KR');
+      const L = [];
+      L.push('■ ' + d.사번 + '  ' + (d.성명 || ''));
+      L.push('적용 연봉계약: ' + (d.연봉일자 || '-'));
+      const yb = Object.keys(d.연봉 || {}).filter(k => d.연봉[k]).map(k => k + ' ' + nf(d.연봉[k])).join(' · ');
+      L.push('연봉항목: ' + (yb || '없음'));
+      if (d.ilhal && d.segments && d.segments.length) L.push('일할 근무구간: ' + d.segments.map(s => s.label + ' ' + s.days + '일').join(' → '));
+      L.push('');
+      L.push('[항목별 계산]  항목 | 계산식 | 계산 | 대장 | 차이');
+      (d.items || []).forEach(it => { const df = it.ours - it.led; L.push('  ' + it.col + ' | ' + (it.formula || '') + ' | ' + nf(it.ours) + ' | ' + nf(it.led) + ' | ' + (df ? (df > 0 ? '+' : '') + nf(df) : '0')); });
+      if (d.extras && d.extras.length) { L.push(''); L.push('[조정·가감 내역]'); d.extras.forEach(e => L.push('  ' + e.label + ': ' + (e.amount == null ? '—' : nf(e.amount)))); }
+      const td = d.ourTotal - d.ledTotal;
+      L.push('');
+      L.push('[총액·세전] 계산 ' + nf(d.ourTotal) + ' / 대장 ' + nf(d.ledTotal) + ' / 차이 ' + (td ? (td > 0 ? '+' : '') + nf(td) : '일치'));
+      if (d.notes && d.notes.length) L.push('[비고] ' + d.notes.join(' · '));
+      if (d.발령 && d.발령.length) { L.push(''); L.push('[백데이터·발령]'); d.발령.forEach(o => L.push('  ' + (o.시작일 || '') + ' ' + (o.구분 || '') + (o.퇴직일 ? ' (퇴직일 ' + o.퇴직일 + ')' : ''))); }
+      if (d.휴가 && d.휴가.length) { L.push(''); L.push('[백데이터·휴가]'); d.휴가.forEach(v => L.push('  ' + (v.시작일 || '') + (v.종료일 && v.종료일 !== v.시작일 ? '~' + v.종료일 : '') + ' ' + (v.종류 || '') + ' ' + (v.일수 || '') + '일')); }
+      return L.join('\n');
+    }
+    function dl(name, text) { const b = new Blob([text], { type: 'text/plain;charset=utf-8' }); const a = doc.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; doc.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1500); }
+    function exportOne(d) { dl(`검증상세_${D.ym || ''}_${d.사번}_${(d.성명 || '')}.txt`, `[검증 상세]  ${D.title || ''}  ${D.meta || ''}\n${'='.repeat(46)}\n\n` + repText(d)); }
+    function exportAll() {
+      const rs = D.rows.filter(r => r.detail);
+      if (!rs.length) { alert('상세 내역이 없습니다'); return; }
+      const head = `[검증 상세 전체]  ${D.title || ''}  ${D.meta || ''}  ·  ${rs.length}명\n${'='.repeat(46)}\n\n`;
+      dl(`검증상세전체_${D.ym || ''}.txt`, head + rs.map(r => repText(r.detail)).join('\n\n' + '-'.repeat(46) + '\n\n'));
+    }
+    { const eb = doc.getElementById('expAll'); if (eb) eb.onclick = exportAll; }
     function match(r) {
       if (st.chip && !r.flags[st.chip]) return false;
       if (st.q) { const s = st.q.toLowerCase(); if (!D.columns.some(c => norm(r.vals[c.key]).includes(s))) return false; }
@@ -477,12 +508,13 @@
       const totH = '<div class="dtot"><span>총액 (세전)</span><span>계산 ' + nf(d.ourTotal) + ' &nbsp;/&nbsp; 대장 ' + nf(d.ledTotal) + ' &nbsp; <span class="' + (totDiff > 0 ? 'dpos' : totDiff < 0 ? 'dneg' : '') + '">' + (totDiff ? (totDiff > 0 ? '+' : '') + nf(totDiff) : '일치') + '</span></span></div>';
       const notesH = (d.notes && d.notes.length) ? '<div class="dnote">📌 ' + d.notes.join(' · ') + '</div>' : '';
       const ov = doc.createElement('div'); ov.className = 'dov';
-      ov.innerHTML = '<div class="dcard"><div class="dhead"><b>' + d.사번 + ' ' + (d.성명 || '') + '</b> 계산 근거 (연봉 → 월급여 · 세전)<span class="dx">✕</span></div><div class="dbody">'
+      ov.innerHTML = '<div class="dcard"><div class="dhead"><b>' + d.사번 + ' ' + (d.성명 || '') + '</b> 계산 근거 (연봉 → 월급여 · 세전)<span class="dexp" title="이 사람의 계산근거·백데이터를 파일로 저장">⬇ 내보내기</span><span class="dx">✕</span></div><div class="dbody">'
         + '<div class="dcontract">📄 적용 연봉계약 <b>' + (d.연봉일자 || '-') + '</b><br>' + 연봉H + '</div>'
         + segH
         + '<div class="dsub">항목별 계산</div><table class="dt"><thead><tr><th class="l">항목</th><th class="l">계산식</th><th>계산</th><th>대장</th><th>차이</th></tr></thead><tbody>' + itemsH + '</tbody></table>'
         + extraH + totH + balH + notesH + '</div></div>';
       ov.onclick = e => { if (e.target === ov || e.target.className === 'dx') ov.remove(); };
+      ov.querySelector('.dexp').onclick = e => { e.stopPropagation(); exportOne(d); };
       doc.body.appendChild(ov);
     }
     doc.getElementById('gs').oninput = e => { st.q = e.target.value; render(); };
@@ -490,20 +522,23 @@
     render();
   }
 
-  function openSearchWin(title, meta, columns, rows, chips, sumHTML) {
+  function openSearchWin(title, meta, columns, rows, chips, sumHTML, ym) {
     const w = window.open('', '_blank');
     if (!w) { toast('팝업이 차단되었습니다. 팝업 허용 후 다시 시도하세요.', 'bad'); return; }
     const head = '<tr>' + columns.map(c => `<th class="${c.align === 'l' ? 'l' : ''}" data-key="${c.key}">${esc(c.label)}<span class="ar"></span></th>`).join('') + '</tr>';
     const chipHTML = chips.map(ch => `<button class="chip${ch.k === 'all' ? ' on' : ''}" data-k="${ch.k}" id="chip-${ch.k}">${esc(ch.label)} <span class="c-n"></span></button>`).join('');
-    const payload = { columns, rows, chips };
+    const hasDetail = rows.some(r => r.detail);
+    const payload = { columns, rows, chips, title, meta, ym: ym || '' };
     const body = `<div class="top"><h1>${esc(title)}</h1><span class="m">${esc(meta)}</span><span class="cnt" id="cnt"></span><span class="sp"></span>
         <div class="search2"><input id="gs" placeholder="🔍 전체 검색 (부분일치)"></div>
-        <button onclick="window.print()">인쇄 / PDF</button></div>
+        ${hasDetail ? '<button id="expAll" title="현재 목록 전원의 계산근거·백데이터를 텍스트 파일 1개로 저장">⬇ 상세 전체 내보내기</button>' : ''}
+        <button onclick="window.print()">인쇄 / PDF</button></div>`;
+    const bodyRest = `
       <div class="wrap">${sumHTML || ''}<div class="chips">${chipHTML}</div>
       <div class="tbl"><table><thead id="thead">${head}</thead><tbody id="tb"></tbody></table></div>
       <div style="margin-top:10px;font-size:11px;color:var(--tx3)">헤더 <b>우클릭</b> = 정렬·열 필터검색 · 헤더 클릭 = 정렬 · 상단 칩/검색 = 필터</div></div>
       <script>window.__D=${JSON.stringify(payload)};(${popupRuntime.toString()})();<\/script>`;
-    w.document.write(`<!DOCTYPE html><html data-theme="${curTheme()}"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${WIN_CSS}</style></head><body>${body}</body></html>`);
+    w.document.write(`<!DOCTYPE html><html data-theme="${curTheme()}"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${WIN_CSS}</style></head><body>${body}${bodyRest}</body></html>`);
     w.document.close();
   }
 
@@ -549,7 +584,7 @@
     const rows = res.rows.map((r, i) => ({ vals: Object.assign({ no: i + 1, 사번: r.사번, 성명: r.성명, 소속: r.소속, total: r.total, 비고: (r.notes || []).join(' ') }, items.reduce((o, c) => (o[c] = r.pay[c] || 0, o), {})), tagsHtml: tagHTML(r.notes) || '<span style="color:var(--tx3)">—</span>', flags: flagsOf(r) }));
     const chips = [{ k: 'all', label: '전체' }, { k: 'ilhal', label: '일할', flag: 'ilhal' }, { k: 'special', label: '특이', flag: 'special' }, { k: 'warn', label: '점검', flag: 'warn' }];
     const sumHTML = `<div class="sum"><div class="sc"><div class="k">대상</div><div class="v">${res.summary.total}</div></div><div class="sc"><div class="k">일할</div><div class="v">${res.summary.ilhal}</div></div><div class="sc"><div class="k">특이</div><div class="v">${res.summary.special}</div></div><div class="sc"><div class="k">점검</div><div class="v">${res.summary.warn}</div></div></div>`;
-    openSearchWin(`급여명세 ${ym}`, `${ym} · 지급일 ${res.payday}`, columns, rows, chips, sumHTML);
+    openSearchWin(`급여명세 ${ym}`, `${ym} · 지급일 ${res.payday}`, columns, rows, chips, sumHTML, ym);
   }
 
   function openVerifyWindow() {
@@ -568,7 +603,7 @@
     });
     const chips = [{ k: 'all', label: '전체' }, { k: 'bad', label: '불일치', flag: 'bad' }, { k: 'ok', label: '일치', flag: 'ok' }, { k: 'warn', label: '점검', flag: 'warn' }];
     const sumHTML = `<div class="sum"><div class="sc"><div class="k">대상</div><div class="v">${res.summary.total}</div></div><div class="sc"><div class="k" style="color:var(--ok)">일치</div><div class="v" style="color:var(--ok)">${res.summary.ok}</div></div><div class="sc"><div class="k" style="color:var(--bad)">불일치</div><div class="v" style="color:var(--bad)">${res.summary.bad}</div></div></div>`;
-    openSearchWin(`검증결과 ${ym}`, `${ym} · 계산 vs 급여대장(세전)`, columns, rows, chips, sumHTML);
+    openSearchWin(`검증결과 ${ym}`, `${ym} · 계산 vs 급여대장(세전)`, columns, rows, chips, sumHTML, ym);
   }
 
   /* ================= 엑셀 export ================= */
