@@ -237,11 +237,14 @@ window.PV = window.PV || {};
     LEDGER_ITEMS.forEach(k => pay[k] = ceilU(real[k]));
 
     // 무급휴가 공제: 감액 항목에 총액 마이너스(절하)
+    // 무급 1일 = 월 정상급여(일할 전 만액) ÷ 30. (일할로 이미 줄어든 pay가 아님)
     const uvac = unpaidVacInMonth(ctx, sabun, y, m, exc);
     let uvacDeduct = 0;
     if (uvac > 0) {
-      const gross = ['기본급', '능력급', '성과급', '성과가급', '변동역량가급1', '변동역량가급2', '고정역량가급'].reduce((a, k) => a + (pay[k] || 0), 0);
-      uvacDeduct = floorU(gross / 30 * uvac);
+      const ec = effContract(ctx, sabun, monthEnd);
+      let fullGross = flat + (applied14 ? 500000 : 0);
+      if (ec) for (const srcK of Object.keys(ITEMMAP)) fullGross += monthlyBase(srcK, ec.items[srcK] || 0, m);
+      uvacDeduct = floorU(fullGross / 30 * uvac);
       pay['감액'] = (pay['감액'] || 0) - uvacDeduct;
     }
 
