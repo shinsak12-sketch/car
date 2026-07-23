@@ -13,7 +13,7 @@
   const store = {
     salary: null, roster: null, order: null, vacation: null, holiday: [], ledger: null,
     files: {}, fileCounts: {}, uploads: { annual: new Map(), prod: new Map(), etc: new Map() },
-    discipline: [], carry: new Map(), overrides: { unpaidVac: new Map() }, dutyextra: [],
+    discipline: [], carry: new Map(), overrides: { unpaidVac: new Map(), maternity: new Map() }, dutyextra: [],
   };
   let payrollResult = null, verifyResult = null;
 
@@ -85,6 +85,7 @@
     store.carry = new Map(a.carry || []);
     store.discipline = (a.discipline || []).map(d => Object.assign({}, d));
     store.overrides.unpaidVac = new Map((a.overrides && a.overrides.unpaidVac) || []);
+    store.overrides.maternity = new Map((a.overrides && a.overrides.maternity) || []);
     toast(`전월(${a.ym}) 처리내역 불러옴 — 이월휴직·징계 자동 반영`, 'ok');
   }
 
@@ -251,10 +252,17 @@
         onSubmit: v => { store.carry.set(a.사번, { 시작일: v.시작일, 종류: v.종류 }); detectLeaves(); runCalc(false); toast('반영 완료 — 재계산됨', 'ok'); },
       });
     } else if (a.kind === 'maternity') {
+      const cur = store.overrides.maternity.get(a.사번) || {};
       openModal({
-        title: '출산휴가 무급일수 입력', sub: `${a.사번} · ${target().m}월`,
-        fields: [{ key: '무급일수', label: '이번달 무급 일수 (일)', type: 'number', value: store.overrides.unpaidVac.get(a.사번) || '' }],
-        onSubmit: v => { store.overrides.unpaidVac.set(a.사번, +v.무급일수 || 0); runCalc(false); toast('반영 완료 — 재계산됨', 'ok'); },
+        title: '출산휴가 기간 입력', sub: `${a.사번} · 유급 60일(다태아 75일) 이후 무급 자동계산`,
+        fields: [
+          { key: '유형', label: '유형', type: 'select', options: ['일반', '다태아', '미숙아'], value: cur.유형 || '일반' },
+          { key: '전시작', label: '출산전 시작일', type: 'date', value: cur.전시작 || '' },
+          { key: '전종료', label: '출산전 종료일', type: 'date', value: cur.전종료 || '' },
+          { key: '후시작', label: '출산후 시작일', type: 'date', value: cur.후시작 || '' },
+          { key: '후종료', label: '출산후 종료일', type: 'date', value: cur.후종료 || '' },
+        ],
+        onSubmit: v => { store.overrides.maternity.set(a.사번, { 유형: v.유형, 전시작: v.전시작, 전종료: v.전종료, 후시작: v.후시작, 후종료: v.후종료 }); runCalc(false); toast('반영 완료 — 무급일수 자동계산·재계산됨', 'ok'); },
       });
     }
   }
@@ -332,7 +340,7 @@
     const a = {
       type: 'pv-archive', ym, savedAt: new Date().toISOString(),
       carry: [...store.carry.entries()], discipline: store.discipline,
-      overrides: { unpaidVac: [...store.overrides.unpaidVac.entries()] },
+      overrides: { unpaidVac: [...store.overrides.unpaidVac.entries()], maternity: [...store.overrides.maternity.entries()] },
       summary: payrollResult.summary,
       rows: payrollResult.rows.map(r => ({ 사번: r.사번, 성명: r.성명, 소속: r.소속, pay: r.pay, total: r.total, notes: r.notes })),
     };
@@ -402,6 +410,7 @@
   .dtot{display:flex;justify-content:space-between;margin-top:12px;padding:11px 13px;background:var(--su2);border-radius:10px;font-weight:800;font-size:13px}
   .dtot .dpos{color:var(--bad)}.dtot .dneg{color:var(--info)}
   .dnote{margin-top:12px;font-size:12px;color:var(--tx2);background:var(--su2);border-radius:9px;padding:10px 12px}
+  .dback{font-size:11.5px;color:var(--tx2);background:var(--su2);border:1px solid var(--bd);border-radius:9px;padding:10px 12px;line-height:1.7}
   @media print{.top button,.chips,.search2{display:none}.tbl{max-height:none;overflow:visible}th{position:static}}
   `;
 
@@ -459,6 +468,11 @@
       const segH = (d.ilhal && d.segments && d.segments.length) ? '<div class="dseg">⏱ 일할 근무구간: ' + d.segments.map(s => s.label + ' ' + s.days + '일').join(' → ') + '</div>' : '';
       const itemsH = d.items.map(it => { const diff = it.ours - it.led; return '<tr class="' + (diff ? 'dd' : '') + '"><td class="l">' + it.col + '</td><td class="l fm">' + (it.formula || '') + '</td><td>' + (it.ours ? nf(it.ours) : '·') + '</td><td>' + (it.led ? nf(it.led) : '·') + '</td><td class="' + (diff > 0 ? 'dpos' : diff < 0 ? 'dneg' : '') + '">' + (diff ? (diff > 0 ? '+' : '') + nf(diff) : '0') + '</td></tr>'; }).join('');
       const extraH = (d.extras && d.extras.length) ? '<div class="dsub">조정·가감 내역</div><table class="dt"><tbody>' + d.extras.map(e => '<tr><td class="l">' + e.label + '</td><td>' + (e.amount == null ? '—' : nf(e.amount)) + '</td></tr>').join('') + '</tbody></table>' : '';
+      const balH = ((d.발령 && d.발령.length) || (d.휴가 && d.휴가.length)) ? '<div class="dsub">고려한 백데이터 (발령·휴가)</div><div class="dback">'
+        + (d.발령 || []).map(o => '📋 ' + (o.시작일 || '') + ' ' + (o.구분 || '') + (o.퇴직일 ? ' (퇴직일 ' + o.퇴직일 + ')' : '')).join('<br>')
+        + ((d.발령 && d.발령.length && d.휴가 && d.휴가.length) ? '<br>' : '')
+        + (d.휴가 || []).map(v => '🏖 ' + (v.시작일 || '') + (v.종료일 && v.종료일 !== v.시작일 ? '~' + v.종료일 : '') + ' ' + (v.종류 || '') + ' ' + (v.일수 || '') + '일').join('<br>')
+        + '</div>' : '';
       const totDiff = d.ourTotal - d.ledTotal;
       const totH = '<div class="dtot"><span>총액 (세전)</span><span>계산 ' + nf(d.ourTotal) + ' &nbsp;/&nbsp; 대장 ' + nf(d.ledTotal) + ' &nbsp; <span class="' + (totDiff > 0 ? 'dpos' : totDiff < 0 ? 'dneg' : '') + '">' + (totDiff ? (totDiff > 0 ? '+' : '') + nf(totDiff) : '일치') + '</span></span></div>';
       const notesH = (d.notes && d.notes.length) ? '<div class="dnote">📌 ' + d.notes.join(' · ') + '</div>' : '';
@@ -467,7 +481,7 @@
         + '<div class="dcontract">📄 적용 연봉계약 <b>' + (d.연봉일자 || '-') + '</b><br>' + 연봉H + '</div>'
         + segH
         + '<div class="dsub">항목별 계산</div><table class="dt"><thead><tr><th class="l">항목</th><th class="l">계산식</th><th>계산</th><th>대장</th><th>차이</th></tr></thead><tbody>' + itemsH + '</tbody></table>'
-        + extraH + totH + notesH + '</div></div>';
+        + extraH + totH + balH + notesH + '</div></div>';
       ov.onclick = e => { if (e.target === ov || e.target.className === 'dx') ov.remove(); };
       doc.body.appendChild(ov);
     }
@@ -519,7 +533,7 @@
       else f = '업로드/기타 항목';
       return { col: c, ours, led, formula: f };
     });
-    return { 사번: r.사번, 성명: r.성명, 연봉일자: t.연봉일자, 연봉: 연봉, quarterMonth: t.quarterMonth, ilhal: t.ilhal, segments: t.segments || [], items, extras: t.extras || [], dutyLabel: t.dutyLabel, dutyFlat: t.dutyFlat, uvac: t.uvac, uvacDeduct: t.uvacDeduct, ourTotal: r.ourTotal, ledTotal: r.ledTotal, notes: r.notes || [] };
+    return { 사번: r.사번, 성명: r.성명, 연봉일자: t.연봉일자, 연봉: 연봉, quarterMonth: t.quarterMonth, ilhal: t.ilhal, segments: t.segments || [], items, extras: t.extras || [], dutyLabel: t.dutyLabel, dutyFlat: t.dutyFlat, uvac: t.uvac, uvacDeduct: t.uvacDeduct, 발령: t.발령 || [], 휴가: t.휴가 || [], ourTotal: r.ourTotal, ledTotal: r.ledTotal, notes: r.notes || [] };
   }
   const tagHTML = notes => (notes || []).map(n => `<span class="tag ${n.startsWith('일할') ? 'ilhal' : n.includes('확인') ? 'warn' : 'sp'}">${esc(n)}</span>`).join('');
   const flagsOf = r => ({ ilhal: (r.notes || []).some(n => n.startsWith('일할')), special: (r.notes || []).some(n => n.includes('특례') || n.includes('소급') || n.includes('임금피크') || n.includes('정직') || n.includes('감봉')), warn: !!r.warn });
