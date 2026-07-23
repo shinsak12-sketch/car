@@ -144,9 +144,9 @@ window.PV = window.PV || {};
     const mu = maternityUnpaid(ctx, sabun);
     if (mu && !mu.split) {
       orders = orders.concat([
-        { 발령구분: '출산휴가(무급)', 발령시작일: mu.start, _pt: 'unpaid' },
-        { 발령구분: '출산휴가 복귀', 발령시작일: addDay(mu.end), _pt: 'normal' },
-      ]).sort((a, b) => cmp(a.발령시작일 || '', b.발령시작일 || ''));
+        { 발령구분: '출산휴가(무급)', 발령시작일: mu.start, _pt: 'unpaid', _pseudo: true },
+        { 발령구분: '출산휴가 복귀', 발령시작일: addDay(mu.end), _pt: 'normal', _pseudo: true },
+      ]).sort((a, b) => cmp(a.발령시작일 || '', b.발령시작일 || '') || ((a._pseudo ? 0 : 1) - (b._pseudo ? 0 : 1)));
     }
     const PT = o => o._pt || payTypeOf(o.발령구분);
     const prior = orders.filter(o => o.발령시작일 && cmp(o.발령시작일, monthStart) < 0);
@@ -185,10 +185,17 @@ window.PV = window.PV || {};
         // 구간 시작일 기준 유효계약 (발령기간=연봉기간 일치, 단축종료 후 복원연봉 사용)
         contract = effContract(ctx, sabun, segStartISO);
       }
-      segs.push({ startDay, payType: pt, contract, gubun: o.발령구분 });
+      segs.push({ startDay, payType: pt, contract, gubun: o.발령구분, pseudo: !!o._pseudo });
     }
     const merged = [];
-    segs.forEach(s => { const last = merged[merged.length - 1]; if (last && last.startDay === s.startDay) merged[merged.length - 1] = s; else merged.push(s); });
+    // 같은 날 충돌 시 실제 발령이 가짜(출산휴가 복귀) 이벤트를 이긴다.
+    // (출산 무급 종료 다음날 = 육아휴직 시작일이 겹치면, '정상복귀'가 육아휴직을 덮어쓰지 않도록)
+    segs.forEach(s => {
+      const last = merged[merged.length - 1];
+      if (last && last.startDay === s.startDay) {
+        if (!(s.pseudo && !last.pseudo)) merged[merged.length - 1] = s;
+      } else merged.push(s);
+    });
     merged.sort((a, b) => a.startDay - b.startDay);
 
     const n = merged.length, total = 30; let acc = 0;
