@@ -45,6 +45,11 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 #topnav button{padding:6px 18px;border-radius:8px;font-size:14px;font-weight:600;color:var(--text-secondary);transition:color .2s var(--ease);}
 #topnav button.on{background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,0.12),0 1px 1px rgba(0,0,0,0.04);}
 .top-right{margin-left:auto;display:flex;align-items:center;gap:var(--sp-3);}
+.save-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:11px;background:var(--db-green);color:#fff;font-size:15px;font-weight:700;letter-spacing:-0.2px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),0 2px 6px rgba(0,133,74,0.32);transition:background .2s var(--ease),transform .1s var(--ease);}
+.save-btn:active{transform:scale(0.96);}
+.save-btn.saved{background:#34C759;box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),0 2px 6px rgba(52,199,89,0.35);}
+.save-btn.dirty{animation:savePulse 1.6s var(--ease) infinite;}
+@keyframes savePulse{0%,100%{box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),0 2px 6px rgba(0,133,74,0.32);}50%{box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),0 2px 14px rgba(0,133,74,0.6);}}
 #saveDot{width:9px;height:9px;border-radius:50%;background:var(--text-tertiary);opacity:0;transition:opacity .3s var(--ease),background .2s var(--ease);flex-shrink:0;}
 #saveDot.saving{opacity:1;background:var(--text-tertiary);}
 #saveDot.saved{opacity:1;background:var(--db-green);}
@@ -429,6 +434,7 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
       <button data-view="ideas">아이디어</button>
     </nav>
     <div class="top-right">
+      <button id="saveBtn" class="save-btn tap" title="지금 저장 (끄기 전에 누르세요)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span id="saveBtnLabel">저장</span></button>
       <div id="saveDot" title="저장 상태"></div>
       <button class="icon-btn tap" id="settingsBtn" title="설정">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -582,10 +588,17 @@ function showSaving(){$("#saveDot").className="saving";}
 function showSaved(){const d=$("#saveDot");d.className="saved";setTimeout(()=>{if(d.classList.contains("saved"))d.className="";},800);}
 async function saveAll(){
   state.settings.lastOpened=new Date().toISOString();
-  if(storageMode==="fs"&&dirHandle){try{await fsWriteJSON("tasks.json",state.tasks);await fsWriteJSON("notes.json",state.notes);await fsWriteJSON("ideas.json",state.ideas);await fsWriteJSON("events.json",state.events);await fsWriteJSON("settings.json",state.settings);}catch(e){storageMode="local";saveToLS();$("#banner").classList.add("show");}}
-  else saveToLS();
+  if(storageMode==="fs"&&dirHandle){try{await fsWriteJSON("tasks.json",state.tasks);await fsWriteJSON("notes.json",state.notes);await fsWriteJSON("ideas.json",state.ideas);await fsWriteJSON("events.json",state.events);await fsWriteJSON("settings.json",state.settings);}catch(e){storageMode="local";$("#banner").classList.add("show");}}
+  try{saveToLS();}catch(e){} // 항상 브라우저에도 미러 백업
 }
-function scheduleSave(){showSaving();clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{await saveAll();showSaved();},500);}
+function setSaveState(st){
+  const b=$("#saveBtn"),l=$("#saveBtnLabel");if(!b)return;
+  b.classList.remove("dirty","saved");
+  if(st==="dirty"){b.classList.add("dirty");if(l)l.textContent="저장";}
+  else if(st==="saved"){b.classList.add("saved");if(l)l.textContent="저장됨";clearTimeout(b._t);b._t=setTimeout(()=>{b.classList.remove("saved");if(l)l.textContent="저장";},1600);}
+}
+function scheduleSave(){showSaving();setSaveState("dirty");clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{await saveAll();showSaved();setSaveState("saved");},500);}
+async function saveNow(){clearTimeout(saveTimer);showSaving();await saveAll();showSaved();setSaveState("saved");toast("저장했어요");}
 async function runBackup(){
   if(storageMode!=="fs"||!dirHandle)return;
   try{
@@ -1475,8 +1488,12 @@ function bindGlobal(){
   qi.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();submitQuick();}});
   $("#quickSend").onclick=submitQuick;
   $("#settingsBtn").onclick=openSettings;
+  $("#saveBtn").onclick=saveNow;
   $("#bannerConnect").onclick=connectAction;
   const bb=$("#bannerBackup");if(bb)bb.onclick=exportData;
+  window.addEventListener("beforeunload",()=>{try{saveToLS();}catch(e){}});
+  document.addEventListener("visibilitychange",()=>{if(document.hidden){try{saveToLS();}catch(e){}}});
+  document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="s"){e.preventDefault();saveNow();}});
 }
 
 /* ===== 초기화 & 복구 ===== */
@@ -1507,7 +1524,11 @@ async function init(){
       if(handle){
         if((await handle.queryPermission({mode:"readwrite"}))==="granted"){
           dirHandle=handle;
-          try{await withTimeout(loadFromFS(),6000);storageMode="fs";restored=true;}
+          try{
+            await withTimeout(loadFromFS(),6000);storageMode="fs";restored=true;
+            // 끄기 직전 변경이 파일에 못 들어갔을 수 있으니, 브라우저 미러가 더 최신이면 그걸 사용
+            try{const raw=localStorage.getItem(LS_KEY);if(raw){const d=JSON.parse(raw);const fileTs=state.settings.lastOpened||"";const lsTs=(d.settings&&d.settings.lastOpened)||"";if(lsTs>fileTs){if(d.tasks)state.tasks=d.tasks;if(d.notes)state.notes=d.notes;if(d.ideas)state.ideas=d.ideas;if(d.events)state.events=d.events;if(d.settings)state.settings={...state.settings,...d.settings};}}}catch(e){}
+          }
           catch(e){console.warn("폴더 로딩 지연/실패 → 로컬 폴백",e);dirHandle=null;}
         }else dirHandle=handle;
       }
