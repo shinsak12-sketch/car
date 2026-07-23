@@ -139,15 +139,21 @@ window.PV = window.PV || {};
   function buildSegments(ctx, sabun, y, m, cutoffISO, block) {
     const monthStart = iso(y, m, 1);
     const monthEndDay = dim(y, m);
-    let orders = ctx.ordersBy.get(sabun) || [];
+    // 퇴직은 '발령시작일'(발령 시점)이 아니라 '퇴직일'(마지막 근무일) 기준. 퇴직일 다음날부터 퇴직상태.
+    // → 발령이 급여일 전에 찍혔어도 퇴직일이 급여일 이후면 그 달은 재직 → 급여 지급.
+    let orders = (ctx.ordersBy.get(sabun) || []).map(o =>
+      ((o.발령구분 || '').includes('퇴직') && o.퇴직일) ? Object.assign({}, o, { 발령시작일: addDay(o.퇴직일) }) : o
+    );
     // 출산휴가 무급기간을 '무급 세그먼트'로 편입 (휴직 발령과 동일 취급 → 지급일 커트라인/소급 정확)
     const mu = maternityUnpaid(ctx, sabun);
     if (mu && !mu.split) {
       orders = orders.concat([
         { 발령구분: '출산휴가(무급)', 발령시작일: mu.start, _pt: 'unpaid', _pseudo: true },
         { 발령구분: '출산휴가 복귀', 발령시작일: addDay(mu.end), _pt: 'normal', _pseudo: true },
-      ]).sort((a, b) => cmp(a.발령시작일 || '', b.발령시작일 || '') || ((a._pseudo ? 0 : 1) - (b._pseudo ? 0 : 1)));
+      ]);
     }
+    // 같은 날 충돌 시 가짜(출산복귀) 이벤트를 앞에 두어 실제 발령이 이기도록 정렬
+    orders = orders.slice().sort((a, b) => cmp(a.발령시작일 || '', b.발령시작일 || '') || ((a._pseudo ? 0 : 1) - (b._pseudo ? 0 : 1)));
     const PT = o => o._pt || payTypeOf(o.발령구분);
     const prior = orders.filter(o => o.발령시작일 && cmp(o.발령시작일, monthStart) < 0);
     let baseType = 'normal', baseGubun = '';
