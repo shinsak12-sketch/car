@@ -96,6 +96,39 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 .task-list{column-width:240px;column-count:var(--list-cols,4);column-gap:var(--sp-3);}
 .card-notes{display:flex;flex-wrap:wrap;gap:6px;padding:2px 15px 10px;}
 
+/* 목록 좌우 분할 (좌: 컴팩트 리스트 / 우: 상세) */
+.task-split{display:flex;gap:var(--sp-4);align-items:flex-start;}
+.task-list-pane{width:360px;flex-shrink:0;display:flex;flex-direction:column;}
+.task-list-pane .search-bar{margin:0 0 10px;}
+.task-list-pane .lseg{margin:0 0 12px;max-width:none;}
+.task-rows{display:flex;flex-direction:column;gap:8px;overflow-y:auto;}
+.task-rows-empty{padding:40px 10px;text-align:center;color:var(--text-secondary);font-size:14px;}
+.task-row{display:flex;gap:11px;align-items:stretch;background:var(--bg-card);border:1px solid rgba(0,0,0,0.05);border-radius:12px;box-shadow:var(--sh-card);padding:11px 13px;cursor:pointer;transition:box-shadow .15s var(--ease),transform .1s var(--ease),background .15s;}
+.task-row:hover{box-shadow:0 3px 10px rgba(0,0,0,0.09);transform:translateY(-1px);}
+.task-row.active{box-shadow:inset 0 0 0 2px var(--db-green),0 2px 8px rgba(0,133,74,0.12);}
+.task-row.done .tr-title{text-decoration:line-through;color:var(--text-secondary);}
+.tr-bar{width:4px;border-radius:3px;flex-shrink:0;}
+.tr-main{flex:1;min-width:0;}
+.tr-title{font-size:14.5px;font-weight:700;letter-spacing:-0.2px;line-height:1.3;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.tr-meta{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap;}
+.tr-cat{font-size:11px;font-weight:700;letter-spacing:-0.2px;}
+.tr-dday{font-size:11px;font-weight:700;font-family:var(--font-num);}
+.tr-prog{font-size:11px;color:var(--text-secondary);font-family:var(--font-num);}
+.tr-hold{font-size:10px;font-weight:700;color:#8A5A00;background:rgba(255,159,10,0.16);padding:1px 6px;border-radius:5px;}
+.task-detail-pane{flex:1;min-width:0;background:var(--bg-card);border:1px solid rgba(0,0,0,0.05);border-radius:var(--r-card);box-shadow:var(--sh-card);position:sticky;top:0;min-height:420px;}
+.td-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:90px 20px;color:var(--text-secondary);}
+.td-empty svg{color:var(--text-tertiary);}
+.task-detail{padding:22px 24px;}
+.td-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.td-title{font-size:23px;font-weight:800;letter-spacing:-0.5px;line-height:1.25;word-break:break-word;color:var(--text-primary);cursor:text;}
+.task-detail.done .td-title{text-decoration:line-through;text-decoration-thickness:2px;color:var(--text-secondary);}
+.td-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.task-detail .progress-wrap{margin-top:16px;}
+.task-detail .subs{max-height:none;padding:0;overflow:visible;margin-top:16px;}
+.task-detail .sub-list{border-top:1px solid var(--separator);padding-top:14px;}
+.task-detail .card-notes{padding:14px 0 0;}
+.td-foot{display:flex;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--separator);}
+
 /* 상태 세그먼트 */
 .lseg{position:relative;display:flex;background:rgba(118,118,128,0.14);border-radius:12px;padding:3px;margin:var(--sp-3) 0 var(--sp-4);max-width:380px;box-shadow:inset 0 1px 2px rgba(0,0,0,0.06);}
 .lseg-ind{position:absolute;top:3px;bottom:3px;border-radius:9px;background:var(--bg-card);box-shadow:0 1px 3px rgba(0,0,0,0.16),0 1px 1px rgba(0,0,0,0.05);transition:transform .35s var(--ease),width .35s var(--ease);z-index:0;}
@@ -403,7 +436,8 @@ input,textarea{font-family:inherit;letter-spacing:inherit;font-size:inherit;colo
 #tabbar{display:none;}
 @media (max-width:900px){#content{padding-left:var(--sp-4);padding-right:var(--sp-4);}#composer{padding-left:var(--sp-4);padding-right:var(--sp-4);}#topbar{padding-left:var(--sp-4);padding-right:var(--sp-4);}
   .cal-split{flex-direction:column;}.cal-right{width:auto;position:static;margin-top:var(--sp-4);}.cal-detail-body{max-height:none;}
-  .notes-split{flex-direction:column;}.notes-list-pane{grid-template-columns:repeat(2,1fr);}.note-edit-pane{position:static;width:100%;}}
+  .notes-split{flex-direction:column;}.notes-list-pane{grid-template-columns:repeat(2,1fr);}.note-edit-pane{position:static;width:100%;}
+  .task-split{flex-direction:column;}.task-list-pane{width:auto;}.task-detail-pane{position:static;width:100%;}}
 @media (max-width:768px){
   #topnav{display:none;}
   .task-list{column-count:1;}
@@ -522,7 +556,7 @@ const HOLIDAYS={
   "2026-09-24":"추석","2026-09-25":"추석","2026-09-26":"추석","2026-09-28":"대체공휴일",
   "2026-10-03":"개천절","2026-10-05":"대체공휴일","2026-10-09":"한글날","2026-12-25":"성탄절"
 };
-let ui={view:"list",listFilter:"active",search:"",expanded:new Set(),calMonth:null,calSelected:null,noteSelected:null,ideaBoard:null,ideaSel:null,ideaColor:null};
+let ui={view:"list",listFilter:"active",taskSel:null,search:"",expanded:new Set(),calMonth:null,calSelected:null,noteSelected:null,ideaBoard:null,ideaSel:null,ideaColor:null};
 const IDEA_COLORS=["#6366F1","#0EA5E9","#10B981","#F59E0B","#EF4444","#EC4899","#8B5CF6","#64748B"];
 let lastToast=null;
 
@@ -598,7 +632,14 @@ function setSaveState(st){
   else if(st==="saved"){b.classList.add("saved");if(l)l.textContent="저장됨";clearTimeout(b._t);b._t=setTimeout(()=>{b.classList.remove("saved");if(l)l.textContent="저장";},1600);}
 }
 function scheduleSave(){showSaving();setSaveState("dirty");clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{await saveAll();showSaved();setSaveState("saved");},500);}
-async function saveNow(){clearTimeout(saveTimer);showSaving();await saveAll();showSaved();setSaveState("saved");toast("저장했어요");}
+async function saveNow(){
+  clearTimeout(saveTimer);showSaving();
+  try{saveToLS();}catch(e){}
+  let ok=true;
+  try{await withTimeout(saveAll(),5000);}catch(e){ok=false;}
+  showSaved();setSaveState("saved");
+  toast(ok?"저장됐습니다 ✓":"브라우저에 저장됨 (폴더 저장 실패)");
+}
 async function runBackup(){
   if(storageMode!=="fs"||!dirHandle)return;
   try{
@@ -814,34 +855,88 @@ function renderList(){
   groups.active.sort(sortActive);groups.hold.sort(sortActive);
   groups.done.sort((a,b)=>(b.completedAt||"").localeCompare(a.completedAt||""));
   const cur=ui.listFilter||"active";
-  let h=`<div class="search-bar ${ui.search?'has-val':''}" id="searchBar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="searchInput" placeholder="검색 (제목·하위·메모)" value="${esc(ui.search)}" autocomplete="off"><button class="clear tap" id="searchClear">${icoX()}</button></div>`;
-  h+=`<div class="lseg" id="listSeg"><div class="lseg-ind" id="lsegInd"></div>
+  const list=groups[cur];
+  if(!ui.taskSel||!list.find(t=>t.id===ui.taskSel))ui.taskSel=list[0]?list[0].id:null;
+  const search=`<div class="search-bar ${ui.search?'has-val':''}" id="searchBar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="searchInput" placeholder="검색" value="${esc(ui.search)}" autocomplete="off"><button class="clear tap" id="searchClear">${icoX()}</button></div>`;
+  const seg=`<div class="lseg" id="listSeg"><div class="lseg-ind" id="lsegInd"></div>
     <button data-lf="active" class="${cur==='active'?'on':''}">진행 <span class="cnt">${groups.active.length}</span></button>
     <button data-lf="hold" class="${cur==='hold'?'on':''}">보류 <span class="cnt">${groups.hold.length}</span></button>
     <button data-lf="done" class="${cur==='done'?'on':''}">완료 <span class="cnt">${groups.done.length}</span></button>
   </div>`;
-  const list=groups[cur];
+  let rows;
   if(!list.length){
-    if(ui.search)h+=emptyState("검색 결과가 없어요","다른 검색어를 입력해 보세요");
-    else if(cur==="active")h+=emptyState("진행 중인 업무가 없어요","위 입력창에 새 업무를 적어보세요");
-    else if(cur==="hold")h+=emptyState("보류 중인 업무가 없어요","카드의 보류 버튼으로 옮길 수 있어요");
-    else h+=emptyState("완료된 업무가 없어요","업무를 완료하면 여기에 쌓여요");
-  }else h+=`<div class="task-list">${list.map(cardHTML).join("")}</div>`;
-  return h;
+    const msg=ui.search?"검색 결과 없음":cur==="active"?"진행 중인 업무 없음":cur==="hold"?"보류 업무 없음":"완료 업무 없음";
+    rows=`<div class="task-rows-empty">${msg}</div>`;
+  }else rows=`<div class="task-rows">${list.map(taskRowHTML).join("")}</div>`;
+  return `<div class="task-split">
+    <div class="task-list-pane">${search}${seg}${rows}</div>
+    <div class="task-detail-pane" id="taskDetail">${taskDetailHTML()}</div>
+  </div>`;
+}
+function taskRowHTML(tk){
+  const cat=catOf(tk);
+  const done=tk.status==="done";
+  const dd=!done?ddayInfo(tk.dueDate):null;
+  const prog=progressOf(tk);
+  let meta="";
+  if(cat)meta+=`<span class="tr-cat" style="color:${cat.color}">${esc(cat.id)}</span>`;
+  if(dd)meta+=`<span class="tr-dday" style="color:${dd.color}">${dd.text}</span>`;
+  if(prog.total)meta+=`<span class="tr-prog">하위 ${prog.done}/${prog.total}</span>`;
+  if(tk.status==="hold")meta+=`<span class="tr-hold">보류</span>`;
+  return `<div class="task-row ${tk.id===ui.taskSel?'active':''} ${done?'done':''}" data-taskrow="${tk.id}">
+    <span class="tr-bar" style="background:${cat?cat.color:'#C7C7CC'}"></span>
+    <div class="tr-main"><div class="tr-title">${esc(tk.title)}</div>${meta?`<div class="tr-meta">${meta}</div>`:""}</div>
+  </div>`;
+}
+function taskDetailHTML(){
+  const tk=findTask(ui.taskSel);
+  if(!tk)return `<div class="td-empty"><svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><div style="margin-top:12px;">좌측에서 업무를 선택하세요</div></div>`;
+  const done=tk.status==="done";
+  const dd=!done?ddayInfo(tk.dueDate):null;
+  const age=ageInfo(tk.createdAt);
+  const prog=progressOf(tk);
+  const cat=catOf(tk);
+  const linked=notesOf(tk.id);
+  const catChip=cat?`<span class="cat-chip" style="color:${cat.color};background:${cat.color}1F"><span class="cat-dot" style="background:${cat.color}"></span>${esc(cat.id)}</span>`:`<span class="cat-chip cat-none"><span class="cat-dot" style="background:#C7C7CC"></span>미분류</span>`;
+  let meta="";
+  if(dd)meta+=`<span class="badge dday gloss" style="background:${dd.color}">${dd.text}</span>`;
+  if(age&&!done)meta+=`<span class="age-chip ${age.old?'old':''}">${age.text}</span>`;
+  if(done)meta+=`<span class="status-pill done gloss">완료</span>`;
+  else if(tk.status==="hold")meta+=`<span class="status-pill hold gloss">보류</span>`;
+  const progHTML=prog.total?`<div class="progress-wrap"><span class="progress-num">${prog.done}/${prog.total}</span><div class="progress-bar"><div class="progress-fill" style="width:${prog.pct}%"></div></div></div>`:"";
+  const notesRow=linked.length?`<div class="card-notes">${linked.map((n,i)=>`<button class="note-btn tap" data-noteview="${n.id}">${icoNoteMini()} ${esc(n.title||("메모"+(i+1)))}</button>`).join("")}</div>`:"";
+  let footActions;
+  if(done)footActions=`<button class="foot-btn done-btn on tap" data-done="${tk.id}">${icoUndo()}<span>되돌리기</span></button>`;
+  else footActions=`${tk.status==="hold"?`<button class="foot-btn hold-btn tap" data-hold="${tk.id}">${icoPlay()}<span>재개</span></button>`:`<button class="foot-btn hold-btn tap" data-hold="${tk.id}">${icoPause()}<span>보류</span></button>`}<button class="foot-btn done-btn primary tap" data-done="${tk.id}">${icoCheck2()}<span>완료</span></button>`;
+  return `<div class="task-detail ${done?'done':''}" data-id="${tk.id}">
+    <div class="td-top">${catChip}<button class="menu-btn tap" data-menu="${tk.id}" title="메뉴">${icoMenu()}</button></div>
+    <div class="td-title" data-titleedit="${tk.id}" title="더블클릭하면 수정">${esc(tk.title)}</div>
+    ${meta?`<div class="td-meta">${meta}</div>`:""}
+    ${progHTML}
+    <div class="subs td-subs">${subsHTML(tk)}</div>
+    ${notesRow}
+    <div class="td-foot"><div class="foot-actions">${footActions}</div></div>
+  </div>`;
+}
+function selectTask(id){
+  ui.taskSel=id;
+  $$('.task-row').forEach(r=>r.classList.toggle("active",r.dataset.taskrow===id));
+  const d=$("#taskDetail");if(d){d.innerHTML=taskDetailHTML();bindCardEvents();}
 }
 function bindListExtras(){
   const si=$("#searchInput");
-  if(si){si.oninput=()=>{ui.search=si.value;const b=$("#searchBar");if(b)b.classList.toggle("has-val",!!si.value);updateListOnly();};
-    $("#searchClear").onclick=()=>{ui.search="";renderContent();};}
-  $$('#listSeg button').forEach(b=>b.onclick=()=>{ui.listFilter=b.dataset.lf;updateListOnly();});
+  if(si){si.oninput=()=>{ui.search=si.value;const b=$("#searchBar");if(b)b.classList.toggle("has-val",!!si.value);ui.taskSel=null;updateListOnly();};
+    $("#searchClear").onclick=()=>{ui.search="";ui.taskSel=null;renderContent();};}
+  $$('#listSeg button').forEach(b=>b.onclick=()=>{ui.listFilter=b.dataset.lf;ui.taskSel=null;updateListOnly();});
+  $$('[data-taskrow]').forEach(r=>r.onclick=()=>selectTask(r.dataset.taskrow));
   moveLSeg();requestAnimationFrame(moveLSeg);
+  bindCardEvents();
 }
 function moveLSeg(){
   const seg=$("#listSeg");if(!seg)return;const on=seg.querySelector("button.on");if(!on)return;
   const ind=$("#lsegInd");if(!ind)return;
   ind.style.width=on.offsetWidth+"px";ind.style.transform=`translateX(${on.offsetLeft-3}px)`;
 }
-// 검색/필터 시 목록만 갱신하되 검색창 포커스 보존
 function updateListOnly(){
   const c=$("#content");const act=document.activeElement;const wasSearch=act&&act.id==="searchInput";const selStart=wasSearch?act.selectionStart:0;
   c.innerHTML=renderList();bindCardEvents();bindListExtras();
@@ -1020,7 +1115,7 @@ function setHold(id){
   if(tk.status==="hold"){tk.status="active";scheduleSave();renderAll();toast("진행으로 복귀: "+tk.title,()=>{tk.status=prev;scheduleSave();renderAll();});}
   else{tk.status="hold";tk.completedAt=null;scheduleSave();renderAll();toast("보류로 이동: "+tk.title,()=>{tk.status=prev;scheduleSave();renderAll();});}
 }
-function pulseCard(id){const card=$(`.card[data-id="${id}"]`);if(card){card.classList.add("pulse");setTimeout(()=>card.classList.remove("pulse"),320);}}
+function pulseCard(id){const card=$(`[data-id="${id}"]`);if(card){card.classList.add("pulse");setTimeout(()=>card.classList.remove("pulse"),320);}}
 function deleteTask(id){
   const idx=state.tasks.findIndex(t=>t.id===id);if(idx<0)return;
   const removed=state.tasks[idx];state.tasks.splice(idx,1);
@@ -1037,16 +1132,18 @@ function toggleSubDone(subId){
   else removeParentPrompt(loc.tk.id);
 }
 function refreshCardSubs(tk){
-  const card=$(`.card[data-id="${tk.id}"]`);if(!card)return;
-  const subsEl=card.querySelector(".subs");if(subsEl)subsEl.innerHTML=subsHTML(tk);
   const prog=progressOf(tk);
-  const pn=card.querySelector(".progress-num");if(pn)pn.textContent=`${prog.done}/${prog.total}`;
-  const pf=card.querySelector(".progress-fill");if(pf)pf.style.width=prog.pct+"%";
-  const eb=card.querySelector(".expand-btn span:last-child");if(eb)eb.textContent=tk.subtasks.length?`하위 ${prog.done}/${prog.total}`:'하위 추가';
+  $$(`[data-id="${tk.id}"]`).forEach(card=>{
+    const subsEl=card.querySelector(".subs");if(subsEl)subsEl.innerHTML=subsHTML(tk);
+    const pn=card.querySelector(".progress-num");if(pn)pn.textContent=`${prog.done}/${prog.total}`;
+    const pf=card.querySelector(".progress-fill");if(pf)pf.style.width=prog.pct+"%";
+    const eb=card.querySelector(".expand-btn span:last-child");if(eb)eb.textContent=tk.subtasks.length?`하위 ${prog.done}/${prog.total}`:'하위 추가';
+  });
+  const rp=$(`[data-taskrow="${tk.id}"] .tr-prog`);if(rp)rp.textContent=`하위 ${prog.done}/${prog.total}`;
   bindCardEvents();
 }
 function promptParentComplete(tk){
-  const card=$(`.card[data-id="${tk.id}"]`);if(!card||card.querySelector(".confirm-parent"))return;
+  const card=$(`[data-id="${tk.id}"]`);if(!card||card.querySelector(".confirm-parent"))return;
   card.classList.add("shake");setTimeout(()=>card.classList.remove("shake"),400);
   const div=document.createElement("div");div.className="confirm-parent";
   div.innerHTML=`<span>하위 업무 완료 · 상위도 완료할까요?</span><button class="no tap">나중에</button><button class="yes tap">완료</button>`;
@@ -1054,7 +1151,7 @@ function promptParentComplete(tk){
   div.querySelector(".yes").onclick=e=>{e.stopPropagation();toggleTaskDone(tk.id);};
   div.querySelector(".no").onclick=e=>{e.stopPropagation();div.remove();};
 }
-function removeParentPrompt(id){const card=$(`.card[data-id="${id}"]`);if(card){const el=card.querySelector(".confirm-parent");if(el)el.remove();}}
+function removeParentPrompt(id){const card=$(`[data-id="${id}"]`);if(card){const el=card.querySelector(".confirm-parent");if(el)el.remove();}}
 // containerId: 태스크 id(최상위) 또는 하위업무 id(그 자식). title 없으면 빈 항목 생성 후 포커스
 function addSub(containerId,title,focusNew){
   const arr=childArrayOf(containerId);if(!arr)return;
@@ -1064,7 +1161,7 @@ function addSub(containerId,title,focusNew){
   arr.push(node);
   if(!ui.expanded.has(tk.id))ui.expanded.add(tk.id);
   scheduleSave();refreshCardSubs(tk);
-  const card=$(`.card[data-id="${tk.id}"]`);if(card){card.classList.add("expanded");
+  const card=$(`[data-id="${tk.id}"]`);if(card){card.classList.add("expanded");
     if(focusNew){const ni=card.querySelector(`[data-subtitle="${node.id}"]`);if(ni){ni.focus();}}
     else{const inp=card.querySelector(`[data-subadd="${containerId}"]`);if(inp)inp.focus();}
   }
