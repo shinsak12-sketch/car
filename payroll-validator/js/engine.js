@@ -123,8 +123,12 @@ window.PV = window.PV || {};
     let baseType = 'normal', baseGubun = '';
     if (prior.length) { baseGubun = prior[prior.length - 1].발령구분; baseType = payTypeOf(baseGubun); }
     else {
+      // 월초 이전 발령이 없음. 명부 '(휴직)' 스냅샷은, 올해 '휴직 시작' 발령이 하나도 없을 때만
+      // 이월휴직으로 인정. (의병/육아/무급 등 휴직시작 발령이 있으면 그 발령일부터가 휴직이므로
+      //  월초부터 휴직으로 깔면 안 됨 → 지급일 상태 우선 원칙)
       const roster = ctx.rosterBy.get(sabun);
-      if (roster && (roster.직무 || '').includes('(휴직)')) {
+      const hasLeaveStart = orders.some(o => ['unpaid', 'sick', 'short'].includes(payTypeOf(o.발령구분)));
+      if (roster && (roster.직무 || '').includes('(휴직)') && !hasLeaveStart) {
         const c = ctx.carry.get(sabun);
         baseType = (c && c.종류) ? (c.종류.includes('의병') ? 'sick' : 'unpaid') : 'unpaid';
       }
