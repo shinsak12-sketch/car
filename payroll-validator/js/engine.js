@@ -189,8 +189,10 @@ window.PV = window.PV || {};
     for (const o of inMonth) {
       const pt = PT(o);
       // 복직=발령일 당일부터 정상 / 단축근로종료=발령일 다음날부터 정상
+      // 휴직 시작(무급·의병)=발령일 당일은 근무(유급), 무급은 다음날부터 (휴직은 시작일 제외)
       const endNextDay = /단축/.test(o.발령구분 || '') && /종료/.test(o.발령구분 || '');
-      const startDay = P(o.발령시작일).d + (endNextDay ? 1 : 0);
+      const leaveNextDay = (pt === 'unpaid' || pt === 'sick') && !o._pseudo;
+      const startDay = P(o.발령시작일).d + (endNextDay || leaveNextDay ? 1 : 0);
       if (startDay > monthEndDay) continue;
       const segStartISO = iso(y, m, startDay);
       let contract;
@@ -288,6 +290,7 @@ window.PV = window.PV || {};
       uvacDeduct = floorU(fullGross / 30) * uvac;
       pay['감액'] = (pay['감액'] || 0) - uvacDeduct;
     }
+    real['감액'] = pay['감액'] || 0; // 감액(정수·십원)도 raw에 반영 → 소급 원단위 누적용
 
     const peakApplied = roster && (roster.피크적용 || '').includes('적용') && roster.피크예상일 && P(roster.피크예상일).m === m && y >= P(roster.피크예상일).y;
     if (trace) {
@@ -301,7 +304,7 @@ window.PV = window.PV || {};
       trace.발령 = (ctx.ordersBy.get(sabun) || []).map(o => ({ 구분: o.발령구분, 시작일: o.발령시작일, 퇴직일: o.퇴직일 || '' }));
       trace.휴가 = (ctx.vacBy.get(sabun) || []).map(v => ({ 종류: v.휴가종류, 시작일: v.시작일, 종료일: v.종료일, 일수: v.휴가일수 }));
     }
-    return { retired: false, pay, paidUnits, is14: applied14, segments: seg.segments, uvac, peakApplied };
+    return { retired: false, pay, real, paidUnits, is14: applied14, segments: seg.segments, uvac, peakApplied };
   }
 
   // 누적 소급: 전월 이전의 (실제−기지급) 차액을 급여 나오는 달에 정산.
@@ -315,7 +318,8 @@ window.PV = window.PV || {};
       if (ap.retired || ac.retired) continue;
       const paid = LEDGER_ITEMS.reduce((a, k) => a + (ap.pay[k] || 0), 0) > 0;
       if (paid) LEDGER_ITEMS.forEach(k => acc[k] = 0);
-      LEDGER_ITEMS.forEach(k => acc[k] += (ac.pay[k] || 0) - (ap.pay[k] || 0));
+      // 원(raw) 단위로 누적 — 최종 base+소급 합산 후 한 번만 절상(이중 반올림 방지)
+      LEDGER_ITEMS.forEach(k => acc[k] += (ac.real[k] || 0) - (ap.real[k] || 0));
     }
     return acc;
   }
@@ -356,11 +360,19 @@ window.PV = window.PV || {};
       }
     });
 
-    // 누적 소급정산: 급여 나오는 달에 반영
+    // 누적 소급정산: 급여 나오는 달에 반영. base(raw) + 소급(raw)을 합산 후 한 번만 절상(이중 반올림 방지).
     const paidThisMonth = LEDGER_ITEMS.reduce((a, k) => a + (base.pay[k] || 0), 0) > 0;
     if (paidThisMonth) {
       const carry = carryIn(ctx, sabun, y, m);
-      let s = 0; LEDGER_ITEMS.forEach(k => { pay[k] += carry[k]; s += carry[k]; });
+      let s = 0;
+      LEDGER_ITEMS.forEach(k => {
+        const adj = (pay[k] || 0) - (base.pay[k] || 0);     // 업로드·징계 등 base 이후 조정분 보존
+        const combined = (base.real[k] || 0) + (carry[k] || 0);
+        const rounded = k === '감액' ? Math.round(combined) : ceilU(combined); // 감액=정수, 그 외 십원 절상
+        const before = pay[k] || 0;
+        pay[k] = rounded + adj;
+        s += pay[k] - before;
+      });
       if (s !== 0) { notes.push(`소급정산 ${s >= 0 ? '+' : ''}${s.toLocaleString()}`); trace.extras.push({ label: '소급정산 (전월 이전 지급일 이후 변동 정산)', amount: s }); }
     }
 
