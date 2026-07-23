@@ -59,10 +59,10 @@
         const res = PV.readWorkbook(await readFile(f), f.name);
         if (res.type === 'unknown' || !res.data) continue;
         if (res.type === 'ledger') { store.ledger = res.data; store.files.ledger = f.name; markLedger(); continue; }
-        if (res.type === 'order') { // 여러 발령 파일 누적
-          store.order = (store.order || []).concat(res.data);
-          store.fileCounts.order = (store.fileCounts.order || 0) + 1;
-          store.files.order = store.fileCounts.order > 1 ? `${store.fileCounts.order}개 파일` : f.name;
+        if (res.type === 'order' || res.type === 'salary') { // 여러 발령·연봉 파일 누적
+          store[res.type] = (store[res.type] || []).concat(res.data);
+          store.fileCounts[res.type] = (store.fileCounts[res.type] || 0) + 1;
+          store.files[res.type] = store.fileCounts[res.type] > 1 ? `${store.fileCounts[res.type]}개 파일` : f.name;
         } else if (res.type === 'holiday') {
           store.holiday = [...new Set([...(store.holiday || []), ...res.data])]; store.files.holiday = f.name;
         } else if (res.type === 'dutyextra') {
@@ -99,7 +99,7 @@
       const cnt = Array.isArray(arr) ? arr.length : 0;
       const it = el('div', 'fileitem ' + (loaded ? 'ok' : 'miss'));
       it.innerHTML = `<span class="dot"></span>
-        <div><div class="fi-name">${lab.name}${type === 'order' && store.fileCounts.order > 1 ? ` <span class="badge g" style="font-size:9px">${store.fileCounts.order}개 합침</span>` : ''}</div><div class="fi-sub">${lab.sub}</div></div>
+        <div><div class="fi-name">${lab.name}${(type === 'order' || type === 'salary') && store.fileCounts[type] > 1 ? ` <span class="badge g" style="font-size:9px">${store.fileCounts[type]}개 합침</span>` : ''}</div><div class="fi-sub">${lab.sub}</div></div>
         <div class="fi-meta">${loaded ? `<span class="badge g">${cnt}${unit[type] || '건'}</span>` : `<span class="badge n">${type === 'dutyextra' ? '없음' : '미인식'}</span>`}
         <div class="fi-file">${esc(store.files[type] || '')}</div></div>`;
       wrap.appendChild(it);
