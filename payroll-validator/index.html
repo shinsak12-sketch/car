@@ -93,7 +93,7 @@
 
     <!-- 3. 징계 입력 -->
     <div class="card">
-      <div class="head"><span class="num">3</span><h2>징계 입력</h2><span class="hint">수기</span>
+      <div class="head"><span class="num">3</span><h2>징계/근태 입력</h2><span class="hint">수기 · 결근·지각 감액</span>
         <div class="tail"><span class="chip-add" id="addDiscipline">+ 추가</span></div>
       </div>
       <div class="body"><div id="disciplineList"></div></div>
@@ -168,11 +168,12 @@
           </button>
         </div>
         <div id="verifyAlerts" class="alerts" style="margin-top:12px"></div>
+        <div id="verifySummary"></div>
       </div>
     </div>
 
     <div class="tipcard">
-      <b>진행 순서</b> ① 폴더·변동·징계·이월휴직 입력 → ② <b>급여 계산 실행</b> (명세서 새 창) → ③ 급여대장 업로드 → ④ <b>검증 실행</b> (결과 새 창)
+      <b>진행 순서</b> ① 폴더·변동·징계/근태·이월휴직 입력 → ② <b>급여 계산 실행</b> → ③ 급여대장 업로드 → ④ <b>검증 실행</b> (결과 새 창 · 재계산/후단/오류 처리 후 <b>검증 저장</b>)
     </div>
 
   </section>

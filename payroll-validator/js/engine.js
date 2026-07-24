@@ -431,14 +431,15 @@ window.PV = window.PV || {};
     if (ctx.uploads.prod.has(sabun)) { const v = num(ctx.uploads.prod.get(sabun)); pay['생산성향상격려금'] = (pay['생산성향상격려금'] || 0) + v; trace.extras.push({ label: '생산성향상격려금(업로드)', amount: v }); }
     if (ctx.uploads.etc.has(sabun)) ctx.uploads.etc.get(sabun).forEach(e => { if (e.구분) { pay[e.구분] = (pay[e.구분] || 0) + num(e.금액); trace.extras.push({ label: `${e.구분}(기타 업로드)`, amount: num(e.금액) }); } });
 
-    // 징계
+    // 징계/근태 (감봉·결근·지각 = 수기 감액, 정직 = 50%)
     ctx.discipline.filter(d => d.사번 === sabun).forEach(d => {
-      if ((d.종류 || '').includes('감봉')) {
+      const kind = d.종류 || '';
+      if (/감봉|결근|지각/.test(kind)) {
         const amt = Math.abs(num(d.금액));
         pay['감액'] = (pay['감액'] || 0) - amt;
-        notes.push('감봉 감액 ' + amt.toLocaleString());
-        trace.extras.push({ label: '감봉(감액)', amount: -amt });
-      } else if ((d.종류 || '').includes('정직')) {
+        notes.push(kind + ' 감액 ' + amt.toLocaleString());
+        trace.extras.push({ label: kind + '(감액)', amount: -amt });
+      } else if (kind.includes('정직')) {
         LEDGER_ITEMS.forEach(k => { if (k === '감액') return; if (SUSPEND_EXCL.has(k)) pay[k] = 0; else pay[k] = ceilU(pay[k] * 0.5); });
         notes.push('정직 50% (역량가급 제외)');
         trace.extras.push({ label: '정직 50% (역량가급·고정역량가급 제외)', amount: null });

@@ -136,7 +136,7 @@
   /* ---------- discipline ---------- */
   function renderDiscipline() {
     const box = $('#disciplineList');
-    if (!store.discipline.length) { box.innerHTML = '<div class="empty">감봉·정직 대상자를 추가하세요</div>'; return; }
+    if (!store.discipline.length) { box.innerHTML = '<div class="empty">감봉·정직·결근·지각 대상자를 추가하세요</div>'; return; }
     const t = el('table', 'mini');
     t.innerHTML = '<thead><tr><th>사번</th><th>성명</th><th>종류</th><th style="text-align:right">금액</th><th></th></tr></thead>';
     const tb = el('tbody');
@@ -144,8 +144,8 @@
       const tr = el('tr');
       tr.innerHTML = `<td><input type="text" value="${esc(d.사번)}" style="width:82px" data-k="사번"></td>
         <td><input type="text" value="${esc(d.성명)}" style="width:60px" data-k="성명"></td>
-        <td><select class="inp" data-k="종류"><option ${d.종류 === '감봉' ? 'selected' : ''}>감봉</option><option ${d.종류 === '정직' ? 'selected' : ''}>정직</option></select></td>
-        <td style="text-align:right"><input type="number" value="${d.금액 || ''}" style="width:92px;text-align:right" data-k="금액" ${d.종류 === '정직' ? 'disabled placeholder="자동"' : ''}></td>
+        <td><select class="inp" data-k="종류">${['감봉', '정직', '결근', '지각'].map(x => `<option ${d.종류 === x ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
+        <td style="text-align:right"><input type="number" value="${d.금액 || ''}" style="width:92px;text-align:right" data-k="금액" ${d.종류 === '정직' ? 'disabled placeholder="자동"' : 'placeholder="감액"'}></td>
         <td><span class="rowdel" title="삭제">✕</span></td>`;
       tr.querySelectorAll('[data-k]').forEach(inp => inp.onchange = () => { d[inp.dataset.k] = inp.dataset.k === '금액' ? +inp.value : inp.value; if (inp.dataset.k === '종류') renderDiscipline(); });
       tr.querySelector('.rowdel').onclick = () => { store.discipline.splice(i, 1); renderDiscipline(); };
@@ -299,9 +299,10 @@
     $('#calcActions').classList.toggle('hidden', res.blocked);
     ensureExtraButtons(); refresh();
     if (res.blocked) { toast('연봉 미입력 — 전체 계산 차단', 'bad'); }
-    else if (openWindow) { openPayrollWindow(); toast(`급여계산 완료 · ${res.summary.total}명`, 'ok'); }
+    else { if (openWindow) openPayrollWindow(); toast(`급여계산 완료 · ${res.summary.total}명 — 검증에서 확인하세요`, 'ok'); }
   }
-  $('#calcBtn').onclick = () => { try { runCalc(true); } catch (e) { console.error(e); toast('오류: ' + e.message, 'bad'); } };
+  // 급여계산 실행 시 리스트 창은 자동으로 열지 않음(검증에서 확인). '창 열기' 버튼으로 수동 오픈.
+  $('#calcBtn').onclick = () => { try { runCalc(false); } catch (e) { console.error(e); toast('오류: ' + e.message, 'bad'); } };
   $('#openCalcBtn').onclick = openPayrollWindow;
 
   // 팝업(재계산·후단처리 처리)에서 호출 — 검증결과에 반영(내보내기·재검증에도 유지)
@@ -312,17 +313,74 @@
     if (!row) return;
     const matched = alt.matched !== false && alt.status === 'ok';
     const label = alt.mode === 'rear' ? '후단처리' : '당월적용';
-    row.processedMode = alt.mode; row.resolved = matched; row.ourTotal = alt.total;
+    row.processedMode = alt.mode; row.resolved = matched; row.ourTotal = alt.total; row.review = matched ? 'resolved' : 'processed';
     if (alt.items) { const p = {}; alt.items.forEach(it => p[it.col] = it.ours); row.ours = p; }
-    const keep = (row.notes || []).filter(n => !n.startsWith('불일치') && !/처리(완료|\(대장 불일치\))$/.test(n));
+    const keep = (row.notes || []).filter(n => !n.startsWith('불일치') && !/처리(완료|\(대장 불일치\))$/.test(n) && !n.startsWith('오류확인'));
     if (matched) { row.status = 'ok'; row.diffs = []; row.notes = [label + ' 처리완료'].concat(keep); }
     else { row.status = 'bad'; row.diffs = alt.diffs || row.diffs; row.notes = [label + ' 처리(대장 불일치)'].concat(keep); }
+    refreshVerifyTiles();
   };
+  // 팝업 '오류 확인'에서 호출 — 대장 오류로 담당자가 확인한 건(검토 완료, 불일치 카운트에서 제외)
+  window.__pvMarkError = function (사번, info) {
+    if (!verifyResult) return;
+    const row = verifyResult.rows.find(r => r.사번 === 사번);
+    if (!row) return;
+    const memo = (info && info.memo) || '';
+    row.review = 'error'; row.resolved = false; row.errMemo = memo;
+    const keep = (row.notes || []).filter(n => !n.startsWith('불일치') && !/처리(완료|\(대장 불일치\))$/.test(n) && !n.startsWith('오류확인'));
+    row.notes = ['오류확인' + (memo ? ': ' + memo : '')].concat(keep);
+    refreshVerifyTiles();
+  };
+  window.__pvUnmarkError = function (사번) {
+    if (!verifyResult) return;
+    const row = verifyResult.rows.find(r => r.사번 === 사번);
+    if (!row) return;
+    row.review = null; row.errMemo = ''; row.notes = (row.notes || []).filter(n => !n.startsWith('오류확인'));
+    refreshVerifyTiles();
+  };
+  // 검증 요약 재계산 + 타일/저장버튼 갱신 (일치=ok, 불일치=미검토 mismatch, 오류=검토완료)
+  function refreshVerifyTiles() {
+    if (!verifyResult) return;
+    let ok = 0, bad = 0, err = 0;
+    verifyResult.rows.forEach(r => { if (r.review === 'error') err++; else if (r.status === 'ok') ok++; else bad++; });
+    verifyResult.summary.ok = ok; verifyResult.summary.bad = bad; verifyResult.summary.error = err;
+    if ($('#tiOk')) $('#tiOk').textContent = ok;
+    if ($('#tiBad')) $('#tiBad').textContent = bad;
+    ensureExtraButtons();
+  }
+  // 팝업 '검증 저장'에서 호출 — 처리·오류 요약 리스트를 랜딩 페이지 검증 영역에 렌더
+  window.__pvSaveVerify = function () {
+    if (!verifyResult) return;
+    refreshVerifyTiles(); renderVerifySummary();
+    toast('검증 저장 완료 — 처리·오류 요약이 검증 영역에 정리되었습니다', 'ok');
+  };
+  function renderVerifySummary() {
+    const box = $('#verifySummary'); if (!box) return;
+    const rows = (verifyResult ? verifyResult.rows : []).filter(r => r.review === 'error' || r.processedMode || r.resolved);
+    if (!rows.length) { box.innerHTML = '<div class="vsum-empty" style="margin-top:12px;font-size:12px;color:var(--muted,#8a94a8)">처리·오류 건이 없습니다.</div>'; return; }
+    const won2 = n => (n == null ? '' : Math.round(n).toLocaleString('ko-KR'));
+    const meta = { error: { c: 'var(--bad)', t: '오류' }, resolvedFront: { c: 'var(--br,#4f6bff)', t: '당월적용' }, resolvedRear: { c: 'var(--ok)', t: '후단처리' }, processed: { c: 'var(--bad)', t: '처리(불일치)' } };
+    const kindOf = r => r.review === 'error' ? 'error' : (r.resolved ? (r.processedMode === 'rear' ? 'resolvedRear' : 'resolvedFront') : 'processed');
+    const items = rows.map(r => {
+      const k = kindOf(r), m = meta[k];
+      const diff = r.ourTotal - r.ledTotal;
+      const detail = k === 'error'
+        ? '대장 오류' + (r.errMemo ? ' — ' + esc(r.errMemo) : '') + ((r.diffs || []).length ? ' (' + (r.diffs || []).map(d => d.col).join(', ') + ')' : '')
+        : (r.resolved ? '대장과 일치 처리' : '처리 후에도 차이 ' + (diff > 0 ? '+' : '') + won2(diff));
+      return `<div class="vsum-it" style="display:flex;gap:8px;align-items:flex-start;padding:7px 9px;border:1px solid var(--line,#e2e8f2);border-radius:8px;margin-bottom:6px;background:var(--card,#fff)">
+        <span style="flex:0 0 auto;font-size:10px;font-weight:800;color:#fff;background:${m.c};border-radius:20px;padding:2px 8px;margin-top:1px">${m.t}</span>
+        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12.5px">${esc(r.사번)} ${esc(r.성명 || '')} <span style="color:var(--muted,#8a94a8);font-weight:500">${esc(r.소속 || '')}</span></div>
+        <div style="font-size:11.5px;color:var(--muted,#5a6579);margin-top:2px">${detail}</div></div></div>`;
+    }).join('');
+    const eC = verifyResult.summary.error || 0, rC = rows.filter(r => r.resolved).length, pC = rows.filter(r => !r.resolved && r.review !== 'error').length;
+    box.innerHTML = `<div style="margin-top:14px"><div style="font-size:11px;font-weight:800;color:var(--muted,#8a94a8);text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px">검증 처리 요약 · 완료 ${rC} · 오류 ${eC}${pC ? ' · 미해결 ' + pC : ''}</div>${items}</div>`;
+  }
 
   /* ---------- STEP B: 검증 ---------- */
   function runVerify(openWindow) {
     const res = PV.compareLedger(payrollResult, storeForEngine());
     verifyResult = res;
+    const vs = $('#verifySummary'); if (vs) vs.innerHTML = '';
     $('#verifyTiles').classList.remove('hidden');
     $('#tiOk').textContent = res.summary.ok; $('#tiBad').textContent = res.summary.bad;
     renderAlerts($('#verifyAlerts'), res.alerts);
@@ -376,6 +434,8 @@
   .search2 input{width:220px;font-family:inherit;font-size:12.5px;padding:8px 12px;border:1px solid var(--bd);border-radius:9px;background:var(--su2);color:var(--tx)}
   .top button{font-family:inherit;font-weight:700;font-size:12px;border:1px solid var(--bd);background:var(--su2);color:var(--tx2);border-radius:9px;padding:8px 14px;cursor:pointer}
   .top button:hover{border-color:var(--br);color:var(--br)}
+  .top button.btn-saveverify{background:var(--ok);border-color:var(--ok);color:#fff}
+  .top button.btn-saveverify:hover{opacity:.9;color:#fff;border-color:var(--ok)}
   .wrap{padding:16px 22px 70px}
   .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:13px}
   .chip{border:1px solid var(--bd);background:var(--su);color:var(--tx2);font-weight:750;font-size:12px;padding:7px 14px;border-radius:20px;cursor:pointer;font-family:inherit;display:flex;gap:7px;align-items:center;transition:all .15s}
@@ -434,6 +494,9 @@
   .rc-btn.ghost{background:transparent;color:var(--br)}.rc-btn:hover{opacity:.9}
   tr.rresolved td{background:color-mix(in srgb,var(--br) 12%,var(--su))!important;color:var(--tx)}
   tr.rresolved2 td{background:color-mix(in srgb,var(--ok) 14%,var(--su))!important;color:var(--tx)}
+  tr.rerror td{background:color-mix(in srgb,var(--warn) 16%,var(--su))!important;color:var(--tx)}
+  .derr{margin-top:8px;padding:9px 12px;border:1px dashed var(--warn);border-radius:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:color-mix(in srgb,var(--warn) 7%,transparent)}
+  .rc-btn.err{background:var(--warn);border-color:var(--warn);color:#fff}
   @media print{.top button,.chips,.search2,.drecalc{display:none}.tbl{max-height:none;overflow:visible}th{position:static}}
   `;
 
@@ -482,6 +545,7 @@
       dl(`검증상세전체_${D.ym || ''}.txt`, head + rs.map(r => repText(r.detail)).join('\n\n' + '-'.repeat(46) + '\n\n'));
     }
     { const eb = doc.getElementById('expAll'); if (eb) eb.onclick = exportAll; }
+    { const sv = doc.getElementById('saveVerify'); if (sv) sv.onclick = () => { try { if (window.opener && window.opener.__pvSaveVerify) window.opener.__pvSaveVerify(); if (window.opener && window.opener.focus) window.opener.focus(); } catch (_) {} window.close(); }; }
     function match(r) {
       if (st.chip && !r.flags[st.chip]) return false;
       if (st.q) { const s = st.q.toLowerCase(); if (!D.columns.some(c => norm(r.vals[c.key]).includes(s))) return false; }
@@ -543,6 +607,24 @@
       render();
     }
     function nf0(n) { return n == null ? '' : (+n).toLocaleString('ko-KR'); }
+    // 오류 확인: 대장 자체가 틀린 경우 담당자가 오류로 표기(검토완료 → 불일치 카운트 제외)
+    function markError(R, memo) {
+      R.review = 'error'; R.resolved = false; R.processedMode = null; R.cls = 'rerror'; R.errMemo = memo || '';
+      if (R.vals) R.vals.상태 = '오류확인';
+      const noteTags = (R.detail.notes || []).filter(n => !n.startsWith('불일치')).map(n => '<span class="tag ilhal">' + n + '</span>').join('');
+      R.tagsHtml = '<span class="pill" style="background:var(--warn);color:#fff">⚑ 오류확인' + (memo ? ': ' + memo : '') + '</span> ' + noteTags;
+      if (R.flags) { R.flags.bad = false; R.flags.error = true; }
+      try { if (window.opener && window.opener.__pvMarkError) window.opener.__pvMarkError(R.detail.사번, { memo: memo }); } catch (_) {}
+      render();
+    }
+    function unmarkError(R) {
+      R.review = null; R.errMemo = '';
+      R.cls = R._cls0 || ''; R.tagsHtml = R._tags0 || '';
+      if (R.vals) R.vals.상태 = (R._cls0 === 'rbad') ? '불일치' : '일치';
+      if (R.flags) { R.flags.error = false; R.flags.bad = (R._cls0 === 'rbad'); }
+      try { if (window.opener && window.opener.__pvUnmarkError) window.opener.__pvUnmarkError(R.detail.사번); } catch (_) {}
+      render();
+    }
     function openDetail(R) {
       const d = R.detail;
       const nf = n => n == null ? '' : (+n).toLocaleString('ko-KR');
@@ -601,14 +683,20 @@
         } else {
           recalcH = '<div class="drecalc"><span class="rc-info" style="color:var(--tx3)">💡 지급일 이후 변동 없음 — 재계산 불필요 (지급일 기준 = 월말 기준 동일)</span></div>';
         }
-        const headPill = R.resolved
-          ? ' <span class="pill" style="background:' + (R.processedMode === 'rear' ? 'var(--ok)' : 'var(--br)') + ';color:#fff">' + (R.processedMode === 'rear' ? '후단처리' : '당월적용') + ' 처리완료</span>'
-          : (R.cls === 'rbad' && R.processedMode ? ' <span class="pill bad">처리했으나 불일치</span>' : '');
+        // 오류 확인 박스: 대장 자체가 틀린 경우 담당자가 오류로 표기 (불일치 행에만 노출)
+        const errH = (R._cls0 === 'rbad' || R.review === 'error') ? ('<div class="derr">' + (R.review === 'error'
+          ? '<span class="pill" style="background:var(--warn);color:#fff">⚑ 오류확인됨' + (R.errMemo ? ': ' + R.errMemo : '') + '</span><button class="rc-btn ghost" data-a="unerror">오류 해제</button>'
+          : '<span style="font-size:11.5px;color:var(--tx2);flex:1;min-width:150px">🔎 계산은 맞고 <b>대장이 틀린</b> 경우 → 오류로 표기(검토완료 처리)</span><button class="rc-btn err" data-a="error">⚑ 오류 확인</button>') + '</div>') : '';
+        const headPill = R.review === 'error'
+          ? ' <span class="pill" style="background:var(--warn);color:#fff">오류확인</span>'
+          : R.resolved
+            ? ' <span class="pill" style="background:' + (R.processedMode === 'rear' ? 'var(--ok)' : 'var(--br)') + ';color:#fff">' + (R.processedMode === 'rear' ? '후단처리' : '당월적용') + ' 처리완료</span>'
+            : (R.cls === 'rbad' && R.processedMode ? ' <span class="pill bad">처리했으나 불일치</span>' : '');
         ov.innerHTML = '<div class="dcard"><div class="dhead"><b>' + d.사번 + ' ' + (d.성명 || '') + '</b> 계산 근거 (연봉 → 월급여 · 세전)' + headPill + '<span class="dexp" title="이 사람의 계산근거·백데이터를 파일로 저장">⬇ 내보내기</span><span class="dx">✕</span></div><div class="dbody">'
           + '<div class="dcontract">📄 적용 연봉계약 <b>' + (d.연봉일자 || '-') + '</b><br>' + 연봉H + '</div>'
           + segHd
           + '<div class="dsub">항목별 계산</div><table class="dt"><thead><tr><th class="l">항목</th><th class="l">계산식</th><th>계산</th><th>대장</th><th>차이</th></tr></thead><tbody>' + itemsHtml() + '</tbody></table>'
-          + extraHd + totHd + recalcH + balH + notesHd + '</div></div>';
+          + extraHd + totHd + recalcH + errH + balH + notesHd + '</div></div>';
         ov.querySelector('.dx').onclick = () => ov.remove();
         ov.querySelector('.dexp').onclick = e => { e.stopPropagation(); exportOne(d); };
         const rb = ov.querySelectorAll('.rc-btn'); rb.forEach(b => b.onclick = e => {
@@ -617,6 +705,8 @@
           else if (a === 'alt2') { view = 'alt2'; renderBody(); }
           else if (a === 'revert') { view = 'base'; renderBody(); }
           else if (a === 'apply') { const mode = view === 'alt2' ? 'rear' : 'front'; resolveRow(R, curAlt(), mode); renderBody(); }
+          else if (a === 'error') { const memo = (window.prompt('오류 내용 (대장 오류 사유 등, 선택):', R.errMemo || '') || '').trim(); markError(R, memo); renderBody(); }
+          else if (a === 'unerror') { unmarkError(R); renderBody(); }
         });
       }
       renderBody();
@@ -628,7 +718,8 @@
     render();
   }
 
-  function openSearchWin(title, meta, columns, rows, chips, sumHTML, ym) {
+  function openSearchWin(title, meta, columns, rows, chips, sumHTML, ym, opts) {
+    opts = opts || {};
     const w = window.open('', '_blank');
     if (!w) { toast('팝업이 차단되었습니다. 팝업 허용 후 다시 시도하세요.', 'bad'); return; }
     const head = '<tr>' + columns.map(c => `<th class="${c.align === 'l' ? 'l' : ''}" data-key="${c.key}">${esc(c.label)}<span class="ar"></span></th>`).join('') + '</tr>';
@@ -638,7 +729,8 @@
     const body = `<div class="top"><h1>${esc(title)}</h1><span class="m">${esc(meta)}</span><span class="cnt" id="cnt"></span><span class="sp"></span>
         <div class="search2"><input id="gs" placeholder="🔍 전체 검색 (부분일치)"></div>
         ${hasDetail ? '<button id="expAll" title="현재 목록 전원의 계산근거·백데이터를 텍스트 파일 1개로 저장">⬇ 상세 전체 내보내기</button>' : ''}
-        <button onclick="window.print()">인쇄 / PDF</button></div>`;
+        <button onclick="window.print()">인쇄 / PDF</button>
+        ${opts.saveVerify ? '<button id="saveVerify" class="btn-saveverify" title="처리·오류 내역을 저장하고 메인 화면으로 이동">💾 검증 저장</button>' : ''}</div>`;
     const bodyRest = `
       <div class="wrap">${sumHTML || ''}<div class="chips">${chipHTML}</div>
       <div class="tbl"><table><thead id="thead">${head}</thead><tbody id="tb"></tbody></table></div>
@@ -671,7 +763,7 @@
         if (c === '성과급' && t.minTopup > 0) f += ` + 최저보전 ${nf(t.minTopup)}`;
         if (c === '변동역량가급1' && t.is14) f += ' + 14명특례 500,000';
       } else if (c === '고정역량가급') f = `직책수당 ${t.dutyLabel || ''} ${nf(t.dutyFlat || 0)}` + (t.ilhal ? ' × 일할' : '');
-      else if (c === '감액') f = (t.uvac ? `무급휴가 ${t.uvac}일 −${nf(t.uvacDeduct)}` : '') + ((r.notes || []).some(n => n.includes('감봉')) ? ' + 감봉' : '');
+      else if (c === '감액') f = (t.uvac ? `무급휴가 ${t.uvac}일 −${nf(t.uvacDeduct)}` : '') + ((r.notes || []).filter(n => /감봉|결근|지각/.test(n)).map(n => ' + ' + n.split(' ')[0]).join(''));
       else f = '업로드/기타 항목';
       return { col: c, ours, led, formula: f };
     });
@@ -749,13 +841,15 @@
       const diffTags = (r.diffs || []).filter(d => d.col !== '—').map(d => `<span class="tag diff">${esc(d.col)} ${d.diff > 0 ? '+' : ''}${won(d.diff)}</span>`).join('');
       const minwage = (r.notes || []).some(n => n.includes('최저임금'));
       const noteTags = (r.notes || []).filter(n => !n.startsWith('불일치')).map(n => `<span class="tag ${n.includes('최저임금') || n.includes('일수 차이') ? 'warn' : n.startsWith('일할') ? 'ilhal' : 'sp'}">${esc(n)}</span>`).join('');
-      return { cls: r.status === 'bad' ? 'rbad' : '', vals: { no: i + 1, 사번: r.사번, 성명: r.성명, 소속: r.소속, ourTotal: r.ourTotal, ledTotal: r.ledTotal, diff, 상태: r.status === 'ok' ? '일치' : '불일치', 비고: ((r.diffs || []).map(d => d.col).join(' ') + ' ' + (r.notes || []).join(' ')) },
-        tagsHtml: (diffTags + noteTags) || (r.status === 'ok' ? '<span class="pill ok">일치</span>' : ''), flags: { bad: r.status === 'bad', ok: r.status === 'ok', warn: !!r.warn, minwage, dayshift: !!r.dayShift },
+      const cls0 = r.status === 'bad' ? 'rbad' : '';
+      const tags0 = (diffTags + noteTags) || (r.status === 'ok' ? '<span class="pill ok">일치</span>' : '');
+      return { cls: cls0, _cls0: cls0, _tags0: tags0, vals: { no: i + 1, 사번: r.사번, 성명: r.성명, 소속: r.소속, ourTotal: r.ourTotal, ledTotal: r.ledTotal, diff, 상태: r.status === 'ok' ? '일치' : '불일치', 비고: ((r.diffs || []).map(d => d.col).join(' ') + ' ' + (r.notes || []).join(' ')) },
+        tagsHtml: tags0, flags: { bad: r.status === 'bad', ok: r.status === 'ok', warn: !!r.warn, minwage, dayshift: !!r.dayShift, error: false },
         detail: buildDetail(r) };
     });
-    const chips = [{ k: 'all', label: '전체' }, { k: 'bad', label: '불일치', flag: 'bad' }, { k: 'ok', label: '일치', flag: 'ok' }, { k: 'warn', label: '점검', flag: 'warn' }, { k: 'minwage', label: '⚠최저보전', flag: 'minwage' }, { k: 'dayshift', label: '⚠익월권장', flag: 'dayshift' }];
+    const chips = [{ k: 'all', label: '전체' }, { k: 'bad', label: '불일치', flag: 'bad' }, { k: 'ok', label: '일치', flag: 'ok' }, { k: 'error', label: '⚑오류', flag: 'error' }, { k: 'warn', label: '점검', flag: 'warn' }, { k: 'minwage', label: '⚠최저보전', flag: 'minwage' }, { k: 'dayshift', label: '⚠익월권장', flag: 'dayshift' }];
     const sumHTML = `<div class="sum"><div class="sc"><div class="k">대상</div><div class="v">${res.summary.total}</div></div><div class="sc"><div class="k" style="color:var(--ok)">일치</div><div class="v" style="color:var(--ok)">${res.summary.ok}</div></div><div class="sc"><div class="k" style="color:var(--bad)">불일치</div><div class="v" style="color:var(--bad)">${res.summary.bad}</div></div></div>`;
-    openSearchWin(`검증결과 ${ym}`, `${ym} · 계산 vs 급여대장(세전)`, columns, rows, chips, sumHTML, ym);
+    openSearchWin(`검증결과 ${ym}`, `${ym} · 계산 vs 급여대장(세전)`, columns, rows, chips, sumHTML, ym, { saveVerify: true });
   }
 
   /* ================= 엑셀 export ================= */
