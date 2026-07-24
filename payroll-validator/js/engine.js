@@ -179,7 +179,10 @@ window.PV = window.PV || {};
   }
 
   // ---------- 월 세그먼트(일할) ----------
-  function buildSegments(ctx, sabun, y, m, cutoffISO, block) {
+  // absorb: 나머지(월 30일 압축분)를 어느 구간이 흡수하나.
+  //  'front'(기본) = 마지막 구간이 흡수(30−앞단, 뒷구간 일수↓) / 'rear' = 첫 구간이 흡수(30−뒷단, 앞구간 일수↓)
+  //  → 담당자가 상세팝업에서 '후단처리'로 뒷구간(복직·유급 등) 실제일수를 보장(근로자 유리)할 수 있음.
+  function buildSegments(ctx, sabun, y, m, cutoffISO, block, calMode, absorb) {
     const monthStart = iso(y, m, 1);
     const monthEndDay = dim(y, m);
     // 퇴직은 '발령시작일'(발령 시점)이 아니라 '퇴직일'(마지막 근무일) 기준. 퇴직일 다음날부터 퇴직상태.
@@ -265,11 +268,25 @@ window.PV = window.PV || {};
     });
     merged.sort((a, b) => a.startDay - b.startDay);
 
-    // 모든 달을 30일로 계산(만근=연봉/12, 일할=앞구간 실제일수·마지막=30−앞합, 일당 /30).
-    const n = merged.length, total = 30; let acc = 0;
-    for (let i = 0; i < n; i++) {
-      if (i < n - 1) { const span = merged[i + 1].startDay - merged[i].startDay; merged[i].days = span; acc += span; }
-      else { let last = total - acc; const paid = ['normal', 'sick', 'short'].includes(merged[i].payType); if (last <= 0) last = paid ? 1 : 0; merged[i].days = last; }
+    // 만근(구간1)=30일(연봉/12). 일할은 기본 30일 모델(당월), calMode(익월 소급)일 땐 실제 그 달 일수.
+    //  → 당월 처리 시 마지막구간=30−앞, 익월 처리(소급) 시 실제일수로 1일 더 인정(근로자 유리 협의).
+    const n = merged.length, total = (n === 1 || !calMode) ? 30 : monthEndDay;
+    const isPaid = pt => ['normal', 'sick', 'short'].includes(pt);
+    if (absorb === 'rear' && n > 1) {
+      // 뒷단(2번째~마지막 구간)은 실제일수 보장, 첫 구간이 나머지(30−뒷단)를 흡수.
+      let acc = 0;
+      for (let i = n - 1; i >= 1; i--) {
+        const span = (i < n - 1) ? (merged[i + 1].startDay - merged[i].startDay) : (monthEndDay + 1 - merged[i].startDay);
+        merged[i].days = span; acc += span;
+      }
+      let first = total - acc; if (first <= 0) first = isPaid(merged[0].payType) ? 1 : 0;
+      merged[0].days = first;
+    } else {
+      let acc = 0;
+      for (let i = 0; i < n; i++) {
+        if (i < n - 1) { const span = merged[i + 1].startDay - merged[i].startDay; merged[i].days = span; acc += span; }
+        else { let last = total - acc; if (last <= 0) last = isPaid(merged[i].payType) ? 1 : 0; merged[i].days = last; }
+      }
     }
     return { segments: merged, retired: false };
   }
@@ -285,7 +302,7 @@ window.PV = window.PV || {};
   }
 
   // ---------- 한 사람·한 달 base 계산 (cutoff: 'actual'|'pay') ----------
-  function computeBase(ctx, sabun, y, m, cutoff, block, exc, trace) {
+  function computeBase(ctx, sabun, y, m, cutoff, block, exc, trace, calMode, absorb) {
     const monthEnd = iso(y, m, dim(y, m));
     const cutoffISO = cutoff === 'pay' ? payday(y, m, ctx.holidays) : monthEnd;
     const roster = ctx.rosterBy.get(sabun);
@@ -298,7 +315,7 @@ window.PV = window.PV || {};
       }
     }
 
-    const seg = buildSegments(ctx, sabun, y, m, cutoffISO, block);
+    const seg = buildSegments(ctx, sabun, y, m, cutoffISO, block, calMode, absorb);
     if (seg.retired) return { retired: true };
 
     const pay = {}; LEDGER_ITEMS.forEach(k => pay[k] = 0);
@@ -380,7 +397,7 @@ window.PV = window.PV || {};
     for (let back = 12; back >= 1; back--) {
       const mm = addMonth(y, m, -back);
       const ap = computeBase(ctx, sabun, mm.y, mm.m, 'pay', [], null);
-      const ac = computeBase(ctx, sabun, mm.y, mm.m, 'actual', [], null);
+      const ac = computeBase(ctx, sabun, mm.y, mm.m, 'actual', [], null, null, true); // 소급=익월처리=실제일수
       if (ap.retired || ac.retired) continue;
       const paid = LEDGER_ITEMS.reduce((a, k) => a + (ap.pay[k] || 0), 0) > 0;
       if (paid) LEDGER_ITEMS.forEach(k => acc[k] = 0);
@@ -393,11 +410,11 @@ window.PV = window.PV || {};
   // ---------- 한 사람 종합 ----------
   // baseCutoff: 'pay'=지급일 기준(기본), 'actual'=월말 기준(지급일 이후분까지 당월 적용, 예외 재계산)
   // skipCarry: 예외 재계산(당월적용)은 이번달 실제 근무분만 — 전월 소급은 제외.
-  function computePerson(ctx, sabun, y, m, baseCutoff, skipCarry) {
+  function computePerson(ctx, sabun, y, m, baseCutoff, skipCarry, absorb) {
     const exc = [];
     const trace = { extras: [] };
     // 당월 지급액 = 지급일(as-paid) 기준. 지급일 이후 변동은 다음달 소급.
-    const base = computeBase(ctx, sabun, y, m, baseCutoff || 'pay', [], exc, trace);
+    const base = computeBase(ctx, sabun, y, m, baseCutoff || 'pay', [], exc, trace, false, absorb);
     if (base.retired) return { retired: true };
     const pay = Object.assign({}, base.pay);
     const notes = [];
@@ -473,13 +490,26 @@ window.PV = window.PV || {};
         (r.exc || []).forEach(e => allExc.push(e));
         const total = Math.round(Object.values(r.pay).reduce((a, b) => a + b, 0));
         // 예외 재계산값(월말 기준=지급일 이후분 당월 적용, 소급 제외). 항상 제공.
-        const rAlt = computePerson(ctx, id, y, m, 'actual', true);
+        //  · rAlt  = 당월적용(30−앞단, 기본) / rAlt2 = 후단처리(30−뒷단, 뒷구간 실제일수 보장)
+        const rAlt = computePerson(ctx, id, y, m, 'actual', true, 'front');
         const altTotal = rAlt.retired ? total : Math.round(Object.values(rAlt.pay).reduce((a, b) => a + b, 0));
         const hasAlt = !rAlt.retired && altTotal !== total;
+        const rAlt2 = computePerson(ctx, id, y, m, 'actual', true, 'rear');
+        const altTotal2 = rAlt2.retired ? total : Math.round(Object.values(rAlt2.pay).reduce((a, b) => a + b, 0));
+        const hasAlt2 = !rAlt2.retired && altTotal2 !== altTotal;
+        // 당월(30−앞단) vs 익월(실제일수) 처리 시 유급일수가 달라지는지 → 담당자에게 익월 처리 권장 경고.
+        //  지급일 이후 변동(소급 대상)이 있고, 30일모델 유급일수 ≠ 실제일수 유급일수일 때만.
+        const notes = (r.notes || []).slice();
+        const bReal = computeBase(ctx, id, y, m, 'actual', [], null, null, true);
+        const paid30 = rAlt.retired ? 0 : rAlt.paidUnits, paidReal = bReal.retired ? 0 : bReal.paidUnits;
+        const hasPostPayChange = !rAlt.retired && r.paidUnits !== rAlt.paidUnits;
+        const dayShift = hasPostPayChange && paid30 !== paidReal;
+        if (dayShift) notes.push(`⚠당월/익월 처리 일수 차이 ${Math.abs(paidReal - paid30)}일 — 익월 처리 권장 (근로자 유리)`);
         rows.push({
           사번: id, 성명: (roster && roster.성명) || sal.성명 || '', 소속: (roster && roster.소속) || sal.소속 || '',
-          pay: r.pay, notes: r.notes || [], warn: (r.exc || []).length > 0, trace: r.trace, total,
+          pay: r.pay, notes, warn: (r.exc || []).length > 0, trace: r.trace, total, dayShift,
           altPay: rAlt.retired ? null : rAlt.pay, altNotes: rAlt.retired ? null : (rAlt.notes || []), altTotal, hasAlt,
+          altPay2: rAlt2.retired ? null : rAlt2.pay, altNotes2: rAlt2.retired ? null : (rAlt2.notes || []), altTotal2, hasAlt2,
         });
       });
       rows.sort((a, b) => (a.소속 || '').localeCompare(b.소속 || '') || a.사번.localeCompare(b.사번));
@@ -492,6 +522,8 @@ window.PV = window.PV || {};
     if (retroP.length) alerts.push({ level: 'info', title: `소급정산 반영 ${retroP.length}명`, desc: retroP.map(r => r.성명 || r.사번).join(', ') });
     const ilhal = rows.filter(r => (r.notes || []).some(n => n.startsWith('일할'))).length;
     if (ilhal) alerts.push({ level: 'info', title: `일할계산 ${ilhal}명`, desc: '휴직·복직·단축 등으로 일할 적용된 인원' });
+    const shiftRows = rows.filter(r => r.dayShift);
+    if (shiftRows.length) alerts.push({ level: 'warn', title: `당월/익월 일수 차이 ${shiftRows.length}명`, desc: '당월(30−앞단)과 익월(실제일수) 처리 시 유급일수가 달라짐 → 익월 처리 권장(1일 근로자 유리): ' + shiftRows.map(r => r.성명 || r.사번).join(', ') });
     const seen = new Set();
     allExc.forEach(e => { const k = e.사번 + e.title; if (seen.has(k)) return; seen.add(k); alerts.push({ level: e.type || 'warn', title: `${e.title} — ${e.사번} ${e.성명 || ''}`, desc: e.desc, 사번: e.사번, 성명: e.성명, kind: e.kind }); });
 
@@ -523,14 +555,17 @@ window.PV = window.PV || {};
       status === 'ok' ? okCnt++ : badCnt++;
       const notes = (r.notes || []).slice();
       if (diffs.length) notes.unshift('불일치: ' + diffs.map(d => d.col).join(', '));
-      // 예외 재계산(당월적용) 값 vs 대장 — 재계산 버튼용 (항상 제공)
-      let alt = null;
-      if (r.altPay) {
-        const aCols = new Set(PV.LEDGER_ITEMS); Object.keys(r.altPay).forEach(k => { if (r.altPay[k] !== 0) aCols.add(k); });
-        const aDiffs = []; aCols.forEach(col => { const ours = Math.round(r.altPay[col] || 0), led = Math.round((L.pay && L.pay[col]) || 0); if (ours !== led) aDiffs.push({ col, ours, led, diff: ours - led }); });
-        alt = { pay: r.altPay, total: r.altTotal, diffs: aDiffs, notes: r.altNotes || [], status: aDiffs.length ? 'bad' : 'ok' };
-      }
-      rows.push({ 사번: L.사번, 성명: L.성명 || r.성명, 소속: L.소속 || r.소속, status, diffs, ours: r.pay, led: L.pay || {}, notes, warn: r.warn, trace: r.trace, ourTotal: r.total, ledTotal: Math.round(L.총지급액 || 0), alt });
+      // 예외 재계산 값 vs 대장 — 재계산 버튼용 (항상 제공)
+      //  alt = 당월적용(30−앞단) / alt2 = 후단처리(30−뒷단)
+      const altOf = (payK, totK) => {
+        if (!r[payK]) return null;
+        const aCols = new Set(PV.LEDGER_ITEMS); Object.keys(r[payK]).forEach(k => { if (r[payK][k] !== 0) aCols.add(k); });
+        const aDiffs = []; aCols.forEach(col => { const ours = Math.round(r[payK][col] || 0), led = Math.round((L.pay && L.pay[col]) || 0); if (ours !== led) aDiffs.push({ col, ours, led, diff: ours - led }); });
+        return { pay: r[payK], total: r[totK], diffs: aDiffs, status: aDiffs.length ? 'bad' : 'ok' };
+      };
+      let alt = altOf('altPay', 'altTotal'); if (alt) { alt.notes = r.altNotes || []; }
+      let alt2 = altOf('altPay2', 'altTotal2'); if (alt2) { alt2.notes = r.altNotes2 || []; }
+      rows.push({ 사번: L.사번, 성명: L.성명 || r.성명, 소속: L.소속 || r.소속, status, diffs, ours: r.pay, led: L.pay || {}, notes, warn: r.warn, trace: r.trace, ourTotal: r.total, ledTotal: Math.round(L.총지급액 || 0), alt, alt2, dayShift: !!r.dayShift });
     });
 
     rows.sort((a, b) => (a.status === b.status ? 0 : a.status === 'bad' ? -1 : 1));
