@@ -22,6 +22,13 @@ window.PV = window.PV || {};
   const ceilU = x => (Math.ceil((x - 1e-6) / 10) * 10) || 0;  // 십원 절상(급여)
   const floorU = x => (Math.floor((x + 1e-6) / 10) * 10) || 0; // 십원 절하(감액)
 
+  // 최저임금: 연도별 최저시급 → 최저연봉 = 시급×12×(209+10*365/12/7*1.5), 천원 절상.
+  // (최저임금은 1.1자 인상, 연봉계약은 4월이라 1~3월 등에서 최저 미달 가능 → 부족분을 성과급에 강제보전)
+  const MIN_HOURLY = { 2023: 9620, 2024: 9860, 2025: 10030, 2026: 10320 };
+  const MIN_ANNUAL_FACTOR = 209 + 10 * 365 / 12 / 7 * 1.5; // = 274.17857...
+  function minAnnual(year) { const h = MIN_HOURLY[year]; return h ? Math.ceil(h * 12 * MIN_ANNUAL_FACTOR / 1000) * 1000 : 0; }
+  PV.minAnnual = minAnnual;
+
   // 성과가급 = 분기 지급(1·4·7·10월). 월 성과가급(연액÷12 십원절상)의 3개월분(×3)을 지급.
   // (연액÷4를 한 번에 절상하는 게 아니라 월단위 절상 후 3배 → 대장 방식)
   const QUARTER_MONTHS = new Set([1, 4, 7, 10]);
@@ -318,6 +325,18 @@ window.PV = window.PV || {};
     const applied14 = is14(ctx, sabun, monthEnd);
     if (applied14) real['변동역량가급1'] += 500000 / 30 * paidUnits;
 
+    // 최저임금 보전: 연봉(고정역량가급 제외)이 최저연봉 미만이면 부족분/12를 성과급에 강제 추가.
+    //  육아기단축근무는 최저연봉 × (주간근로시간/40)로 비례 하향(예: 단축35=7/8, 단축15=3/8).
+    let minShortHrs = 0;
+    seg.segments.forEach(s => { if (s.payType === 'short') { const mt = (s.gubun || '').match(/(\d{2})\s*$/); if (mt) minShortHrs = +mt[1]; } });
+    const minStd = minAnnual(y) * (minShortHrs ? minShortHrs / 40 : 1);
+    let minTopup = 0, minAnnualCmp = 0;
+    if (minStd > 0) {
+      const ec = effContract(ctx, sabun, monthEnd);
+      if (ec) for (const srcK of Object.keys(ITEMMAP)) minAnnualCmp += (ec.items[srcK] || 0); // 고정역량가급 제외(연봉내역엔 없음)
+      if (minAnnualCmp > 0 && minAnnualCmp < minStd) { minTopup = (minStd - minAnnualCmp) / 12; real['성과급'] += minTopup / 30 * paidUnits; }
+    }
+
     LEDGER_ITEMS.forEach(k => pay[k] = ceilU(real[k]));
 
     // 무급휴가 공제: 감액 항목에 총액 마이너스(절하)
@@ -345,12 +364,13 @@ window.PV = window.PV || {};
       trace.ilhal = seg.segments.length > 1 || (seg.segments[0] && seg.segments[0].payType !== 'normal');
       trace.dutyLabel = dutyBase ? (roster && roster.직책 || '') : (dutyExt ? '본점 예외' : '');
       trace.dutyFlat = flat; trace.is14 = applied14; trace.uvac = uvac; trace.uvacDeduct = uvacDeduct; trace.peakApplied = peakApplied;
+      trace.minTopup = minTopup; trace.minStd = minStd; trace.minAnnualCmp = minAnnualCmp; trace.minShortHrs = minShortHrs;
       trace.발령 = (ctx.ordersBy.get(sabun) || []).map(o => ({ 구분: o.발령구분, 시작일: o.발령시작일, 퇴직일: o.퇴직일 || '' }));
       trace.휴가 = (ctx.vacBy.get(sabun) || []).map(v => ({ 종류: v.휴가종류, 시작일: v.시작일, 종료일: v.종료일, 일수: v.휴가일수 }));
       const _mu = maternityUnpaid(ctx, sabun);
       trace.matUnpaid = _mu ? { start: _mu.start, end: _mu.end } : null; // 출산/유사산 무급 구간
     }
-    return { retired: false, pay, real, paidUnits, is14: applied14, segments: seg.segments, uvac, peakApplied };
+    return { retired: false, pay, real, paidUnits, is14: applied14, segments: seg.segments, uvac, peakApplied, minTopup, minStd, minAnnualCmp, minShortHrs };
   }
 
   // 누적 소급: 전월 이전의 (실제−기지급) 차액을 급여 나오는 달에 정산.
@@ -428,6 +448,7 @@ window.PV = window.PV || {};
     if (segNote) notes.unshift('일할 · ' + base.segments.map(s => `${s.gubun || PT_LABEL[s.payType]} ${s.days}일`).join(' → '));
     if (base.uvac > 0) notes.push(`전월 무급휴가 ${base.uvac}일 공제`);
     if (base.peakApplied) notes.push('임금피크 해당월');
+    if (base.minTopup > 0) { notes.push(`⚠최저임금 보전 (연봉 ${base.minAnnualCmp.toLocaleString()} < 최저 ${Math.round(base.minStd).toLocaleString()}${base.minShortHrs ? ' ·단축' + base.minShortHrs : ''}, 성과급+월 ${Math.round(base.minTopup).toLocaleString()})`); }
     trace.finalPay = Object.assign({}, pay);
 
     return { retired: false, pay, notes, exc, paidUnits: base.paidUnits, segments: base.segments, trace };

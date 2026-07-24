@@ -632,6 +632,7 @@
         if (c === '성과가급') f = t.quarterMonth ? `(${nf(ann)} ÷ 12 절상) × 3 (분기)` : '분기 비지급월';
         else f = `${nf(ann)} ÷ 12`;
         if (t.ilhal && c !== '성과가급') f += ' × 일할';
+        if (c === '성과급' && t.minTopup > 0) f += ` + 최저보전 ${nf(t.minTopup)}`;
         if (c === '변동역량가급1' && t.is14) f += ' + 14명특례 500,000';
       } else if (c === '고정역량가급') f = `직책수당 ${t.dutyLabel || ''} ${nf(t.dutyFlat || 0)}` + (t.ilhal ? ' × 일할' : '');
       else if (c === '감액') f = (t.uvac ? `무급휴가 ${t.uvac}일 −${nf(t.uvacDeduct)}` : '') + ((r.notes || []).some(n => n.includes('감봉')) ? ' + 감봉' : '');
@@ -709,12 +710,13 @@
     const rows = res.rows.map((r, i) => {
       const diff = r.ourTotal - r.ledTotal;
       const diffTags = (r.diffs || []).filter(d => d.col !== '—').map(d => `<span class="tag diff">${esc(d.col)} ${d.diff > 0 ? '+' : ''}${won(d.diff)}</span>`).join('');
-      const noteTags = (r.notes || []).filter(n => !n.startsWith('불일치')).map(n => `<span class="tag ${n.startsWith('일할') ? 'ilhal' : 'sp'}">${esc(n)}</span>`).join('');
+      const minwage = (r.notes || []).some(n => n.includes('최저임금'));
+      const noteTags = (r.notes || []).filter(n => !n.startsWith('불일치')).map(n => `<span class="tag ${n.includes('최저임금') ? 'warn' : n.startsWith('일할') ? 'ilhal' : 'sp'}">${esc(n)}</span>`).join('');
       return { cls: r.status === 'bad' ? 'rbad' : '', vals: { no: i + 1, 사번: r.사번, 성명: r.성명, 소속: r.소속, ourTotal: r.ourTotal, ledTotal: r.ledTotal, diff, 상태: r.status === 'ok' ? '일치' : '불일치', 비고: ((r.diffs || []).map(d => d.col).join(' ') + ' ' + (r.notes || []).join(' ')) },
-        tagsHtml: (diffTags + noteTags) || (r.status === 'ok' ? '<span class="pill ok">일치</span>' : ''), flags: { bad: r.status === 'bad', ok: r.status === 'ok', warn: !!r.warn },
+        tagsHtml: (diffTags + noteTags) || (r.status === 'ok' ? '<span class="pill ok">일치</span>' : ''), flags: { bad: r.status === 'bad', ok: r.status === 'ok', warn: !!r.warn, minwage },
         detail: buildDetail(r) };
     });
-    const chips = [{ k: 'all', label: '전체' }, { k: 'bad', label: '불일치', flag: 'bad' }, { k: 'ok', label: '일치', flag: 'ok' }, { k: 'warn', label: '점검', flag: 'warn' }];
+    const chips = [{ k: 'all', label: '전체' }, { k: 'bad', label: '불일치', flag: 'bad' }, { k: 'ok', label: '일치', flag: 'ok' }, { k: 'warn', label: '점검', flag: 'warn' }, { k: 'minwage', label: '⚠최저보전', flag: 'minwage' }];
     const sumHTML = `<div class="sum"><div class="sc"><div class="k">대상</div><div class="v">${res.summary.total}</div></div><div class="sc"><div class="k" style="color:var(--ok)">일치</div><div class="v" style="color:var(--ok)">${res.summary.ok}</div></div><div class="sc"><div class="k" style="color:var(--bad)">불일치</div><div class="v" style="color:var(--bad)">${res.summary.bad}</div></div></div>`;
     openSearchWin(`검증결과 ${ym}`, `${ym} · 계산 vs 급여대장(세전)`, columns, rows, chips, sumHTML, ym);
   }
