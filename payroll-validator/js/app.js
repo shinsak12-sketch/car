@@ -331,11 +331,23 @@
     row.notes = ['오류확인' + (memo ? ': ' + memo : '')].concat(keep);
     refreshVerifyTiles();
   };
+  // 팝업 '정상처리'에서 호출 — 대장 정상·계산이 수기입력 누락으로 다른 건을 정상(검토완료)으로 인정
+  window.__pvNormalize = function (사번, memo) {
+    if (!verifyResult) return;
+    const row = verifyResult.rows.find(r => r.사번 === 사번);
+    if (!row) return;
+    row.review = 'normal'; row.resolved = true; row.normMemo = memo || '';
+    const keep = (row.notes || []).filter(n => !n.startsWith('불일치') && !n.startsWith('오류확인') && !n.startsWith('정상처리') && !/처리(완료|\(대장 불일치\))$/.test(n));
+    row.status = 'ok'; row.notes = ['정상처리' + (memo ? ': ' + memo : '')].concat(keep);
+    refreshVerifyTiles();
+  };
   window.__pvUnmarkError = function (사번) {
     if (!verifyResult) return;
     const row = verifyResult.rows.find(r => r.사번 === 사번);
     if (!row) return;
-    row.review = null; row.errMemo = ''; row.notes = (row.notes || []).filter(n => !n.startsWith('오류확인'));
+    row.review = null; row.resolved = false; row.errMemo = ''; row.normMemo = '';
+    row.status = (row.diffs && row.diffs.length) ? 'bad' : 'ok';
+    row.notes = (row.notes || []).filter(n => !n.startsWith('오류확인') && !n.startsWith('정상처리'));
     refreshVerifyTiles();
   };
   // 검증 요약 재계산 + 타일/저장버튼 갱신 (일치=ok, 불일치=미검토 mismatch, 오류=검토완료)
@@ -359,14 +371,16 @@
     const rows = (verifyResult ? verifyResult.rows : []).filter(r => r.review === 'error' || r.processedMode || r.resolved);
     if (!rows.length) { box.innerHTML = '<div class="vsum-empty" style="margin-top:12px;font-size:12px;color:var(--muted,#8a94a8)">처리·오류 건이 없습니다.</div>'; return; }
     const won2 = n => (n == null ? '' : Math.round(n).toLocaleString('ko-KR'));
-    const meta = { error: { c: 'var(--bad)', t: '오류' }, resolvedFront: { c: 'var(--br,#4f6bff)', t: '당월적용' }, resolvedRear: { c: 'var(--ok)', t: '후단처리' }, processed: { c: 'var(--bad)', t: '처리(불일치)' } };
-    const kindOf = r => r.review === 'error' ? 'error' : (r.resolved ? (r.processedMode === 'rear' ? 'resolvedRear' : 'resolvedFront') : 'processed');
+    const meta = { error: { c: 'var(--bad)', t: '오류' }, normal: { c: 'var(--ok)', t: '정상처리' }, resolvedFront: { c: 'var(--br,#4f6bff)', t: '당월적용' }, resolvedRear: { c: 'var(--ok)', t: '후단처리' }, processed: { c: 'var(--bad)', t: '처리(불일치)' } };
+    const kindOf = r => r.review === 'error' ? 'error' : r.review === 'normal' ? 'normal' : (r.resolved ? (r.processedMode === 'rear' ? 'resolvedRear' : 'resolvedFront') : 'processed');
     const items = rows.map(r => {
       const k = kindOf(r), m = meta[k];
       const diff = r.ourTotal - r.ledTotal;
       const detail = k === 'error'
         ? '대장 오류' + (r.errMemo ? ' — ' + esc(r.errMemo) : '') + ((r.diffs || []).length ? ' (' + (r.diffs || []).map(d => d.col).join(', ') + ')' : '')
-        : (r.resolved ? '대장과 일치 처리' : '처리 후에도 차이 ' + (diff > 0 ? '+' : '') + won2(diff));
+        : k === 'normal'
+          ? '정상 인정' + (r.normMemo ? ' — ' + esc(r.normMemo) : '') + ((r.diffs || []).length ? ' (' + (r.diffs || []).map(d => d.col).join(', ') + ')' : '')
+          : (r.resolved ? '대장과 일치 처리' : '처리 후에도 차이 ' + (diff > 0 ? '+' : '') + won2(diff));
       return `<div class="vsum-it" style="display:flex;gap:8px;align-items:flex-start;padding:7px 9px;border:1px solid var(--line,#e2e8f2);border-radius:8px;margin-bottom:6px;background:var(--card,#fff)">
         <span style="flex:0 0 auto;font-size:10px;font-weight:800;color:#fff;background:${m.c};border-radius:20px;padding:2px 8px;margin-top:1px">${m.t}</span>
         <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12.5px">${esc(r.사번)} ${esc(r.성명 || '')} <span style="color:var(--muted,#8a94a8);font-weight:500">${esc(r.소속 || '')}</span></div>
@@ -455,10 +469,16 @@
   tbody tr:hover{background:var(--su2)}
   .rbad{background:var(--bads)}.rbad:hover{background:var(--bads)}
   .tot{font-weight:800}
-  .note{color:var(--tx2);font-size:11px;text-align:left;white-space:normal;min-width:220px;max-width:360px;line-height:1.5}
-  .tag{display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:800;margin:1px 2px 1px 0}
-  .tag.ilhal{background:var(--warns);color:var(--warn)}.tag.sp{background:#eef;color:var(--br)}
-  .tag.warn{background:var(--warns);color:var(--warn)}.tag.diff{background:var(--bads);color:var(--bad)}
+  .note{color:var(--tx2);font-size:11px;text-align:left;white-space:normal;min-width:240px;max-width:400px;line-height:1.5}
+  .vgrp{display:flex;flex-direction:column;gap:5px}
+  .vg{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+  .vg-d{padding-bottom:1px}
+  .tag{display:inline-flex;align-items:center;padding:3px 9px;border-radius:7px;font-size:10.5px;font-weight:700;margin:0;line-height:1.3;font-variant-numeric:tabular-nums;border:1px solid transparent}
+  .tag.ilhal{background:var(--warns);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 25%,transparent)}
+  .tag.sp{background:color-mix(in srgb,var(--br) 10%,transparent);color:var(--br);border-color:color-mix(in srgb,var(--br) 22%,transparent)}
+  .tag.warn{background:var(--warns);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 30%,transparent)}
+  .tag.diff{background:var(--bads);color:var(--bad);font-weight:800;border-color:color-mix(in srgb,var(--bad) 25%,transparent)}
+  .tag.diff b{font-weight:850;margin-right:4px}
   .pill{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:800}.pill.ok{background:var(--oks);color:var(--ok)}.pill.bad{background:var(--bads);color:var(--bad)}
   .dpos{color:var(--bad);font-weight:800}.dneg{color:var(--info);font-weight:800}
   .ctx{position:fixed;z-index:60;background:var(--su);border:1px solid var(--bd);border-radius:10px;box-shadow:0 14px 34px rgba(0,0,0,.28);padding:6px;min-width:200px}
@@ -495,7 +515,9 @@
   tr.rresolved td{background:color-mix(in srgb,var(--br) 12%,var(--su))!important;color:var(--tx)}
   tr.rresolved2 td{background:color-mix(in srgb,var(--ok) 14%,var(--su))!important;color:var(--tx)}
   tr.rerror td{background:color-mix(in srgb,var(--warn) 16%,var(--su))!important;color:var(--tx)}
+  tr.rnormal td{background:color-mix(in srgb,var(--ok) 12%,var(--su))!important;color:var(--tx)}
   .derr{margin-top:8px;padding:9px 12px;border:1px dashed var(--warn);border-radius:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:color-mix(in srgb,var(--warn) 7%,transparent)}
+  .dnorm{margin-top:8px;padding:9px 12px;border:1px dashed var(--ok);border-radius:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:color-mix(in srgb,var(--ok) 7%,transparent)}
   .rc-btn.err{background:var(--warn);border-color:var(--warn);color:#fff}
   @media print{.top button,.chips,.search2,.drecalc{display:none}.tbl{max-height:none;overflow:visible}th{position:static}}
   `;
@@ -617,11 +639,22 @@
       try { if (window.opener && window.opener.__pvMarkError) window.opener.__pvMarkError(R.detail.사번, { memo: memo }); } catch (_) {}
       render();
     }
+    // 정상처리: 대장이 맞고 우리 계산이 근태·징계 등 수기입력 누락으로 다른 경우 → 정상(검토완료)으로 인정.
+    //  앞단에 다시 입력하고 재검증(초기화)할 필요 없이 이 건만 정상 처리.
+    function markNormal(R, memo) {
+      R.review = 'normal'; R.resolved = true; R.processedMode = null; R.cls = 'rnormal'; R.normMemo = memo || '';
+      if (R.vals) R.vals.상태 = '정상처리';
+      const noteTags = (R.detail.notes || []).filter(n => !n.startsWith('불일치')).map(n => '<span class="tag ilhal">' + n + '</span>').join('');
+      R.tagsHtml = '<span class="pill" style="background:var(--ok);color:#fff">✔ 정상처리' + (memo ? ': ' + memo : '') + '</span> ' + noteTags;
+      if (R.flags) { R.flags.bad = false; R.flags.ok = true; R.flags.error = false; }
+      try { if (window.opener && window.opener.__pvNormalize) window.opener.__pvNormalize(R.detail.사번, memo); } catch (_) {}
+      render();
+    }
     function unmarkError(R) {
-      R.review = null; R.errMemo = '';
+      R.review = null; R.errMemo = ''; R.normMemo = '';
       R.cls = R._cls0 || ''; R.tagsHtml = R._tags0 || '';
       if (R.vals) R.vals.상태 = (R._cls0 === 'rbad') ? '불일치' : '일치';
-      if (R.flags) { R.flags.error = false; R.flags.bad = (R._cls0 === 'rbad'); }
+      if (R.flags) { R.flags.error = false; R.flags.bad = (R._cls0 === 'rbad'); R.flags.ok = (R._cls0 !== 'rbad'); }
       try { if (window.opener && window.opener.__pvUnmarkError) window.opener.__pvUnmarkError(R.detail.사번); } catch (_) {}
       render();
     }
@@ -683,20 +716,27 @@
         } else {
           recalcH = '<div class="drecalc"><span class="rc-info" style="color:var(--tx3)">💡 지급일 이후 변동 없음 — 재계산 불필요 (지급일 기준 = 월말 기준 동일)</span></div>';
         }
+        const reviewable = R._cls0 === 'rbad' || R.review;
+        // 정상처리 박스: 대장이 맞고 우리 계산이 근태·징계 등 수기입력 누락으로 다른 경우 (불일치 행에만 노출)
+        const normH = reviewable ? ('<div class="dnorm">' + (R.review === 'normal'
+          ? '<span class="pill" style="background:var(--ok);color:#fff">✔ 정상처리됨' + (R.normMemo ? ': ' + R.normMemo : '') + '</span><button class="rc-btn ghost" data-a="unnormal">해제</button>'
+          : '<span style="font-size:11.5px;color:var(--tx2);flex:1;min-width:150px">✅ 대장이 맞고 계산이 <b>근태·징계 등 수기입력 누락</b>으로 다른 경우 → 정상처리(앞단 재입력·재검증 불필요)</span><button class="rc-btn" style="background:var(--ok);border-color:var(--ok)" data-a="normal">✔ 정상처리</button>') + '</div>') : '';
         // 오류 확인 박스: 대장 자체가 틀린 경우 담당자가 오류로 표기 (불일치 행에만 노출)
-        const errH = (R._cls0 === 'rbad' || R.review === 'error') ? ('<div class="derr">' + (R.review === 'error'
+        const errH = reviewable ? ('<div class="derr">' + (R.review === 'error'
           ? '<span class="pill" style="background:var(--warn);color:#fff">⚑ 오류확인됨' + (R.errMemo ? ': ' + R.errMemo : '') + '</span><button class="rc-btn ghost" data-a="unerror">오류 해제</button>'
           : '<span style="font-size:11.5px;color:var(--tx2);flex:1;min-width:150px">🔎 계산은 맞고 <b>대장이 틀린</b> 경우 → 오류로 표기(검토완료 처리)</span><button class="rc-btn err" data-a="error">⚑ 오류 확인</button>') + '</div>') : '';
         const headPill = R.review === 'error'
           ? ' <span class="pill" style="background:var(--warn);color:#fff">오류확인</span>'
-          : R.resolved
-            ? ' <span class="pill" style="background:' + (R.processedMode === 'rear' ? 'var(--ok)' : 'var(--br)') + ';color:#fff">' + (R.processedMode === 'rear' ? '후단처리' : '당월적용') + ' 처리완료</span>'
-            : (R.cls === 'rbad' && R.processedMode ? ' <span class="pill bad">처리했으나 불일치</span>' : '');
+          : R.review === 'normal'
+            ? ' <span class="pill" style="background:var(--ok);color:#fff">정상처리</span>'
+            : R.resolved
+              ? ' <span class="pill" style="background:' + (R.processedMode === 'rear' ? 'var(--ok)' : 'var(--br)') + ';color:#fff">' + (R.processedMode === 'rear' ? '후단처리' : '당월적용') + ' 처리완료</span>'
+              : (R.cls === 'rbad' && R.processedMode ? ' <span class="pill bad">처리했으나 불일치</span>' : '');
         ov.innerHTML = '<div class="dcard"><div class="dhead"><b>' + d.사번 + ' ' + (d.성명 || '') + '</b> 계산 근거 (연봉 → 월급여 · 세전)' + headPill + '<span class="dexp" title="이 사람의 계산근거·백데이터를 파일로 저장">⬇ 내보내기</span><span class="dx">✕</span></div><div class="dbody">'
           + '<div class="dcontract">📄 적용 연봉계약 <b>' + (d.연봉일자 || '-') + '</b><br>' + 연봉H + '</div>'
           + segHd
           + '<div class="dsub">항목별 계산</div><table class="dt"><thead><tr><th class="l">항목</th><th class="l">계산식</th><th>계산</th><th>대장</th><th>차이</th></tr></thead><tbody>' + itemsHtml() + '</tbody></table>'
-          + extraHd + totHd + recalcH + errH + balH + notesHd + '</div></div>';
+          + extraHd + totHd + recalcH + normH + errH + balH + notesHd + '</div></div>';
         ov.querySelector('.dx').onclick = () => ov.remove();
         ov.querySelector('.dexp').onclick = e => { e.stopPropagation(); exportOne(d); };
         const rb = ov.querySelectorAll('.rc-btn'); rb.forEach(b => b.onclick = e => {
@@ -707,6 +747,8 @@
           else if (a === 'apply') { const mode = view === 'alt2' ? 'rear' : 'front'; resolveRow(R, curAlt(), mode); renderBody(); }
           else if (a === 'error') { const memo = (window.prompt('오류 내용 (대장 오류 사유 등, 선택):', R.errMemo || '') || '').trim(); markError(R, memo); renderBody(); }
           else if (a === 'unerror') { unmarkError(R); renderBody(); }
+          else if (a === 'normal') { const memo = (window.prompt('정상처리 사유 (예: 결근 3일 수기누락, 대장 정상 — 선택):', R.normMemo || '') || '').trim(); markNormal(R, memo); renderBody(); }
+          else if (a === 'unnormal') { unmarkError(R); renderBody(); }
         });
       }
       renderBody();
@@ -838,11 +880,13 @@
       { key: '상태', label: '상태', align: 'l' }, { key: '비고', label: '비고 (특이/불일치)', align: 'l', kind: 'tags' }];
     const rows = res.rows.map((r, i) => {
       const diff = r.ourTotal - r.ledTotal;
-      const diffTags = (r.diffs || []).filter(d => d.col !== '—').map(d => `<span class="tag diff">${esc(d.col)} ${d.diff > 0 ? '+' : ''}${won(d.diff)}</span>`).join('');
+      const diffTags = (r.diffs || []).filter(d => d.col !== '—').map(d => `<span class="tag diff"><b>${esc(d.col)}</b>${d.diff > 0 ? '+' : ''}${won(d.diff)}</span>`).join('');
       const minwage = (r.notes || []).some(n => n.includes('최저임금'));
       const noteTags = (r.notes || []).filter(n => !n.startsWith('불일치')).map(n => `<span class="tag ${n.includes('최저임금') || n.includes('일수 차이') ? 'warn' : n.startsWith('일할') ? 'ilhal' : 'sp'}">${esc(n)}</span>`).join('');
       const cls0 = r.status === 'bad' ? 'rbad' : '';
-      const tags0 = (diffTags + noteTags) || (r.status === 'ok' ? '<span class="pill ok">일치</span>' : '');
+      const tags0 = (diffTags || noteTags)
+        ? `<div class="vgrp">${diffTags ? '<div class="vg vg-d">' + diffTags + '</div>' : ''}${noteTags ? '<div class="vg vg-n">' + noteTags + '</div>' : ''}</div>`
+        : (r.status === 'ok' ? '<span class="pill ok">일치</span>' : '');
       return { cls: cls0, _cls0: cls0, _tags0: tags0, vals: { no: i + 1, 사번: r.사번, 성명: r.성명, 소속: r.소속, ourTotal: r.ourTotal, ledTotal: r.ledTotal, diff, 상태: r.status === 'ok' ? '일치' : '불일치', 비고: ((r.diffs || []).map(d => d.col).join(' ') + ' ' + (r.notes || []).join(' ')) },
         tagsHtml: tags0, flags: { bad: r.status === 'bad', ok: r.status === 'ok', warn: !!r.warn, minwage, dayshift: !!r.dayShift, error: false },
         detail: buildDetail(r) };

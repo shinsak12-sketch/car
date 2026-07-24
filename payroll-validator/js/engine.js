@@ -343,15 +343,31 @@ window.PV = window.PV || {};
     if (applied14) real['변동역량가급1'] += 500000 / 30 * paidUnits;
 
     // 최저임금 보전: 연봉(고정역량가급 제외)이 최저연봉 미만이면 부족분/12를 성과급에 강제 추가.
-    //  육아기단축근무는 최저연봉 × (주간근로시간/40)로 비례 하향(예: 단축35=7/8, 단축15=3/8).
-    let minShortHrs = 0;
-    seg.segments.forEach(s => { if (s.payType === 'short') { const mt = (s.gubun || '').match(/(\d{2})\s*$/); if (mt) minShortHrs = +mt[1]; } });
-    const minStd = minAnnual(y) * (minShortHrs ? minShortHrs / 40 : 1);
+    //  육아기단축근무자는 연봉 자체가 시간비례로 낮으므로, 최저기준도 최저연봉 × (주간근로시간/40)로 비례 하향해야 함.
+    //  (예: 단축35=35/40, 단축15=15/40). 단축시간(NN)은 ①현재 short 세그먼트 gubun, ②이력상 활성 육아기단축근로NN 발령에서 추출.
+    //  단축근무자인데 NN을 확정 못하면(발령 데이터에 시간 누락) 풀타임 최저와 비교하면 과다보전이 되므로 보전을 생략(확인필요).
+    const ymStr = `${y}-${String(m).padStart(2, '0')}`;
+    const allOrders = ctx.ordersBy.get(sabun) || [];
+    let minShortHrs = 0, isShortWorker = false;
+    const grabNN = g => { const mt = (g || '').match(/(\d{2})\s*$/); return mt ? +mt[1] : 0; };
+    seg.segments.forEach(s => { if (s.payType === 'short') { isShortWorker = true; const nn = grabNN(s.gubun); if (nn) minShortHrs = nn; } });
+    // 이력: 최신 육아기단축근로NN 시작 / 그 이후의 완전복귀(복직·단축근로종료)
+    let shortStart = null, shortEnd = null;
+    allOrders.forEach(o => {
+      const g = o.발령구분 || '', dt = o.발령시작일 || '';
+      if (!dt || cmp(dt, monthEnd) > 0) return;
+      if (/단축/.test(g) && !/종료/.test(g)) { if (!shortStart || dt > shortStart.발령시작일) shortStart = o; }
+      if (/복직/.test(g) || (/단축/.test(g) && /종료/.test(g))) { if (!shortEnd || dt > shortEnd.발령시작일) shortEnd = o; }
+    });
+    if (shortStart && (!shortEnd || cmp(shortEnd.발령시작일, shortStart.발령시작일) <= 0)) { isShortWorker = true; if (!minShortHrs) minShortHrs = grabNN(shortStart.발령구분); }
+    if (shortEnd && /단축/.test(shortEnd.발령구분 || '') && (shortEnd.발령시작일 || '').slice(0, 7) === ymStr) isShortWorker = true; // 이번달 단축종료 → 이번달은 단축근무자
+    const minShortUnknown = isShortWorker && !minShortHrs;
+    const minStd = minShortUnknown ? 0 : minAnnual(y) * (minShortHrs ? minShortHrs / 40 : 1);
     let minTopup = 0, minAnnualCmp = 0;
-    if (minStd > 0) {
+    {
       const ec = effContract(ctx, sabun, monthEnd);
       if (ec) for (const srcK of Object.keys(ITEMMAP)) minAnnualCmp += (ec.items[srcK] || 0); // 고정역량가급 제외(연봉내역엔 없음)
-      if (minAnnualCmp > 0 && minAnnualCmp < minStd) { minTopup = (minStd - minAnnualCmp) / 12; real['성과급'] += minTopup / 30 * paidUnits; }
+      if (minStd > 0 && minAnnualCmp > 0 && minAnnualCmp < minStd) { minTopup = (minStd - minAnnualCmp) / 12; real['성과급'] += minTopup / 30 * paidUnits; }
     }
 
     LEDGER_ITEMS.forEach(k => pay[k] = ceilU(real[k]));
@@ -382,12 +398,13 @@ window.PV = window.PV || {};
       trace.dutyLabel = dutyBase ? (roster && roster.직책 || '') : (dutyExt ? '본점 예외' : '');
       trace.dutyFlat = flat; trace.is14 = applied14; trace.uvac = uvac; trace.uvacDeduct = uvacDeduct; trace.peakApplied = peakApplied;
       trace.minTopup = minTopup; trace.minStd = minStd; trace.minAnnualCmp = minAnnualCmp; trace.minShortHrs = minShortHrs;
+      trace.minShortWorker = isShortWorker; trace.minShortUnknown = minShortUnknown;
       trace.발령 = (ctx.ordersBy.get(sabun) || []).map(o => ({ 구분: o.발령구분, 시작일: o.발령시작일, 퇴직일: o.퇴직일 || '' }));
       trace.휴가 = (ctx.vacBy.get(sabun) || []).map(v => ({ 종류: v.휴가종류, 시작일: v.시작일, 종료일: v.종료일, 일수: v.휴가일수 }));
       const _mu = maternityUnpaid(ctx, sabun);
       trace.matUnpaid = _mu ? { start: _mu.start, end: _mu.end } : null; // 출산/유사산 무급 구간
     }
-    return { retired: false, pay, real, paidUnits, is14: applied14, segments: seg.segments, uvac, peakApplied, minTopup, minStd, minAnnualCmp, minShortHrs };
+    return { retired: false, pay, real, paidUnits, is14: applied14, segments: seg.segments, uvac, peakApplied, minTopup, minStd, minAnnualCmp, minShortHrs, minShortWorker: isShortWorker, minShortUnknown };
   }
 
   // 누적 소급: 전월 이전의 (실제−기지급) 차액을 급여 나오는 달에 정산.
@@ -467,6 +484,7 @@ window.PV = window.PV || {};
     if (base.uvac > 0) notes.push(`전월 무급휴가 ${base.uvac}일 공제`);
     if (base.peakApplied) notes.push('임금피크 해당월');
     if (base.minTopup > 0) { notes.push(`⚠최저임금 보전 (연봉 ${base.minAnnualCmp.toLocaleString()} < 최저 ${Math.round(base.minStd).toLocaleString()}${base.minShortHrs ? ' ·단축' + base.minShortHrs : ''}, 성과급+월 ${Math.round(base.minTopup).toLocaleString()})`); }
+    else if (base.minShortUnknown && base.minAnnualCmp > 0 && base.minAnnualCmp < minAnnual(y)) { notes.push('단축근무자 최저보전 생략 (단축시간 미확인 — 발령에 육아기단축근로NN 없음)'); }
     trace.finalPay = Object.assign({}, pay);
 
     return { retired: false, pay, notes, exc, paidUnits: base.paidUnits, segments: base.segments, trace };
