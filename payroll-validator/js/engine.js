@@ -450,14 +450,14 @@ window.PV = window.PV || {};
         const sal = (ctx.salaryBy.get(id) || []).slice(-1)[0] || {};
         (r.exc || []).forEach(e => allExc.push(e));
         const total = Math.round(Object.values(r.pay).reduce((a, b) => a + b, 0));
-        // 예외 재계산값(월말 기준=지급일 이후분 당월 적용). 지급일 기준과 다를 때만 제공.
+        // 예외 재계산값(월말 기준=지급일 이후분 당월 적용). 항상 제공(변동 없으면 hasAlt=false).
         const rAlt = computePerson(ctx, id, y, m, 'actual');
         const altTotal = rAlt.retired ? total : Math.round(Object.values(rAlt.pay).reduce((a, b) => a + b, 0));
         const hasAlt = !rAlt.retired && altTotal !== total;
         rows.push({
           사번: id, 성명: (roster && roster.성명) || sal.성명 || '', 소속: (roster && roster.소속) || sal.소속 || '',
           pay: r.pay, notes: r.notes || [], warn: (r.exc || []).length > 0, trace: r.trace, total,
-          altPay: hasAlt ? rAlt.pay : null, altNotes: hasAlt ? (rAlt.notes || []) : null, altTotal: hasAlt ? altTotal : null, hasAlt,
+          altPay: rAlt.retired ? null : rAlt.pay, altNotes: rAlt.retired ? null : (rAlt.notes || []), altTotal, hasAlt,
         });
       });
       rows.sort((a, b) => (a.소속 || '').localeCompare(b.소속 || '') || a.사번.localeCompare(b.사번));
@@ -501,9 +501,9 @@ window.PV = window.PV || {};
       status === 'ok' ? okCnt++ : badCnt++;
       const notes = (r.notes || []).slice();
       if (diffs.length) notes.unshift('불일치: ' + diffs.map(d => d.col).join(', '));
-      // 예외 재계산(당월적용) 값 vs 대장 — 재계산 버튼용
+      // 예외 재계산(당월적용) 값 vs 대장 — 재계산 버튼용 (항상 제공)
       let alt = null;
-      if (r.hasAlt && r.altPay) {
+      if (r.altPay) {
         const aCols = new Set(PV.LEDGER_ITEMS); Object.keys(r.altPay).forEach(k => { if (r.altPay[k] !== 0) aCols.add(k); });
         const aDiffs = []; aCols.forEach(col => { const ours = Math.round(r.altPay[col] || 0), led = Math.round((L.pay && L.pay[col]) || 0); if (ours !== led) aDiffs.push({ col, ours, led, diff: ours - led }); });
         alt = { pay: r.altPay, total: r.altTotal, diffs: aDiffs, notes: r.altNotes || [], status: aDiffs.length ? 'bad' : 'ok' };

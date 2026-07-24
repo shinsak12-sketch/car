@@ -562,10 +562,13 @@
         const tot = curTotal(), td = tot - d.ledTotal;
         const totHd = '<div class="dtot"><span>총액 (세전)' + (useAlt ? ' <b style="color:var(--br)">· 당월적용 재계산</b>' : '') + '</span><span>계산 ' + nf(tot) + ' &nbsp;/&nbsp; 대장 ' + nf(d.ledTotal) + ' &nbsp; <span class="' + (td > 0 ? 'dpos' : td < 0 ? 'dneg' : '') + '">' + (td ? (td > 0 ? '+' : '') + nf(td) : '일치') + '</span></span></div>';
         const nts = curNotes(); const notesHd = (nts && nts.length) ? '<div class="dnote">📌 ' + nts.join(' · ') + '</div>' : '';
-        // 재계산 버튼: 지급일 이후 변동을 당월 적용(월말 기준)한 예외 재계산. alt가 있을 때만.
+        // 재계산 박스: 항상 표시. 지급일 이후 변동이 있으면 재계산 버튼, 없으면 안내만.
+        const altChanged = d.alt && d.alt.total !== d.ourTotal;
         const recalcH = d.alt ? '<div class="drecalc">' + (useAlt
-          ? '<span class="rc-done">✔ 지급일 이후분 당월 적용됨' + (d.alt.status === 'ok' ? ' — 대장과 일치' : '') + '</span>' + (R.resolved ? '' : '<button class="rc-btn" data-a="apply">이 값으로 처리완료</button>') + '<button class="rc-btn ghost" data-a="revert">되돌리기</button>'
-          : '<span class="rc-info">지급일(20일) 이후 변동은 기본적으로 다음달 소급. 담당자 판단으로 이번달에 바로 처리하려면 →</span><button class="rc-btn" data-a="alt">⟳ 지급일 이후분 당월 적용 (재계산)</button>') + '</div>' : '';
+          ? '<span class="rc-done">✔ 지급일 이후분 당월 적용됨' + (d.alt.status === 'ok' ? ' — 대장과 일치' : ' (계산 ' + nf(d.alt.total) + ' / 대장 ' + nf(d.ledTotal) + ')') + '</span>' + (R.resolved ? '' : '<button class="rc-btn" data-a="apply">이 값으로 처리완료</button>') + '<button class="rc-btn ghost" data-a="revert">되돌리기</button>'
+          : altChanged
+            ? '<span class="rc-info">지급일(20일) 이후 변동은 기본적으로 다음달 소급. 담당자 판단으로 이번달에 바로 처리하려면 → <b style="color:var(--br)">당월적용 시 ' + nf(d.alt.total) + '</b></span><button class="rc-btn" data-a="alt">⟳ 지급일 이후분 당월 적용 (재계산)</button>'
+            : '<span class="rc-info" style="color:var(--tx3)">💡 지급일 이후 변동 없음 — 재계산 불필요 (지급일 기준 = 월말 기준 동일)</span>') + '</div>' : '';
         ov.innerHTML = '<div class="dcard"><div class="dhead"><b>' + d.사번 + ' ' + (d.성명 || '') + '</b> 계산 근거 (연봉 → 월급여 · 세전)' + (R.resolved ? ' <span class="pill" style="background:var(--br);color:#fff">처리완료</span>' : '') + '<span class="dexp" title="이 사람의 계산근거·백데이터를 파일로 저장">⬇ 내보내기</span><span class="dx">✕</span></div><div class="dbody">'
           + '<div class="dcontract">📄 적용 연봉계약 <b>' + (d.연봉일자 || '-') + '</b><br>' + 연봉H + '</div>'
           + segHd
