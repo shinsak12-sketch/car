@@ -815,7 +815,7 @@
     const pm = pmObj ? `${pmObj.y}-${String(pmObj.m).padStart(2, '0')}` : '';
     const monthStartISO = ym ? ym + '-01' : '';
     const isUnpaidVac = k => /무급휴가|가족돌봄|보건|생리/.test(k || '');
-    const isMat = k => /출산|유사산/.test(k || '');
+    const isMat = k => /출산|유사산/.test(k || '') && !/배우자/.test(k || '');
     const mu = t.matUnpaid;
     let fullG = (t.dutyFlat || 0) + (t.is14 ? 500000 : 0);
     Object.values(연봉).forEach(v => fullG += (+v || 0) / 12);

@@ -111,6 +111,8 @@ window.PV = window.PV || {};
     return 0;
   }
   const isUnpaidVac = t => /무급휴가|가족돌봄|보건|생리/.test(t || '');
+  // 출산휴가(모성) 판별 — 배우자출산휴가(남성 5일)는 모성휴가 아님(무급구간 없음) → 제외.
+  const isMatVac = t => /출산|유사산/.test(t || '') && !/배우자/.test(t || '');
 
   function is14(ctx, sabun, monthEnd) {
     const orders = (ctx.ordersBy.get(sabun) || []).filter(o => o.발령시작일 && cmp(o.발령시작일, monthEnd) <= 0);
@@ -127,7 +129,7 @@ window.PV = window.PV || {};
 
   // 모든 출산/유사산 휴가 날짜(유급+무급) Set — 일자별·기간형·override 모두 지원
   function maternityDates(ctx, sabun) {
-    const rows = (ctx.vacBy.get(sabun) || []).filter(v => /출산|유사산/.test(v.휴가종류));
+    const rows = (ctx.vacBy.get(sabun) || []).filter(v => isMatVac(v.휴가종류));
     const mo = ctx.overrides.maternity.get(sabun);
     const set = new Set();
     if (mo) [...dateRange(mo.전시작, mo.전종료), ...dateRange(mo.후시작, mo.후종료)].forEach(d => set.add(d));
@@ -144,16 +146,16 @@ window.PV = window.PV || {};
   //  - 사건 내 단일 블록: 유급이 앞·무급이 뒤. 분리 블록(출산전+출산후): 앞 블록서 유급 소진 시
   //    뒤 블록은 무급이 앞·유급이 뒤.
   function maternityUnpaid(ctx, sabun) {
-    const rows = (ctx.vacBy.get(sabun) || []).filter(v => /출산|유사산/.test(v.휴가종류));
+    const rows = (ctx.vacBy.get(sabun) || []).filter(v => isMatVac(v.휴가종류));
     if (!rows.length) return null;
     const mo = ctx.overrides.maternity.get(sabun);
-    // 날짜별 {d, grp, 다태아} 수집
+    // 날짜별 {d, grp, 다태아, full} 수집. full = '출산전후휴가'(통합 유형) — 법정연장 대상 판별용.
     let entries = [];
-    if (mo) [...dateRange(mo.전시작, mo.전종료), ...dateRange(mo.후시작, mo.후종료)].forEach(d => entries.push({ d, grp: 'birth', da: mo.유형 === '다태아' }));
+    if (mo) [...dateRange(mo.전시작, mo.전종료), ...dateRange(mo.후시작, mo.후종료)].forEach(d => entries.push({ d, grp: 'birth', da: mo.유형 === '다태아', full: false }));
     else rows.forEach(v => {
-      const grp = /유사산/.test(v.휴가종류) ? 'mis' : 'birth', da = /다태아/.test(v.휴가종류);
+      const grp = /유사산/.test(v.휴가종류) ? 'mis' : 'birth', da = /다태아/.test(v.휴가종류), full = /출산전후/.test(v.휴가종류);
       const ds = (v.시작일 && v.종료일 && v.종료일 > v.시작일) ? dateRange(v.시작일, v.종료일) : (v.시작일 ? [v.시작일] : []);
-      ds.forEach(d => entries.push({ d, grp, da }));
+      ds.forEach(d => entries.push({ d, grp, da, full }));
     });
     if (!entries.length) return null;
     const seen = new Set();
@@ -174,7 +176,8 @@ window.PV = window.PV || {};
       // 출산전후휴가(birth)는 법정기간(단태아 90 / 다태아 120일) 연속. 휴가 기록이 짧게 끊겨도
       //  법정일수까지 연장해 유급(60/75) 초과분을 무급으로 반영(예: 오다혜 — 12월까지만 기록, 1월분 무급 누락).
       //  단, ①담당자 수기입력(override) 있으면 그대로 ②블록 사이 공백이 있으면(출산전+출산후 분리 특수케이스) 연장 안 함.
-      if (evt[0].grp === 'birth' && !mo) {
+      // 법정연장은 '출산전후휴가'(통합 유형)에만 — '출산전휴가'·'출산후휴가'(분리 부분)나 배우자출산은 제외.
+      if (evt[0].grp === 'birth' && !mo && evt.every(x => x.full)) {
         let contiguous = true;
         for (let i = 1; i < dts.length; i++) { if (daysBetween(dts[i - 1], dts[i]) > 1) { contiguous = false; break; } }
         if (contiguous) {
