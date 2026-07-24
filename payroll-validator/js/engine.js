@@ -361,6 +361,9 @@ window.PV = window.PV || {};
     });
     if (shortStart && (!shortEnd || cmp(shortEnd.발령시작일, shortStart.발령시작일) <= 0)) { isShortWorker = true; if (!minShortHrs) minShortHrs = grabNN(shortStart.발령구분); }
     if (shortEnd && /단축/.test(shortEnd.발령구분 || '') && (shortEnd.발령시작일 || '').slice(0, 7) === ymStr) isShortWorker = true; // 이번달 단축종료 → 이번달은 단축근무자
+    // 발령에 육아기단축근로 시작이 없어도 휴가 종류에 '육아기 등 단축근무자' 흔적이 있으면 단축근무자로 인식.
+    //  (발령 데이터에 단축시간 NN이 없어 스케일은 못 하므로 → 과다보전 방지 위해 보전 생략)
+    if (!isShortWorker) { const vs = ctx.vacBy.get(sabun) || []; if (vs.some(v => /단축근무자|단축근로|육아기\s*단축/.test(v.휴가종류 || ''))) isShortWorker = true; }
     const minShortUnknown = isShortWorker && !minShortHrs;
     const minStd = minShortUnknown ? 0 : minAnnual(y) * (minShortHrs ? minShortHrs / 40 : 1);
     let minTopup = 0, minAnnualCmp = 0;
@@ -484,7 +487,7 @@ window.PV = window.PV || {};
     if (base.uvac > 0) notes.push(`전월 무급휴가 ${base.uvac}일 공제`);
     if (base.peakApplied) notes.push('임금피크 해당월');
     if (base.minTopup > 0) { notes.push(`⚠최저임금 보전 (연봉 ${base.minAnnualCmp.toLocaleString()} < 최저 ${Math.round(base.minStd).toLocaleString()}${base.minShortHrs ? ' ·단축' + base.minShortHrs : ''}, 성과급+월 ${Math.round(base.minTopup).toLocaleString()})`); }
-    else if (base.minShortUnknown && base.minAnnualCmp > 0 && base.minAnnualCmp < minAnnual(y)) { notes.push('단축근무자 최저보전 생략 (단축시간 미확인 — 발령에 육아기단축근로NN 없음)'); }
+    else if (base.minShortUnknown && base.minAnnualCmp > 0 && base.minAnnualCmp < minAnnual(y)) { notes.push('육아기단축근무자 — 최저보전 생략 (단축시간 미확인, 발령에 육아기단축근로NN 없음)'); }
     trace.finalPay = Object.assign({}, pay);
 
     return { retired: false, pay, notes, exc, paidUnits: base.paidUnits, segments: base.segments, trace };
