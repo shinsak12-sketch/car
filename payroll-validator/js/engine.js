@@ -18,13 +18,14 @@ window.PV = window.PV || {};
   const SICK_EXCL = new Set(['성과가급', '변동역량가급1', '변동역량가급2', '고정역량가급']);
   const SUSPEND_EXCL = new Set(['변동역량가급1', '변동역량가급2', '고정역량가급']);
 
-  // 성과가급 = 분기 지급(1·4·7·10월에 연액 ¼)
-  const QUARTER_MONTHS = new Set([1, 4, 7, 10]);
-  const monthlyBase = (srcK, annual, m) => srcK === '성과가급' ? (QUARTER_MONTHS.has(m) ? annual / 4 : 0) : annual / 12;
-
   // ---------- 유틸 ----------
   const ceilU = x => (Math.ceil((x - 1e-6) / 10) * 10) || 0;  // 십원 절상(급여)
   const floorU = x => (Math.floor((x + 1e-6) / 10) * 10) || 0; // 십원 절하(감액)
+
+  // 성과가급 = 분기 지급(1·4·7·10월). 월 성과가급(연액÷12 십원절상)의 3개월분(×3)을 지급.
+  // (연액÷4를 한 번에 절상하는 게 아니라 월단위 절상 후 3배 → 대장 방식)
+  const QUARTER_MONTHS = new Set([1, 4, 7, 10]);
+  const monthlyBase = (srcK, annual, m) => srcK === '성과가급' ? (QUARTER_MONTHS.has(m) ? 3 * ceilU(annual / 12) : 0) : annual / 12;
   const P = s => { if (!s) return null; const [y, m, d] = s.split('-').map(Number); return { y, m, d }; };
   const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   const dim = (y, m) => new Date(y, m, 0).getDate();
@@ -331,6 +332,8 @@ window.PV = window.PV || {};
       trace.dutyFlat = flat; trace.is14 = applied14; trace.uvac = uvac; trace.uvacDeduct = uvacDeduct; trace.peakApplied = peakApplied;
       trace.발령 = (ctx.ordersBy.get(sabun) || []).map(o => ({ 구분: o.발령구분, 시작일: o.발령시작일, 퇴직일: o.퇴직일 || '' }));
       trace.휴가 = (ctx.vacBy.get(sabun) || []).map(v => ({ 종류: v.휴가종류, 시작일: v.시작일, 종료일: v.종료일, 일수: v.휴가일수 }));
+      const _mu = maternityUnpaid(ctx, sabun);
+      trace.matUnpaid = _mu ? { start: _mu.start, end: _mu.end } : null; // 출산/유사산 무급 구간
     }
     return { retired: false, pay, real, paidUnits, is14: applied14, segments: seg.segments, uvac, peakApplied };
   }
