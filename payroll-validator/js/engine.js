@@ -258,9 +258,8 @@ window.PV = window.PV || {};
     });
     merged.sort((a, b) => a.startDay - b.startDay);
 
-    // 만근(월 전체 한 구간)이면 월급 그대로(30일). 일할(구간 분리)일 때만 실제 그 달 일수 기준
-    // (앞구간 실제일수, 마지막=그달일수−앞합, 일당은 /30). — 31일 달 만근이 31/30 과다지급되던 문제 방지.
-    const n = merged.length, total = n === 1 ? 30 : monthEndDay; let acc = 0;
+    // 모든 달을 30일로 계산(만근=연봉/12, 일할=앞구간 실제일수·마지막=30−앞합, 일당 /30).
+    const n = merged.length, total = 30; let acc = 0;
     for (let i = 0; i < n; i++) {
       if (i < n - 1) { const span = merged[i + 1].startDay - merged[i].startDay; merged[i].days = span; acc += span; }
       else { let last = total - acc; const paid = ['normal', 'sick', 'short'].includes(merged[i].payType); if (last <= 0) last = paid ? 1 : 0; merged[i].days = last; }
@@ -373,7 +372,8 @@ window.PV = window.PV || {};
 
   // ---------- 한 사람 종합 ----------
   // baseCutoff: 'pay'=지급일 기준(기본), 'actual'=월말 기준(지급일 이후분까지 당월 적용, 예외 재계산)
-  function computePerson(ctx, sabun, y, m, baseCutoff) {
+  // skipCarry: 예외 재계산(당월적용)은 이번달 실제 근무분만 — 전월 소급은 제외.
+  function computePerson(ctx, sabun, y, m, baseCutoff, skipCarry) {
     const exc = [];
     const trace = { extras: [] };
     // 당월 지급액 = 지급일(as-paid) 기준. 지급일 이후 변동은 다음달 소급.
@@ -410,7 +410,7 @@ window.PV = window.PV || {};
 
     // 누적 소급정산: 급여 나오는 달에 반영. base(raw) + 소급(raw)을 합산 후 한 번만 절상(이중 반올림 방지).
     const paidThisMonth = LEDGER_ITEMS.reduce((a, k) => a + (base.pay[k] || 0), 0) > 0;
-    if (paidThisMonth) {
+    if (paidThisMonth && !skipCarry) {
       const carry = carryIn(ctx, sabun, y, m);
       let s = 0;
       LEDGER_ITEMS.forEach(k => {
@@ -451,8 +451,8 @@ window.PV = window.PV || {};
         const sal = (ctx.salaryBy.get(id) || []).slice(-1)[0] || {};
         (r.exc || []).forEach(e => allExc.push(e));
         const total = Math.round(Object.values(r.pay).reduce((a, b) => a + b, 0));
-        // 예외 재계산값(월말 기준=지급일 이후분 당월 적용). 항상 제공(변동 없으면 hasAlt=false).
-        const rAlt = computePerson(ctx, id, y, m, 'actual');
+        // 예외 재계산값(월말 기준=지급일 이후분 당월 적용, 소급 제외). 항상 제공.
+        const rAlt = computePerson(ctx, id, y, m, 'actual', true);
         const altTotal = rAlt.retired ? total : Math.round(Object.values(rAlt.pay).reduce((a, b) => a + b, 0));
         const hasAlt = !rAlt.retired && altTotal !== total;
         rows.push({
