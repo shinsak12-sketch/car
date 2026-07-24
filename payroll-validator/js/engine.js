@@ -258,8 +258,9 @@ window.PV = window.PV || {};
     });
     merged.sort((a, b) => a.startDay - b.startDay);
 
-    // 근무일수는 실제 그 달 일수 기준(31일 달이면 31로 계산), 일당은 /30. (앞구간 실제일수, 마지막=그달일수−앞합)
-    const n = merged.length, total = monthEndDay; let acc = 0;
+    // 만근(월 전체 한 구간)이면 월급 그대로(30일). 일할(구간 분리)일 때만 실제 그 달 일수 기준
+    // (앞구간 실제일수, 마지막=그달일수−앞합, 일당은 /30). — 31일 달 만근이 31/30 과다지급되던 문제 방지.
+    const n = merged.length, total = n === 1 ? 30 : monthEndDay; let acc = 0;
     for (let i = 0; i < n; i++) {
       if (i < n - 1) { const span = merged[i + 1].startDay - merged[i].startDay; merged[i].days = span; acc += span; }
       else { let last = total - acc; const paid = ['normal', 'sick', 'short'].includes(merged[i].payType); if (last <= 0) last = paid ? 1 : 0; merged[i].days = last; }
