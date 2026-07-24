@@ -43,6 +43,7 @@ window.PV = window.PV || {};
     return out;
   }
   function addDay(isoStr) { const [y, m, d] = isoStr.split('-').map(Number); const dt = new Date(y, m - 1, d + 1); return iso(dt.getFullYear(), dt.getMonth() + 1, dt.getDate()); }
+  function daysBetween(a, b) { const [ay, am, ad] = a.split('-').map(Number), [by, bm, bd] = b.split('-').map(Number); return Math.round((new Date(by, bm - 1, bd) - new Date(ay, am - 1, ad)) / 86400000); }
   PV.dim = dim;
 
   function payday(y, m, holidays) {
@@ -130,32 +131,54 @@ window.PV = window.PV || {};
   }
 
   // 출산휴가 무급기간 {start,end} (유급 60/75일 이후). 분리 입력·기간형 자동 병합.
-  //  - 단일(연속) 블록: 유급이 앞·무급이 뒤 (최초 60일 유급)
-  //  - 분리 블록(출산전 사용 후 임신중육아휴직 등으로 끊긴 뒤 출산후): 앞 블록에서 유급을
-  //    소진했으면 뒤(출산후) 블록은 무급이 앞·유급이 뒤 (남은 유급이 출산후휴가 뒷부분)
+  //  - 사건(event) 단위로 분리: 출산전후휴가(birth)와 유사산휴가(mis)는 별개 사건, 각자 유급 60/75일.
+  //    같은 종류라도 200일 넘게 떨어지면 다른 사건(다른 임신).
+  //  - 사건 내 단일 블록: 유급이 앞·무급이 뒤. 분리 블록(출산전+출산후): 앞 블록서 유급 소진 시
+  //    뒤 블록은 무급이 앞·유급이 뒤.
   function maternityUnpaid(ctx, sabun) {
     const rows = (ctx.vacBy.get(sabun) || []).filter(v => /출산|유사산/.test(v.휴가종류));
     if (!rows.length) return null;
     const mo = ctx.overrides.maternity.get(sabun);
-    const limit = ((mo && mo.유형 === '다태아') || rows.some(v => /다태아/.test(v.휴가종류))) ? 75 : 60;
-    const dates = [...maternityDates(ctx, sabun)].sort();
-    if (!dates.length) return null;
-    // 연속 블록 분리(하루 초과 간격 = 새 블록)
-    const blocks = []; let cur = [dates[0]];
-    for (let i = 1; i < dates.length; i++) { if (dates[i] === addDay(dates[i - 1])) cur.push(dates[i]); else { blocks.push(cur); cur = [dates[i]]; } }
-    blocks.push(cur);
-    let used = 0; const unpaidDates = [];
-    for (const blk of blocks) {
-      if (used >= limit) { unpaidDates.push(...blk); continue; }
-      if (used + blk.length <= limit) { used += blk.length; continue; }
-      const paidInBlk = limit - used;
-      if (used === 0) unpaidDates.push(...blk.slice(paidInBlk));           // 유급 먼저 → 무급 뒤
-      else unpaidDates.push(...blk.slice(0, blk.length - paidInBlk));      // 유급 나중 → 무급 앞
-      used = limit;
+    // 날짜별 {d, grp, 다태아} 수집
+    let entries = [];
+    if (mo) [...dateRange(mo.전시작, mo.전종료), ...dateRange(mo.후시작, mo.후종료)].forEach(d => entries.push({ d, grp: 'birth', da: mo.유형 === '다태아' }));
+    else rows.forEach(v => {
+      const grp = /유사산/.test(v.휴가종류) ? 'mis' : 'birth', da = /다태아/.test(v.휴가종류);
+      const ds = (v.시작일 && v.종료일 && v.종료일 > v.시작일) ? dateRange(v.시작일, v.종료일) : (v.시작일 ? [v.시작일] : []);
+      ds.forEach(d => entries.push({ d, grp, da }));
+    });
+    if (!entries.length) return null;
+    const seen = new Set();
+    entries = entries.filter(e => { if (seen.has(e.d)) return false; seen.add(e.d); return true; }).sort((a, b) => cmp(a.d, b.d));
+    // 사건 분리(그룹 다름 or 200일 초과 간격)
+    const events = []; let ev = [entries[0]];
+    for (let i = 1; i < entries.length; i++) {
+      if (entries[i].grp !== entries[i - 1].grp || daysBetween(entries[i - 1].d, entries[i].d) > 200) { events.push(ev); ev = [entries[i]]; }
+      else ev.push(entries[i]);
+    }
+    events.push(ev);
+    const unpaidDates = []; let matEnd = null;
+    for (const evt of events) {
+      const limit = evt.some(x => x.da) ? 75 : 60;
+      const dts = evt.map(x => x.d);
+      if (dts.length <= limit) continue;                 // 사건 전체가 유급
+      const blocks = []; let cur = [dts[0]];
+      for (let i = 1; i < dts.length; i++) { if (dts[i] === addDay(dts[i - 1])) cur.push(dts[i]); else { blocks.push(cur); cur = [dts[i]]; } }
+      blocks.push(cur);
+      let used = 0, evUnpaid = false;
+      for (const blk of blocks) {
+        if (used >= limit) { unpaidDates.push(...blk); evUnpaid = true; continue; }
+        if (used + blk.length <= limit) { used += blk.length; continue; }
+        const paidInBlk = limit - used;
+        if (used === 0) unpaidDates.push(...blk.slice(paidInBlk));
+        else unpaidDates.push(...blk.slice(0, blk.length - paidInBlk));
+        used = limit; evUnpaid = true;
+      }
+      if (evUnpaid) { const e = dts[dts.length - 1]; if (!matEnd || e > matEnd) matEnd = e; }
     }
     if (!unpaidDates.length) return null;
     unpaidDates.sort();
-    return { start: unpaidDates[0], end: unpaidDates[unpaidDates.length - 1], matEnd: dates[dates.length - 1] };
+    return { start: unpaidDates[0], end: unpaidDates[unpaidDates.length - 1], matEnd };
   }
 
   // ---------- 월 세그먼트(일할) ----------
@@ -325,7 +348,7 @@ window.PV = window.PV || {};
     if (trace) {
       const ec = effContract(ctx, sabun, monthEnd) || { items: {} };
       trace.연봉일자 = ec.연봉일자; trace.연봉 = Object.assign({}, ec.items);
-      trace.month = m; trace.quarterMonth = QUARTER_MONTHS.has(m);
+      trace.month = m; trace.year = y; trace.quarterMonth = QUARTER_MONTHS.has(m);
       trace.segments = seg.segments.map(s => ({ label: s.gubun || PT_LABEL[s.payType], days: s.days, payType: s.payType }));
       trace.ilhal = seg.segments.length > 1 || (seg.segments[0] && seg.segments[0].payType !== 'normal');
       trace.dutyLabel = dutyBase ? (roster && roster.직책 || '') : (dutyExt ? '본점 예외' : '');
