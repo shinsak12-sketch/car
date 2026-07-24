@@ -50,6 +50,7 @@ window.PV = window.PV || {};
     return out;
   }
   function addDay(isoStr) { const [y, m, d] = isoStr.split('-').map(Number); const dt = new Date(y, m - 1, d + 1); return iso(dt.getFullYear(), dt.getMonth() + 1, dt.getDate()); }
+  function addDays(isoStr, n) { const [y, m, d] = isoStr.split('-').map(Number); const dt = new Date(y, m - 1, d + n); return iso(dt.getFullYear(), dt.getMonth() + 1, dt.getDate()); }
   function daysBetween(a, b) { const [ay, am, ad] = a.split('-').map(Number), [by, bm, bd] = b.split('-').map(Number); return Math.round((new Date(by, bm - 1, bd) - new Date(ay, am - 1, ad)) / 86400000); }
   PV.dim = dim;
 
@@ -167,8 +168,25 @@ window.PV = window.PV || {};
     // 유급이 앞(최초 60/75일), 무급이 마지막(시간순). 출산전+출산후로 나뉘어도 시간순으로 이어서 계산.
     const unpaidDates = []; let matEnd = null;
     for (const evt of events) {
-      const limit = evt.some(x => x.da) ? 75 : 60;
-      const dts = evt.map(x => x.d);               // 정렬됨
+      const da = evt.some(x => x.da);
+      const limit = da ? 75 : 60;
+      let dts = evt.map(x => x.d);                  // 정렬됨
+      // 출산전후휴가(birth)는 법정기간(단태아 90 / 다태아 120일) 연속. 휴가 기록이 짧게 끊겨도
+      //  법정일수까지 연장해 유급(60/75) 초과분을 무급으로 반영(예: 오다혜 — 12월까지만 기록, 1월분 무급 누락).
+      //  단, ①담당자 수기입력(override) 있으면 그대로 ②블록 사이 공백이 있으면(출산전+출산후 분리 특수케이스) 연장 안 함.
+      if (evt[0].grp === 'birth' && !mo) {
+        let contiguous = true;
+        for (let i = 1; i < dts.length; i++) { if (daysBetween(dts[i - 1], dts[i]) > 1) { contiguous = false; break; } }
+        if (contiguous) {
+          let legalEnd = addDays(dts[0], (da ? 120 : 90) - 1);
+          // 출산휴가 종료 후 다른 휴직/복직/단축 발령이 있으면 = 휴가가 실제 거기서 끝난 것(예: 석세라 32일 후 육아휴직)
+          //  → 그 발령 전날까지만 연장. (연장 대상은 오다혜처럼 이후 상태발령 없이 휴가가 이어지는 경우)
+          const recEnd = dts[dts.length - 1];
+          const nextOrd = (ctx.ordersBy.get(sabun) || []).filter(o => /휴직|복직|단축|퇴직/.test(o.발령구분 || '') && o.발령시작일 && cmp(o.발령시작일, recEnd) > 0).sort((a, b) => cmp(a.발령시작일 || '', b.발령시작일 || ''))[0];
+          if (nextOrd) { const cap = addDays(nextOrd.발령시작일, -1); if (cmp(cap, legalEnd) < 0) legalEnd = cap; }
+          if (cmp(legalEnd, recEnd) > 0) dts = dateRange(dts[0], legalEnd);
+        }
+      }
       if (dts.length <= limit) continue;           // 사건 전체가 유급
       unpaidDates.push(...dts.slice(limit));       // 유급 앞 limit일, 무급은 나머지(마지막)
       const e = dts[dts.length - 1]; if (!matEnd || e > matEnd) matEnd = e;
@@ -420,9 +438,12 @@ window.PV = window.PV || {};
       const ac = computeBase(ctx, sabun, mm.y, mm.m, 'actual', [], null, null, true); // 소급=익월처리=실제일수
       if (ap.retired || ac.retired) continue;
       const paid = LEDGER_ITEMS.reduce((a, k) => a + (ap.pay[k] || 0), 0) > 0;
-      if (paid) LEDGER_ITEMS.forEach(k => acc[k] = 0);
-      // 원(raw) 단위로 누적 — 최종 base+소급 합산 후 한 번만 절상(이중 반올림 방지)
-      LEDGER_ITEMS.forEach(k => acc[k] += (ac.real[k] || 0) - (ap.real[k] || 0));
+      // 지급이 있었던 달은 그 시점까지 정산 완료로 간주(리셋, 자기 diff도 누적 안 함).
+      // 미지급(무급·복직 이연 등)된 달의 실제근무분만 누적 → 다음 지급달에 소급.
+      //  (지급월의 '지급일 이후 변동'은 그 달 재계산/후단으로 처리하므로 소급 누적 대상 아님)
+      //  원(raw) 단위로 누적 — 최종 base+소급 합산 후 한 번만 절상(이중 반올림 방지)
+      if (paid) { LEDGER_ITEMS.forEach(k => acc[k] = 0); }
+      else { LEDGER_ITEMS.forEach(k => acc[k] += (ac.real[k] || 0) - (ap.real[k] || 0)); }
     }
     return acc;
   }

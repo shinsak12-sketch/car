@@ -35,7 +35,7 @@
   /* ---------- period ---------- */
   (function () {
     const sy = $('#selYear'), sm = $('#selMonth'), now = new Date();
-    for (let y = now.getFullYear() + 1; y >= 2023; y--) { const o = el('option'); o.value = y; o.textContent = y + '년'; sy.appendChild(o); }
+    for (let y = now.getFullYear() + 10; y >= 2023; y--) { const o = el('option'); o.value = y; o.textContent = y + '년'; sy.appendChild(o); }
     for (let m = 1; m <= 12; m++) { const o = el('option'); o.value = m; o.textContent = m + '월'; sm.appendChild(o); }
     sy.value = now.getFullYear(); sm.value = now.getMonth() + 1;
     sy.onchange = sm.onchange = updatePayday; updatePayday();
