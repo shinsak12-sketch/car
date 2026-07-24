@@ -157,24 +157,14 @@ window.PV = window.PV || {};
       else ev.push(entries[i]);
     }
     events.push(ev);
+    // 유급이 앞(최초 60/75일), 무급이 마지막(시간순). 출산전+출산후로 나뉘어도 시간순으로 이어서 계산.
     const unpaidDates = []; let matEnd = null;
     for (const evt of events) {
       const limit = evt.some(x => x.da) ? 75 : 60;
-      const dts = evt.map(x => x.d);
-      if (dts.length <= limit) continue;                 // 사건 전체가 유급
-      const blocks = []; let cur = [dts[0]];
-      for (let i = 1; i < dts.length; i++) { if (dts[i] === addDay(dts[i - 1])) cur.push(dts[i]); else { blocks.push(cur); cur = [dts[i]]; } }
-      blocks.push(cur);
-      let used = 0, evUnpaid = false;
-      for (const blk of blocks) {
-        if (used >= limit) { unpaidDates.push(...blk); evUnpaid = true; continue; }
-        if (used + blk.length <= limit) { used += blk.length; continue; }
-        const paidInBlk = limit - used;
-        if (used === 0) unpaidDates.push(...blk.slice(paidInBlk));
-        else unpaidDates.push(...blk.slice(0, blk.length - paidInBlk));
-        used = limit; evUnpaid = true;
-      }
-      if (evUnpaid) { const e = dts[dts.length - 1]; if (!matEnd || e > matEnd) matEnd = e; }
+      const dts = evt.map(x => x.d);               // 정렬됨
+      if (dts.length <= limit) continue;           // 사건 전체가 유급
+      unpaidDates.push(...dts.slice(limit));       // 유급 앞 limit일, 무급은 나머지(마지막)
+      const e = dts[dts.length - 1]; if (!matEnd || e > matEnd) matEnd = e;
     }
     if (!unpaidDates.length) return null;
     unpaidDates.sort();
