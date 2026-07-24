@@ -203,6 +203,9 @@ window.PV = window.PV || {};
     // 무급휴직 = 정상복귀·복직보다 우선(출산무급/육아휴직이 같은 날 복직/복귀를 이긴다).
     const payRank = { unpaid: 0, retire: 0, sick: 1, short: 2, normal: 3 };
     orders = orders.slice().sort((a, b) => cmp(a.발령시작일 || '', b.발령시작일 || '') || ((payRank[PT(b)] ?? 3) - (payRank[PT(a)] ?? 3)) || ((a._pseudo ? 0 : 1) - (b._pseudo ? 0 : 1)));
+    // 상태변경 발령만 세그먼트에 반영: 복직·휴직·단축·퇴직(+출산 가짜). 정기승진·직무변경 등
+    // 행정발령은 근무상태를 바꾸지 않으므로 제외(연봉 변경은 연봉내역 일자로 자동 반영).
+    orders = orders.filter(o => o._pseudo || /복직|휴직|단축|퇴직/.test(o.발령구분 || ''));
     const prior = orders.filter(o => o.발령시작일 && cmp(o.발령시작일, monthStart) < 0);
     let baseType = 'normal', baseGubun = '';
     if (prior.length) { baseGubun = prior[prior.length - 1].발령구분; baseType = PT(prior[prior.length - 1]); }
@@ -233,7 +236,7 @@ window.PV = window.PV || {};
     const matNext = (matEnd && cmp(addDay(matEnd), monthStart) >= 0 && cmp(addDay(matEnd), monthEndISO) <= 0) ? addDay(matEnd) : null;
     const inMonth = orders.filter(o => o.발령시작일 && cmp(o.발령시작일, monthStart) >= 0 &&
       (cmp(o.발령시작일, cutoffISO) <= 0 || (matNext && o.발령시작일 === matNext && ['unpaid', 'sick'].includes(PT(o)))));
-    const segs = [{ startDay: 1, payType: baseType, contract: baseContract, gubun: baseGubun }];
+    const segs = [{ startDay: 1, payType: baseType, contract: baseContract, gubun: baseGubun, _base: true }];
     for (const o of inMonth) {
       const pt = PT(o);
       // 휴직은 시작일 제외(발령일부터 무급) / 복직은 복직일부터 근무 / 단축근로종료=발령일 다음날부터 정상
@@ -253,12 +256,15 @@ window.PV = window.PV || {};
       segs.push({ startDay, payType: pt, contract, gubun: o.발령구분, pseudo: !!o._pseudo });
     }
     const merged = [];
-    // 같은 날 충돌 시 '더 제한적인(낮은 지급) 상태'가 이긴다. 정직/정기승진 등 행정발령이
-    // 휴가·무급 중에 찍혀도 무급이 유지됨. (동급이면 나중 것)
+    // 같은 날 충돌: (1) 실제 발령은 baseline(이월 상태)을 덮는다 — 복직/단축이 이월 육아휴직을 종료.
+    // (2) 실제 발령끼리는 더 제한적인(낮은 지급) 상태가 우선 — 출산무급이 복직/복귀를,
+    //     육아기단축이 복직을 이긴다.
     segs.forEach(s => {
       const last = merged[merged.length - 1];
-      if (last && last.startDay === s.startDay) { if ((payRank[s.payType] ?? 3) <= (payRank[last.payType] ?? 3)) merged[merged.length - 1] = s; }
-      else merged.push(s);
+      if (last && last.startDay === s.startDay) {
+        if (last._base) merged[merged.length - 1] = s;                                   // baseline은 실제 발령에 밀림
+        else if (!s._base && (payRank[s.payType] ?? 3) <= (payRank[last.payType] ?? 3)) merged[merged.length - 1] = s;
+      } else merged.push(s);
     });
     merged.sort((a, b) => a.startDay - b.startDay);
 
@@ -329,7 +335,9 @@ window.PV = window.PV || {};
     const uvac = unpaidVacInMonth(ctx, sabun, y, m, exc);
     let uvacDeduct = 0;
     if (uvac > 0) {
-      const ec = effContract(ctx, sabun, monthEnd);
+      // 감액/추가지급 지급은 이번달이지만 금액계산은 '발생한 달(전월)'의 연봉으로. (4.1자 연봉인상 반영)
+      const pm = prevMonth(y, m);
+      const ec = effContract(ctx, sabun, iso(pm.y, pm.m, dim(pm.y, pm.m)));
       let fullGross = flat + (applied14 ? 500000 : 0);
       if (ec) for (const srcK of Object.keys(ITEMMAP)) fullGross += (ec.items[srcK] || 0) / 12;
       // 1일 급여를 십원 절하한 뒤 일수를 곱한다(대장 방식). (일당절하 × 일수)
