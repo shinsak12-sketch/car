@@ -600,18 +600,19 @@
     let fullG = (t.dutyFlat || 0) + (t.is14 ? 500000 : 0);
     Object.values(연봉).forEach(v => fullG += (+v || 0) / 12);
     const dayRate = Math.round(fullG / 30);
+    // 당월 데이터는 이번달 근무일수(일할) 계산일 뿐 → 감액/추가지급 표기는 '다른 달 것(소급·전월공제)'에만.
     const 휴가 = (t.휴가 || []).map(v => {
       const k = v.종류 || '', s = v.시작일 || '', e = v.종료일 || s, sm = s.slice(0, 7);
       let tag = '유급', aff = false, impact = '', amt = 0;
       if (isMat(k)) {
         const unpaidDay = mu && s >= mu.start && s <= mu.end;
         tag = mu && unpaidDay ? '무급' : (mu && s <= mu.end && e >= mu.start ? '혼재' : '유급');
-        if (sm === ym) { aff = true; if (unpaidDay) { impact = '감액'; amt = -dayRate; } else impact = '유급지급'; }
+        if (sm === ym && unpaidDay) aff = true;   // 당월 무급일만 강조(일할 감소). 금액표기 없음(감액 아님).
       } else if (isUnpaidVac(k)) {
         tag = '무급';
-        if (sm === pm) { aff = true; impact = '감액'; amt = t.uvac ? -Math.round((t.uvacDeduct || 0) / t.uvac) : 0; }
-        else if (sm === ym) { aff = true; impact = '익월공제'; }
-      } else if (sm === ym) { aff = true; impact = '유급지급'; }
+        if (sm === pm) { aff = true; impact = '감액'; amt = t.uvac ? -Math.round((t.uvacDeduct || 0) / t.uvac) : 0; }  // 전월분 이번달 공제 = 감액
+        else if (sm === ym) impact = '익월공제';    // 당월 무급휴가 = 다음달 공제(이번달 영향 아님)
+      }
       return { 종류: k, 시작일: s, 종료일: v.종료일, 일수: v.일수, tag, aff, impact, amt };
     });
     let baselineDate = null;

@@ -203,7 +203,6 @@ window.PV = window.PV || {};
     // 무급휴직 = 정상복귀·복직보다 우선(출산무급/육아휴직이 같은 날 복직/복귀를 이긴다).
     const payRank = { unpaid: 0, retire: 0, sick: 1, short: 2, normal: 3 };
     orders = orders.slice().sort((a, b) => cmp(a.발령시작일 || '', b.발령시작일 || '') || ((payRank[PT(b)] ?? 3) - (payRank[PT(a)] ?? 3)) || ((a._pseudo ? 0 : 1) - (b._pseudo ? 0 : 1)));
-    const matDates = maternityDates(ctx, sabun);
     const prior = orders.filter(o => o.발령시작일 && cmp(o.발령시작일, monthStart) < 0);
     let baseType = 'normal', baseGubun = '';
     if (prior.length) { baseGubun = prior[prior.length - 1].발령구분; baseType = PT(prior[prior.length - 1]); }
@@ -237,16 +236,9 @@ window.PV = window.PV || {};
     const segs = [{ startDay: 1, payType: baseType, contract: baseContract, gubun: baseGubun }];
     for (const o of inMonth) {
       const pt = PT(o);
-      // 복직=발령일 당일부터 정상 / 단축근로종료=발령일 다음날부터 정상
-      // 휴직 시작(무급·의병)=발령일 당일은 근무(유급), 무급은 다음날부터 (휴직은 시작일 제외).
-      // 단, 전날이 이미 휴가/휴직(출산휴가 등)이면 근무한 날이 아니므로 시작일 제외 미적용.
+      // 휴직은 시작일 제외(발령일부터 무급) / 복직은 복직일부터 근무 / 단축근로종료=발령일 다음날부터 정상
       const endNextDay = /단축/.test(o.발령구분 || '') && /종료/.test(o.발령구분 || '');
-      const _pd = P(o.발령시작일), _pdt = _pd ? new Date(_pd.y, _pd.m - 1, _pd.d - 1) : null;
-      const prevDayISO = _pdt ? iso(_pdt.getFullYear(), _pdt.getMonth() + 1, _pdt.getDate()) : '';
-      const prevSeg = segs[segs.length - 1];
-      const workingBefore = !matDates.has(prevDayISO) && !(prevSeg && ['unpaid', 'sick'].includes(prevSeg.payType));
-      const leaveNextDay = (pt === 'unpaid' || pt === 'sick') && !o._pseudo && workingBefore;
-      const startDay = P(o.발령시작일).d + (endNextDay || leaveNextDay ? 1 : 0);
+      const startDay = P(o.발령시작일).d + (endNextDay ? 1 : 0);
       if (startDay > monthEndDay) continue;
       const segStartISO = iso(y, m, startDay);
       let contract;
@@ -261,15 +253,17 @@ window.PV = window.PV || {};
       segs.push({ startDay, payType: pt, contract, gubun: o.발령구분, pseudo: !!o._pseudo });
     }
     const merged = [];
-    // 같은 날 충돌 시 정렬상 뒤(더 제한적인 상태)가 이긴다. (무급이 정상복귀·복직을 덮어씀)
+    // 같은 날 충돌 시 '더 제한적인(낮은 지급) 상태'가 이긴다. 정직/정기승진 등 행정발령이
+    // 휴가·무급 중에 찍혀도 무급이 유지됨. (동급이면 나중 것)
     segs.forEach(s => {
       const last = merged[merged.length - 1];
-      if (last && last.startDay === s.startDay) merged[merged.length - 1] = s;
+      if (last && last.startDay === s.startDay) { if ((payRank[s.payType] ?? 3) <= (payRank[last.payType] ?? 3)) merged[merged.length - 1] = s; }
       else merged.push(s);
     });
     merged.sort((a, b) => a.startDay - b.startDay);
 
-    const n = merged.length, total = 30; let acc = 0;
+    // 근무일수는 실제 그 달 일수 기준(31일 달이면 31로 계산), 일당은 /30. (앞구간 실제일수, 마지막=그달일수−앞합)
+    const n = merged.length, total = monthEndDay; let acc = 0;
     for (let i = 0; i < n; i++) {
       if (i < n - 1) { const span = merged[i + 1].startDay - merged[i].startDay; merged[i].days = span; acc += span; }
       else { let last = total - acc; const paid = ['normal', 'sick', 'short'].includes(merged[i].payType); if (last <= 0) last = paid ? 1 : 0; merged[i].days = last; }
