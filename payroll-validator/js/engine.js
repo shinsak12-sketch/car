@@ -381,11 +381,12 @@ window.PV = window.PV || {};
   }
 
   // ---------- 한 사람 종합 ----------
-  function computePerson(ctx, sabun, y, m) {
+  // baseCutoff: 'pay'=지급일 기준(기본), 'actual'=월말 기준(지급일 이후분까지 당월 적용, 예외 재계산)
+  function computePerson(ctx, sabun, y, m, baseCutoff) {
     const exc = [];
     const trace = { extras: [] };
     // 당월 지급액 = 지급일(as-paid) 기준. 지급일 이후 변동은 다음달 소급.
-    const base = computeBase(ctx, sabun, y, m, 'pay', [], exc, trace);
+    const base = computeBase(ctx, sabun, y, m, baseCutoff || 'pay', [], exc, trace);
     if (base.retired) return { retired: true };
     const pay = Object.assign({}, base.pay);
     const notes = [];
@@ -458,10 +459,15 @@ window.PV = window.PV || {};
         const roster = ctx.rosterBy.get(id);
         const sal = (ctx.salaryBy.get(id) || []).slice(-1)[0] || {};
         (r.exc || []).forEach(e => allExc.push(e));
+        const total = Math.round(Object.values(r.pay).reduce((a, b) => a + b, 0));
+        // 예외 재계산값(월말 기준=지급일 이후분 당월 적용). 지급일 기준과 다를 때만 제공.
+        const rAlt = computePerson(ctx, id, y, m, 'actual');
+        const altTotal = rAlt.retired ? total : Math.round(Object.values(rAlt.pay).reduce((a, b) => a + b, 0));
+        const hasAlt = !rAlt.retired && altTotal !== total;
         rows.push({
           사번: id, 성명: (roster && roster.성명) || sal.성명 || '', 소속: (roster && roster.소속) || sal.소속 || '',
-          pay: r.pay, notes: r.notes || [], warn: (r.exc || []).length > 0, trace: r.trace,
-          total: Math.round(Object.values(r.pay).reduce((a, b) => a + b, 0)),
+          pay: r.pay, notes: r.notes || [], warn: (r.exc || []).length > 0, trace: r.trace, total,
+          altPay: hasAlt ? rAlt.pay : null, altNotes: hasAlt ? (rAlt.notes || []) : null, altTotal: hasAlt ? altTotal : null, hasAlt,
         });
       });
       rows.sort((a, b) => (a.소속 || '').localeCompare(b.소속 || '') || a.사번.localeCompare(b.사번));
@@ -505,7 +511,14 @@ window.PV = window.PV || {};
       status === 'ok' ? okCnt++ : badCnt++;
       const notes = (r.notes || []).slice();
       if (diffs.length) notes.unshift('불일치: ' + diffs.map(d => d.col).join(', '));
-      rows.push({ 사번: L.사번, 성명: L.성명 || r.성명, 소속: L.소속 || r.소속, status, diffs, ours: r.pay, led: L.pay || {}, notes, warn: r.warn, trace: r.trace, ourTotal: r.total, ledTotal: Math.round(L.총지급액 || 0) });
+      // 예외 재계산(당월적용) 값 vs 대장 — 재계산 버튼용
+      let alt = null;
+      if (r.hasAlt && r.altPay) {
+        const aCols = new Set(PV.LEDGER_ITEMS); Object.keys(r.altPay).forEach(k => { if (r.altPay[k] !== 0) aCols.add(k); });
+        const aDiffs = []; aCols.forEach(col => { const ours = Math.round(r.altPay[col] || 0), led = Math.round((L.pay && L.pay[col]) || 0); if (ours !== led) aDiffs.push({ col, ours, led, diff: ours - led }); });
+        alt = { pay: r.altPay, total: r.altTotal, diffs: aDiffs, notes: r.altNotes || [], status: aDiffs.length ? 'bad' : 'ok' };
+      }
+      rows.push({ 사번: L.사번, 성명: L.성명 || r.성명, 소속: L.소속 || r.소속, status, diffs, ours: r.pay, led: L.pay || {}, notes, warn: r.warn, trace: r.trace, ourTotal: r.total, ledTotal: Math.round(L.총지급액 || 0), alt });
     });
 
     rows.sort((a, b) => (a.status === b.status ? 0 : a.status === 'bad' ? -1 : 1));

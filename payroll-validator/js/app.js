@@ -304,6 +304,16 @@
   $('#calcBtn').onclick = () => { try { runCalc(true); } catch (e) { console.error(e); toast('오류: ' + e.message, 'bad'); } };
   $('#openCalcBtn').onclick = openPayrollWindow;
 
+  // 팝업(재계산 처리완료)에서 호출 — 검증결과에 반영(내보내기·재검증에도 유지)
+  window.__pvResolveVerify = function (사번, alt) {
+    if (!verifyResult || !alt) return;
+    const row = verifyResult.rows.find(r => r.사번 === 사번);
+    if (!row) return;
+    row.resolved = true; row.status = 'ok'; row.ourTotal = alt.total; row.diffs = [];
+    if (alt.items) { const p = {}; alt.items.forEach(it => p[it.col] = it.ours); row.ours = p; }
+    row.notes = ['당월적용 처리완료'].concat((row.notes || []).filter(n => !n.startsWith('불일치')));
+  };
+
   /* ---------- STEP B: 검증 ---------- */
   function runVerify(openWindow) {
     const res = PV.compareLedger(payrollResult, storeForEngine());
@@ -412,7 +422,13 @@
   .dtot .dpos{color:var(--bad)}.dtot .dneg{color:var(--info)}
   .dnote{margin-top:12px;font-size:12px;color:var(--tx2);background:var(--su2);border-radius:9px;padding:10px 12px}
   .dback{font-size:11.5px;color:var(--tx2);background:var(--su2);border:1px solid var(--bd);border-radius:9px;padding:10px 12px;line-height:1.7}
-  @media print{.top button,.chips,.search2{display:none}.tbl{max-height:none;overflow:visible}th{position:static}}
+  .drecalc{margin-top:12px;padding:11px 13px;border:1px dashed var(--br);border-radius:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:color-mix(in srgb,var(--br) 7%,transparent)}
+  .drecalc .rc-info{font-size:11.5px;color:var(--tx2);flex:1;min-width:180px}
+  .drecalc .rc-done{font-size:12px;color:var(--br);font-weight:800;flex:1;min-width:150px}
+  .rc-btn{font-family:inherit;font-weight:800;font-size:12px;border:1px solid var(--br);background:var(--br);color:#fff;border-radius:8px;padding:7px 13px;cursor:pointer}
+  .rc-btn.ghost{background:transparent;color:var(--br)}.rc-btn:hover{opacity:.9}
+  tr.rresolved td{background:color-mix(in srgb,var(--br) 12%,var(--su))!important;color:var(--tx)}
+  @media print{.top button,.chips,.search2,.drecalc{display:none}.tbl{max-height:none;overflow:visible}th{position:static}}
   `;
 
   // 팝업 내부 런타임(문자열로 주입되어 팝업 컨텍스트에서 실행)
@@ -501,13 +517,27 @@
     }
     doc.addEventListener('click', e => { if (!e.target.closest('.ctx') && !e.target.closest('th')) closeCtx(); });
     // 행 클릭 → 상세(계산 vs 대장)
-    tb.onclick = e => { const tr = e.target.closest('tr[data-i]'); if (!tr) return; const r = D.rows[+tr.dataset.i]; if (r && r.detail) openDetail(r.detail); };
-    function openDetail(d) {
+    tb.onclick = e => { const tr = e.target.closest('tr[data-i]'); if (!tr) return; const r = D.rows[+tr.dataset.i]; if (r && r.detail) openDetail(r); };
+    function resolveRow(R, alt) {  // 재계산(당월적용)값으로 처리완료 표시
+      R.resolved = true; R.cls = 'rresolved';
+      if (R.vals) { R.vals.ourTotal = alt.total; R.vals.diff = alt.total - (R.detail.ledTotal || 0); R.vals.상태 = '처리완료'; }
+      const noteTags = (alt.notes || []).filter(n => !n.startsWith('불일치')).map(n => '<span class="tag ilhal">' + (n) + '</span>').join('');
+      R.tagsHtml = '<span class="pill" style="background:var(--br);color:#fff">✔ 당월적용 처리완료</span> ' + noteTags;
+      if (R.flags) { R.flags.resolved = true; R.flags.bad = false; }
+      try { if (window.opener && window.opener.__pvResolveVerify) window.opener.__pvResolveVerify(R.detail.사번, alt); } catch (_) {}
+      render();
+    }
+    function openDetail(R) {
+      const d = R.detail;
       const nf = n => n == null ? '' : (+n).toLocaleString('ko-KR');
       const 연봉H = Object.keys(d.연봉 || {}).filter(k => d.연봉[k]).map(k => k + ' <b>' + nf(d.연봉[k]) + '</b>').join(' · ') || '연봉정보 없음';
-      const segH = (d.ilhal && d.segments && d.segments.length) ? '<div class="dseg">⏱ 일할 근무구간: ' + d.segments.map(s => s.label + ' ' + s.days + '일').join(' → ') + '</div>' : '';
-      const itemsH = d.items.map(it => { const diff = it.ours - it.led; return '<tr class="' + (diff ? 'dd' : '') + '"><td class="l">' + it.col + '</td><td class="l fm">' + (it.formula || '') + '</td><td>' + (it.ours ? nf(it.ours) : '·') + '</td><td>' + (it.led ? nf(it.led) : '·') + '</td><td class="' + (diff > 0 ? 'dpos' : diff < 0 ? 'dneg' : '') + '">' + (diff ? (diff > 0 ? '+' : '') + nf(diff) : '0') + '</td></tr>'; }).join('');
-      const extraH = (d.extras && d.extras.length) ? '<div class="dsub">조정·가감 내역</div><table class="dt"><tbody>' + d.extras.map(e => '<tr><td class="l">' + e.label + '</td><td>' + (e.amount == null ? '—' : nf(e.amount)) + '</td></tr>').join('') + '</tbody></table>' : '';
+      let useAlt = !!R.resolved;
+      const segH = (!useAlt && d.ilhal && d.segments && d.segments.length) ? '<div class="dseg">⏱ 일할 근무구간: ' + d.segments.map(s => s.label + ' ' + s.days + '일').join(' → ') + '</div>' : '';
+      const curItems = () => useAlt && d.alt ? d.alt.items : d.items;
+      const curTotal = () => useAlt && d.alt ? d.alt.total : d.ourTotal;
+      const curNotes = () => useAlt && d.alt ? d.alt.notes : d.notes;
+      const itemsHtml = () => curItems().map(it => { const diff = it.ours - it.led; return '<tr class="' + (diff ? 'dd' : '') + '"><td class="l">' + it.col + '</td><td class="l fm">' + (it.formula || (useAlt ? '당월적용(지급일 이후분 포함)' : '')) + '</td><td>' + (it.ours ? nf(it.ours) : '·') + '</td><td>' + (it.led ? nf(it.led) : '·') + '</td><td class="' + (diff > 0 ? 'dpos' : diff < 0 ? 'dneg' : '') + '">' + (diff ? (diff > 0 ? '+' : '') + nf(diff) : '0') + '</td></tr>'; }).join('');
+      const extraH = (!useAlt && d.extras && d.extras.length) ? '<div class="dsub">조정·가감 내역</div><table class="dt"><tbody>' + d.extras.map(e => '<tr><td class="l">' + e.label + '</td><td>' + (e.amount == null ? '—' : nf(e.amount)) + '</td></tr>').join('') + '</tbody></table>' : '';
       const mu = d.matUnpaid;
       const tagHtml = t => t ? ' <b style="color:' + (t === '무급' ? 'var(--bad)' : t === '혼재' ? 'var(--warn)' : 'var(--ok)') + '">[' + t + ']</b>' : '';
       const impHtml = v => {  // 이번달 급여 영향: 감액(빨강 −) / 추가지급(초록 +) / 익월공제·유급지급(회색)
@@ -525,17 +555,33 @@
         + ((d.발령 && d.발령.length && d.휴가 && d.휴가.length) ? '<br>' : '')
         + (d.휴가 || []).map(v => affWrap('🏖 ' + (v.시작일 || '') + (v.종료일 && v.종료일 !== v.시작일 ? '~' + v.종료일 : '') + ' ' + (v.종류 || '') + ' ' + (v.일수 || '') + '일' + tagHtml(v.tag) + impHtml(v), v.aff)).join('<br>')
         + '</div>' : '';
-      const totDiff = d.ourTotal - d.ledTotal;
-      const totH = '<div class="dtot"><span>총액 (세전)</span><span>계산 ' + nf(d.ourTotal) + ' &nbsp;/&nbsp; 대장 ' + nf(d.ledTotal) + ' &nbsp; <span class="' + (totDiff > 0 ? 'dpos' : totDiff < 0 ? 'dneg' : '') + '">' + (totDiff ? (totDiff > 0 ? '+' : '') + nf(totDiff) : '일치') + '</span></span></div>';
-      const notesH = (d.notes && d.notes.length) ? '<div class="dnote">📌 ' + d.notes.join(' · ') + '</div>' : '';
       const ov = doc.createElement('div'); ov.className = 'dov';
-      ov.innerHTML = '<div class="dcard"><div class="dhead"><b>' + d.사번 + ' ' + (d.성명 || '') + '</b> 계산 근거 (연봉 → 월급여 · 세전)<span class="dexp" title="이 사람의 계산근거·백데이터를 파일로 저장">⬇ 내보내기</span><span class="dx">✕</span></div><div class="dbody">'
-        + '<div class="dcontract">📄 적용 연봉계약 <b>' + (d.연봉일자 || '-') + '</b><br>' + 연봉H + '</div>'
-        + segH
-        + '<div class="dsub">항목별 계산</div><table class="dt"><thead><tr><th class="l">항목</th><th class="l">계산식</th><th>계산</th><th>대장</th><th>차이</th></tr></thead><tbody>' + itemsH + '</tbody></table>'
-        + extraH + totH + balH + notesH + '</div></div>';
-      ov.onclick = e => { if (e.target === ov || e.target.className === 'dx') ov.remove(); };
-      ov.querySelector('.dexp').onclick = e => { e.stopPropagation(); exportOne(d); };
+      function renderBody() {
+        const segHd = (!useAlt && d.ilhal && d.segments && d.segments.length) ? '<div class="dseg">⏱ 일할 근무구간: ' + d.segments.map(s => s.label + ' ' + s.days + '일').join(' → ') + '</div>' : '';
+        const extraHd = (!useAlt && d.extras && d.extras.length) ? '<div class="dsub">조정·가감 내역</div><table class="dt"><tbody>' + d.extras.map(e => '<tr><td class="l">' + e.label + '</td><td>' + (e.amount == null ? '—' : nf(e.amount)) + '</td></tr>').join('') + '</tbody></table>' : '';
+        const tot = curTotal(), td = tot - d.ledTotal;
+        const totHd = '<div class="dtot"><span>총액 (세전)' + (useAlt ? ' <b style="color:var(--br)">· 당월적용 재계산</b>' : '') + '</span><span>계산 ' + nf(tot) + ' &nbsp;/&nbsp; 대장 ' + nf(d.ledTotal) + ' &nbsp; <span class="' + (td > 0 ? 'dpos' : td < 0 ? 'dneg' : '') + '">' + (td ? (td > 0 ? '+' : '') + nf(td) : '일치') + '</span></span></div>';
+        const nts = curNotes(); const notesHd = (nts && nts.length) ? '<div class="dnote">📌 ' + nts.join(' · ') + '</div>' : '';
+        // 재계산 버튼: 지급일 이후 변동을 당월 적용(월말 기준)한 예외 재계산. alt가 있을 때만.
+        const recalcH = d.alt ? '<div class="drecalc">' + (useAlt
+          ? '<span class="rc-done">✔ 지급일 이후분 당월 적용됨' + (d.alt.status === 'ok' ? ' — 대장과 일치' : '') + '</span>' + (R.resolved ? '' : '<button class="rc-btn" data-a="apply">이 값으로 처리완료</button>') + '<button class="rc-btn ghost" data-a="revert">되돌리기</button>'
+          : '<span class="rc-info">지급일(20일) 이후 변동은 기본적으로 다음달 소급. 담당자 판단으로 이번달에 바로 처리하려면 →</span><button class="rc-btn" data-a="alt">⟳ 지급일 이후분 당월 적용 (재계산)</button>') + '</div>' : '';
+        ov.innerHTML = '<div class="dcard"><div class="dhead"><b>' + d.사번 + ' ' + (d.성명 || '') + '</b> 계산 근거 (연봉 → 월급여 · 세전)' + (R.resolved ? ' <span class="pill" style="background:var(--br);color:#fff">처리완료</span>' : '') + '<span class="dexp" title="이 사람의 계산근거·백데이터를 파일로 저장">⬇ 내보내기</span><span class="dx">✕</span></div><div class="dbody">'
+          + '<div class="dcontract">📄 적용 연봉계약 <b>' + (d.연봉일자 || '-') + '</b><br>' + 연봉H + '</div>'
+          + segHd
+          + '<div class="dsub">항목별 계산</div><table class="dt"><thead><tr><th class="l">항목</th><th class="l">계산식</th><th>계산</th><th>대장</th><th>차이</th></tr></thead><tbody>' + itemsHtml() + '</tbody></table>'
+          + extraHd + totHd + recalcH + balH + notesHd + '</div></div>';
+        ov.querySelector('.dx').onclick = () => ov.remove();
+        ov.querySelector('.dexp').onclick = e => { e.stopPropagation(); exportOne(d); };
+        const rb = ov.querySelectorAll('.rc-btn'); rb.forEach(b => b.onclick = e => {
+          e.stopPropagation(); const a = b.dataset.a;
+          if (a === 'alt') { useAlt = true; renderBody(); }
+          else if (a === 'revert') { useAlt = false; renderBody(); }
+          else if (a === 'apply') { resolveRow(R, d.alt); useAlt = true; renderBody(); }
+        });
+      }
+      renderBody();
+      ov.onclick = e => { if (e.target === ov) ov.remove(); };
       doc.body.appendChild(ov);
     }
     doc.getElementById('gs').oninput = e => { st.q = e.target.value; render(); };
@@ -622,7 +668,17 @@
       const aff = (ym && sm === ym) || o.시작일 === baselineDate || ((o.퇴직일 || '').slice(0, 7) === ym);
       return { 구분: o.구분, 시작일: o.시작일, 퇴직일: o.퇴직일, aff };
     });
-    return { 사번: r.사번, 성명: r.성명, 연봉일자: t.연봉일자, 연봉: 연봉, quarterMonth: t.quarterMonth, ilhal: t.ilhal, segments: t.segments || [], items, extras: t.extras || [], dutyLabel: t.dutyLabel, dutyFlat: t.dutyFlat, uvac: t.uvac, uvacDeduct: t.uvacDeduct, 발령: 발령, 휴가: 휴가, matUnpaid: t.matUnpaid || null, ym, ourTotal: r.ourTotal, ledTotal: r.ledTotal, notes: r.notes || [] };
+    // 백데이터 일자 내림차순(최신순) 정렬
+    const dcmp = (a, b) => (b.시작일 || '') < (a.시작일 || '') ? -1 : (b.시작일 || '') > (a.시작일 || '') ? 1 : 0;
+    발령.sort(dcmp); 휴가.sort(dcmp);
+    // 예외 재계산(당월적용) 상세 구성
+    let alt = null;
+    if (r.alt) {
+      const acols = [...new Set([...PV.LEDGER_ITEMS, ...Object.keys(r.alt.pay || {}), ...Object.keys(r.led || {})])].filter(c => ((r.alt.pay && r.alt.pay[c]) || (r.led && r.led[c])));
+      const aitems = acols.map(c => ({ col: c, ours: Math.round((r.alt.pay && r.alt.pay[c]) || 0), led: Math.round((r.led && r.led[c]) || 0) }));
+      alt = { total: r.alt.total, status: r.alt.status, items: aitems, notes: r.alt.notes || [], diffCols: (r.alt.diffs || []).map(d => d.col) };
+    }
+    return { 사번: r.사번, 성명: r.성명, 연봉일자: t.연봉일자, 연봉: 연봉, quarterMonth: t.quarterMonth, ilhal: t.ilhal, segments: t.segments || [], items, extras: t.extras || [], dutyLabel: t.dutyLabel, dutyFlat: t.dutyFlat, uvac: t.uvac, uvacDeduct: t.uvacDeduct, 발령: 발령, 휴가: 휴가, matUnpaid: t.matUnpaid || null, ym, ourTotal: r.ourTotal, ledTotal: r.ledTotal, notes: r.notes || [], alt };
   }
   const tagHTML = notes => (notes || []).map(n => `<span class="tag ${n.startsWith('일할') ? 'ilhal' : n.includes('확인') ? 'warn' : 'sp'}">${esc(n)}</span>`).join('');
   const flagsOf = r => ({ ilhal: (r.notes || []).some(n => n.startsWith('일할')), special: (r.notes || []).some(n => n.includes('특례') || n.includes('소급') || n.includes('임금피크') || n.includes('정직') || n.includes('감봉')), warn: !!r.warn });
