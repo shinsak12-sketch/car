@@ -46,6 +46,7 @@ export default function BottomNav({ isAdmin }) {
             <div className="sheet-handle" />
             <Link href="/alerts" className="sheet-item alert" onClick={close}><span>🚨</span> 비상 알림</Link>
             <Link href="/contacts" className="sheet-item" onClick={close}><span>📇</span> 연락처 · 관계자</Link>
+            {isAdmin && <Link href="/report" className="sheet-item" onClick={close}><span>📝</span> 보고서 프롬프트</Link>}
             {isAdmin && <Link href="/users" className="sheet-item" onClick={close}><span>👤</span> 사용자 관리</Link>}
             <Link href="/account" className="sheet-item" onClick={close}><span>⚙️</span> 내 계정</Link>
             <form action="/api/logout" method="post">

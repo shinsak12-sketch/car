@@ -20,6 +20,9 @@ export default function Nav({ user, orgName }) {
           <Link href="/files" className={is('/files') ? 'active' : ''}>자료함</Link>
           <Link href="/alerts" className={`alert-link ${is('/alerts') ? 'active' : ''}`}>🚨 비상 알림</Link>
           {user.role === 'admin' && (
+            <Link href="/report" className={is('/report') ? 'active' : ''}>보고서</Link>
+          )}
+          {user.role === 'admin' && (
             <Link href="/users" className={is('/users') ? 'active' : ''}>사용자</Link>
           )}
         </nav>

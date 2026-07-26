@@ -234,6 +234,13 @@ textarea{resize:vertical}
 .file-link{font-size:.74rem;color:var(--primary);margin-top:4px}
 .file-actions{display:flex;gap:6px;margin-top:8px}
 
+/* ── 보고서 프롬프트 ── */
+.report-lead{font-size:.86rem;color:var(--muted);line-height:1.55;margin:0 0 12px}
+.report-prompt{margin-top:14px}
+.report-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.report-hint{font-size:.78rem;color:var(--muted);line-height:1.5;margin:0 0 8px}
+.report-textarea{width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;line-height:1.5;padding:12px;border:1px solid var(--line);border-radius:var(--radius);background:#f8fafc;color:var(--ink);resize:vertical;white-space:pre}
+
 /* ── 대시보드 최근 자료 썸네일 ── */
 .thumb-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
 .thumb{flex:0 0 auto;width:72px;height:72px;border-radius:10px;border:1px solid var(--line);background:#f8fafc;display:flex;align-items:center;justify-content:center;overflow:hidden}
