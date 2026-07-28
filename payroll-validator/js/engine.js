@@ -216,16 +216,14 @@ window.PV = window.PV || {};
     let orders = (ctx.ordersBy.get(sabun) || []).map(o =>
       ((o.발령구분 || '').includes('퇴직') && o.퇴직일) ? Object.assign({}, o, { 발령시작일: addDay(o.퇴직일) }) : o
     );
-    // 출산휴가 무급기간을 '무급 세그먼트'로 편입 (휴직 발령과 동일 취급 → 지급일 커트라인/소급 정확)
+    // 출산휴가 무급기간을 '무급 세그먼트'로 편입 (휴직 발령과 동일 취급 → 지급일 커트라인/소급 정확).
+    //  복귀 예정일이 지급일 이후면 그 달의 재계산/후단(담당자 판단)으로 처리 — 별도 특례 없음.
     const mu = maternityUnpaid(ctx, sabun);
     if (mu) {
-      const backDate = addDay(mu.end); // 출산휴가 복귀 예정일
-      // 복귀 직후(3일 내)에 다른 휴직/퇴직 발령이 이어지면 = 실제 복귀 아님(연속 휴가: 출산→육아휴직 등).
-      //  → '복귀'(정상근무) 가짜구간을 생략해 유령 유급일이 안 생기게. (실제 복귀해 며칠이라도 근무하면 유지)
-      const contLeave = orders.some(o => /휴직|퇴직/.test(o.발령구분 || '') && o.발령시작일 && cmp(o.발령시작일, backDate) >= 0 && daysBetween(backDate, o.발령시작일) <= 3);
-      const pseudo = [{ 발령구분: '출산휴가(무급)', 발령시작일: mu.start, _pt: 'unpaid', _pseudo: true }];
-      if (!contLeave) pseudo.push({ 발령구분: '출산휴가 복귀', 발령시작일: backDate, _pt: 'normal', _pseudo: true });
-      orders = orders.concat(pseudo);
+      orders = orders.concat([
+        { 발령구분: '출산휴가(무급)', 발령시작일: mu.start, _pt: 'unpaid', _pseudo: true },
+        { 발령구분: '출산휴가 복귀', 발령시작일: addDay(mu.end), _pt: 'normal', _pseudo: true },
+      ]);
     }
     const PT = o => o._pt || payTypeOf(o.발령구분);
     // 같은 날 충돌 시 '더 제한적인(낮은 지급) 상태'가 이기도록 정렬(날짜 asc, 지급순위 desc → 무급이 뒤).
@@ -628,6 +626,12 @@ window.PV = window.PV || {};
         const paid30 = rAlt.retired ? 0 : rAlt.paidUnits, paidReal = bReal.retired ? 0 : bReal.paidUnits;
         const hasPostPayChange = !rAlt.retired && r.paidUnits !== rAlt.paidUnits;
         const dayShift = hasPostPayChange && paid30 !== paidReal;
+        // ★ 당월 지급일 이후 변동(발령뿐 아니라 무급→유급 등 상태변화 모두). 소급 제외 base(지급일기준) vs
+        //   당월적용(월말기준)이 다르면 = 20일 이후 급여영향 변동 발생 → 담당자 재계산/당월적용 검토 대상.
+        const sogTmp = r.trace && r.trace.sogeup;
+        const payBaseTotal = total - ((sogTmp && sogTmp.sum) || 0);
+        const currentPostPay = !rAlt.retired && altTotal !== payBaseTotal;
+        if (currentPostPay) notes.push('⚠당월 지급일(20일) 이후 변동 (무급↔유급·발령 등) — 당월적용/재계산 검토 (누락 확인)');
         if (dayShift) notes.push(`⚠당월/익월 처리 일수 차이 ${Math.abs(paidReal - paid30)}일 — 익월 처리 권장 (근로자 유리)`);
         // 전월 대장 대비 소급 + '전월 이월 무시'(소급 제외) 값
         const sog = r.trace && r.trace.sogeup;
@@ -642,7 +646,7 @@ window.PV = window.PV || {};
         }
         rows.push({
           사번: id, 성명: (roster && roster.성명) || sal.성명 || '', 소속: (roster && roster.소속) || sal.소속 || '',
-          pay: r.pay, notes, warn: (r.exc || []).length > 0, trace: r.trace, total, dayShift,
+          pay: r.pay, notes, warn: (r.exc || []).length > 0, trace: r.trace, total, dayShift, currentPostPay,
           altPay: rAlt.retired ? null : rAlt.pay, altNotes: rAlt.retired ? null : (rAlt.notes || []), altTotal, hasAlt,
           altPay2: rAlt2.retired ? null : rAlt2.pay, altNotes2: rAlt2.retired ? null : (rAlt2.notes || []), altTotal2, hasAlt2,
           sogeup: sog || null, hasSogeup, ignorePay, ignoreTotal, ignoreNotes, prevChangeOrders,
@@ -660,6 +664,8 @@ window.PV = window.PV || {};
     if (ilhal) alerts.push({ level: 'info', title: `일할계산 ${ilhal}명`, desc: '휴직·복직·단축 등으로 일할 적용된 인원' });
     const shiftRows = rows.filter(r => r.dayShift);
     if (shiftRows.length) alerts.push({ level: 'warn', title: `당월/익월 일수 차이 ${shiftRows.length}명`, desc: '당월(30−앞단)과 익월(실제일수) 처리 시 유급일수가 달라짐 → 익월 처리 권장(1일 근로자 유리): ' + shiftRows.map(r => r.성명 || r.사번).join(', ') });
+    const postRows = rows.filter(r => r.currentPostPay);
+    if (postRows.length) alerts.push({ level: 'warn', title: `당월 지급일 이후 변동 ${postRows.length}명`, desc: '지급일(20일) 이후 무급↔유급·발령 등 급여영향 변동 발생 → 당월적용/재계산 검토(누락 확인): ' + postRows.map(r => r.성명 || r.사번).join(', ') });
     const sogRows = rows.filter(r => r.hasSogeup);
     if (sogRows.length) alerts.push({ level: 'warn', title: `전월 지급일 이후 변동(소급) ${sogRows.length}명`, desc: `전월 대장 대비 재계산 차액 발생 → 당월 추가처리 필요. 담당자 누락 여부 확인: ` + sogRows.map(r => `${r.성명 || r.사번}(${r.sogeup.sum >= 0 ? '+' : ''}${r.sogeup.sum.toLocaleString()})`).join(', ') });
     const seen = new Set();
@@ -715,7 +721,7 @@ window.PV = window.PV || {};
         const iDiffs = []; iCols.forEach(col => { const ours = Math.round(r.ignorePay[col] || 0), led = Math.round((L.pay && L.pay[col]) || 0); if (ours !== led) iDiffs.push({ col, ours, led, diff: ours - led }); });
         ignore = { pay: r.ignorePay, total: r.ignoreTotal, diffs: iDiffs, notes: r.ignoreNotes || [], status: iDiffs.length ? 'bad' : 'ok' };
       }
-      rows.push({ 사번: L.사번, 성명: L.성명 || r.성명, 소속: L.소속 || r.소속, status, diffs, ours: r.pay, led: L.pay || {}, notes, warn: r.warn, trace: r.trace, ourTotal: r.total, ledTotal: Math.round(L.총지급액 || 0), alt, alt2, ignore, dayShift: !!r.dayShift, hasSogeup: !!r.hasSogeup, sogeup: r.sogeup || null, prevChangeOrders: r.prevChangeOrders || null });
+      rows.push({ 사번: L.사번, 성명: L.성명 || r.성명, 소속: L.소속 || r.소속, status, diffs, ours: r.pay, led: L.pay || {}, notes, warn: r.warn, trace: r.trace, ourTotal: r.total, ledTotal: Math.round(L.총지급액 || 0), alt, alt2, ignore, dayShift: !!r.dayShift, currentPostPay: !!r.currentPostPay, hasSogeup: !!r.hasSogeup, sogeup: r.sogeup || null, prevChangeOrders: r.prevChangeOrders || null });
     });
 
     rows.sort((a, b) => (a.status === b.status ? 0 : a.status === 'bad' ? -1 : 1));
