@@ -396,13 +396,24 @@ async function extractPdfText(file){
   }
   return text;
 }
+// 사택 주소에서 시/도(한도판정 지역) 추정
+function guessRegion(addr){
+  addr=String(addr||"");
+  const map=[["서울","서울"],["부산","부산"],["대구","대구"],["인천","인천"],["광주","광주"],["대전","대전"],
+    ["울산","울산"],["세종","세종"],["경기","경기"],["강원","강원"],["충북","충북"],["충남","충남"],
+    ["전북","전북"],["전남","전남"],["경북","경북"],["경남","경남"],["제주","제주"]];
+  for(const [k,v] of map){ if(addr.includes(k)) return v; }
+  return "";
+}
 // 고정 양식 라벨 기준 필드 추출
 function parseApprovalText(text){
   const t = text.replace(/\r/g,"");
   // 같은 줄에 여러 라벨이 붙을 수 있어, 값은 "다음 라벨" 직전에서 잘라낸다.
-  const STOP_LABELS=["문서번호","센터명","성명","사번","연고지 주소","연고지주소","사택 주소","사택주소",
-    "계약구분","사용층","전용면적","소유주","보증금 지급금액","보증금지급금액","보증금","월세 지급금액",
-    "월세지급금액","월세 지급일","월세지급일","결재"];
+  const STOP_LABELS=["문서번호","보안등급","문서형식","보존년한","기안자","기안부서","수신부서","작성일","제 목","제목",
+    "센터명","성명","사번","연고지 주소","연고지주소","사택 주소","사택주소",
+    "계약구분","사용층","전용면적","소유주","소유자","임대인","집주인","보증금 지급금액","보증금지급금액","보증금",
+    "월세 지급금액","월세지급금액","월 임대료","월임대료","임대료","월세 지급일","월세지급일","임대료 지급일",
+    "연락처","전화","휴대폰","핸드폰","계좌","관리비","결재"];
   // 라벨 뒤 값 추출: 라벨 다음 콜론/공백 후 줄바꿈 또는 다음 라벨 전까지
   function grab(labels){
     for(const lb of labels){
@@ -422,12 +433,39 @@ function parseApprovalText(text){
     }
     return "";
   }
-  function num(s){ const m=String(s).replace(/[, ]/g,"").match(/-?\d+/); return m?Number(m[0]):""; }
-  // 결재선 마지막 결재일: 문서 내 모든 날짜 중 최대값(YYYY-MM-DD / YYYY.MM.DD)
-  const dates=[...t.matchAll(/(20\d{2})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/g)]
-    .map(m=>`${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`);
-  const approvalDate = dates.length?dates.sort().slice(-1)[0]:"";
+  const pad=n=>String(n).padStart(2,"0");
+  // 문자열에서 전화번호 형태만 추출(없으면 원문 반환)
+  function phone(s){ const m=String(s).match(/01[016-9][-.\s]?\d{3,4}[-.\s]?\d{4}|0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}/); return m?m[0].replace(/\s/g,""):String(s||"").trim(); }
+
   const ct = grab(["계약구분\\(전/월세\\)","계약구분"]);
+  const contractType = /전세/.test(ct)?"전세":(/월세/.test(ct)?"월세":ct);
+
+  // ── 보증금/월세 금액: 이 사택 결재양식은 보증금·월세 표가 뒤엉켜 추출되므로 라벨 대신
+  //    금액(원)·지급일 토큰을 직접 인식한다.
+  //    실제 예) 보증금 지급금액 5,000,000원 / 월세 450,000원 / 월세지급일 13일(후불)
+  const wonAmts=[...t.matchAll(/([\d,]{4,})\s*원/g)].map(m=>Number(m[1].replace(/,/g,"")));
+  const depM = t.match(/지급금액\s*([\d,]{4,})\s*원/);         // '지급금액 …원' = 보증금 지급금액
+  let deposit = depM? Number(depM[1].replace(/,/g,"")) : (wonAmts.length?Math.max(...wonAmts):"");
+  let monthlyRent = "";
+  if(contractType!=="전세"){
+    const others = wonAmts.filter(a=>a!==deposit);   // 보증금을 제외한 금액 = 월세
+    monthlyRent = others.length? others[0] : "";
+  }
+  // 월세 지급일: 'N일(선불/후불)' 토큰 우선
+  const payDayM = t.match(/(\d{1,2})\s*일\s*\(\s*([선후])\s*[불납]?\s*\)/);
+  const rentPayDay = payDayM? payDayM[0].replace(/\s/g,"") : "";
+  const rentPayType = (t.match(/선불|선납|후불|후납/)||[""])[0].replace("선납","선불").replace("후납","후불");
+  // 보증금 지급일(계약/입주 기준일 추정) → 시작일 채움
+  const kd = t.match(/지급일\s*(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+  const startDate = kd? `${kd[1]}-${pad(kd[2])}-${pad(kd[3])}` : "";
+
+  // 결재완료일: 결재선의 '날짜 시:분:초' 타임스탬프 중 최댓값(하단 출력일자 오인 방지)
+  const stamps=[...t.matchAll(/(20\d{2})[-.\/](\d{1,2})[-.\/](\d{1,2})\s+\d{1,2}:\d{2}(?::\d{2})?/g)]
+    .map(m=>`${m[1]}-${pad(m[2])}-${pad(m[3])}`);
+  const allDates=[...t.matchAll(/(20\d{2})[-.\/](\d{1,2})[-.\/](\d{1,2})/g)]
+    .map(m=>`${m[1]}-${pad(m[2])}-${pad(m[3])}`);
+  const approvalDate = stamps.length? stamps.sort().slice(-1)[0] : (allDates.length? allDates.sort().slice(-1)[0] : "");
+
   return {
     docNumber:  grab(["문서번호"]),
     centerName: grab(["센터명"]),
@@ -435,13 +473,20 @@ function parseApprovalText(text){
     employeeId: grab(["사번"]),
     homeAddress:grab(["연고지 주소","연고지주소"]),
     address:    grab(["사택 주소","사택주소"]),
-    contractType: /전세/.test(ct)?"전세":(/월세/.test(ct)?"월세":ct),
+    contractType,
+    region:     guessRegion(grab(["사택 주소","사택주소"])),   // 사택 주소에서 시/도 추정(한도판정용)
     floor:      grab(["사용층"]),
     area:       grab(["전용면적"]),
-    owner:      grab(["소유주"]),
-    deposit:    num(grab(["보증금 지급금액","보증금지급금액","보증금"])),
-    monthlyRent:num(grab(["월세 지급금액","월세지급금액"])),
-    rentPayDay: grab(["월세 지급일","월세지급일"]),
+    // 임대인(소유주) 이름: 여러 별칭 시도
+    owner:      grab(["임대인 성명","임대인","소유주","소유자","집주인"]),
+    // ⚠ 이 결재 PDF 양식에는 임대인 '연락처'·'계좌'가 없음 → 있는 경우만 채워지고, 보통 수동입력 필요
+    ownerContact: phone(grab(["임대인 연락처","소유주 연락처","임대인 전화","소유주 전화","임대인 휴대폰","연락처","전화번호","휴대폰","핸드폰"])),
+    ownerAccount: grab(["임대인 계좌","소유주 계좌","입금 계좌","입금계좌","계좌번호","계좌"]),
+    deposit,
+    monthlyRent,
+    rentPayDay,           // 예: 13일(후불)
+    rentPayType,          // 선불/후불
+    startDate,            // 보증금 지급일 기준(추정)
     approvalDate,
   };
 }
@@ -454,6 +499,7 @@ function findOrCreateProperty(data){
   p = {
     propertyId: nextId("property"),
     address: data.address||"", owner:data.owner||"",
+    ownerContact:data.ownerContact||"", ownerAccount:data.ownerAccount||"",
     contractType:data.contractType||"", floor:data.floor||"", area:data.area||"",
     region:data.region||"", status:"공실"
   };
@@ -463,14 +509,15 @@ function findOrCreateProperty(data){
 // 신규 계약 저장(검토폼 → 한도판정 → 저장). property=입주중
 function saveNewContract(data){
   const prop = findOrCreateProperty(data);
-  // property 정보 보완
-  ["owner","floor","area","region"].forEach(k=>{ if(!prop[k]&&data[k]) prop[k]=data[k]; });
+  // property 정보 보완(임대인 이름·연락처·계좌 포함)
+  ["owner","ownerContact","ownerAccount","floor","area","region"].forEach(k=>{ if(!prop[k]&&data[k]) prop[k]=data[k]; });
   const c = {
     contractId: nextId("contract"), propertyId: prop.propertyId,
     docNumber:data.docNumber, centerName:data.centerName, tenantName:data.tenantName,
     employeeId:data.employeeId, homeAddress:data.homeAddress, contractType:data.contractType,
     deposit:Number(data.deposit||0), monthlyRent:Number(data.monthlyRent||0),
-    rentPayDay:data.rentPayDay||"", startDate:data.startDate||"", endDate:data.endDate||"",
+    rentPayDay:data.rentPayDay||"", rentPayType:data.rentPayType||"",
+    startDate:data.startDate||"", endDate:data.endDate||"",
     approvalDate:data.approvalDate||"", region:data.region||prop.region||"",
     limitCheck:data.limitCheck||"", limitReason:data.limitReason||"",
     status:"계약중"
@@ -484,7 +531,7 @@ function saveNewContract(data){
 function updateContract(id, newData, reason){
   const c=db.contracts.find(x=>x.contractId===id); if(!c) return;
   const before={...c};
-  const fields=["docNumber","centerName","tenantName","employeeId","homeAddress","contractType","deposit","monthlyRent","rentPayDay","startDate","endDate","approvalDate","region","limitCheck","status"];
+  const fields=["docNumber","centerName","tenantName","employeeId","homeAddress","contractType","deposit","monthlyRent","rentPayDay","rentPayType","startDate","endDate","approvalDate","region","limitCheck","status"];
   Object.assign(c,newData);
   c.deposit=Number(c.deposit||0); c.monthlyRent=Number(c.monthlyRent||0);
   logDiff("contract",id,before,c,fields,reason||"계약 정보 수정");
@@ -529,6 +576,7 @@ function seedSample(){
   db.limits=[
     {region:"서울", grade:"공통", jeonseLimit:300000000, wolseDepositLimit:50000000, wolseRentLimit:1500000},
     {region:"경기", grade:"공통", jeonseLimit:200000000, wolseDepositLimit:30000000, wolseRentLimit:1000000},
+    {region:"인천", grade:"실무자", jeonseLimit:150000000, wolseDepositLimit:20000000, wolseRentLimit:600000},
     {region:"대전", grade:"공통", jeonseLimit:150000000, wolseDepositLimit:20000000, wolseRentLimit:800000},
   ];
   // property + contract 3건
@@ -874,7 +922,9 @@ function contractFormFields(d, pid){
     ${f("사번","c_employeeId",d.employeeId)}
     ${f("연고지 주소","c_homeAddress",d.homeAddress)}
     ${f("사택 주소","c_address",d.address)}
-    ${f("소유주","c_owner",d.owner)}
+    ${f("소유주(임대인)","c_owner",d.owner)}
+    ${f("임대인 연락처","c_ownerContact",d.ownerContact)}
+    ${f("임대인 계좌(입금)","c_ownerAccount",d.ownerAccount)}
     ${f("계약구분","c_contractType",d.contractType||"전세","select",["전세","월세"])}
     ${f("사용층","c_floor",d.floor)}
     ${f("전용면적","c_area",d.area)}
@@ -882,18 +932,21 @@ function contractFormFields(d, pid){
     ${f("보증금","c_deposit",d.deposit,"number")}
     ${f("월세","c_monthlyRent",d.monthlyRent,"number")}
     ${f("월세 지급일","c_rentPayDay",d.rentPayDay)}
+    ${f("선불/후불","c_rentPayType",d.rentPayType||"","select",["","선불","후불"])}
     ${f("계약 시작일","c_startDate",d.startDate,"date")}
     ${f("계약 종료일","c_endDate",d.endDate,"date")}
     ${f("결재 완료일","c_approvalDate",d.approvalDate,"date")}
   </div>
+  <div class="notice gray small" style="margin-top:8px">※ 이 결재 PDF 양식에는 <b>임대인 연락처·계좌</b>가 없어 자동으로 채워지지 않습니다. 계약서(첨부)를 보고 직접 입력하세요.</div>
   <div id="limitPreview" style="margin-top:10px"></div>`;
 }
 function readContractForm(){
   return {
     docNumber:val("c_docNumber"),centerName:val("c_centerName"),tenantName:val("c_tenantName"),
-    employeeId:val("c_employeeId"),homeAddress:val("c_homeAddress"),address:val("c_address"),owner:val("c_owner"),
+    employeeId:val("c_employeeId"),homeAddress:val("c_homeAddress"),address:val("c_address"),
+    owner:val("c_owner"),ownerContact:val("c_ownerContact"),ownerAccount:val("c_ownerAccount"),
     contractType:val("c_contractType"),floor:val("c_floor"),area:val("c_area"),region:val("c_region"),
-    deposit:val("c_deposit"),monthlyRent:val("c_monthlyRent"),rentPayDay:val("c_rentPayDay"),
+    deposit:val("c_deposit"),monthlyRent:val("c_monthlyRent"),rentPayDay:val("c_rentPayDay"),rentPayType:val("c_rentPayType"),
     startDate:val("c_startDate"),endDate:val("c_endDate"),approvalDate:val("c_approvalDate")
   };
 }
