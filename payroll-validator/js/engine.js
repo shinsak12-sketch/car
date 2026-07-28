@@ -219,10 +219,13 @@ window.PV = window.PV || {};
     // 출산휴가 무급기간을 '무급 세그먼트'로 편입 (휴직 발령과 동일 취급 → 지급일 커트라인/소급 정확)
     const mu = maternityUnpaid(ctx, sabun);
     if (mu) {
-      orders = orders.concat([
-        { 발령구분: '출산휴가(무급)', 발령시작일: mu.start, _pt: 'unpaid', _pseudo: true },
-        { 발령구분: '출산휴가 복귀', 발령시작일: addDay(mu.end), _pt: 'normal', _pseudo: true },
-      ]);
+      const backDate = addDay(mu.end); // 출산휴가 복귀 예정일
+      // 복귀 직후(3일 내)에 다른 휴직/퇴직 발령이 이어지면 = 실제 복귀 아님(연속 휴가: 출산→육아휴직 등).
+      //  → '복귀'(정상근무) 가짜구간을 생략해 유령 유급일이 안 생기게. (실제 복귀해 며칠이라도 근무하면 유지)
+      const contLeave = orders.some(o => /휴직|퇴직/.test(o.발령구분 || '') && o.발령시작일 && cmp(o.발령시작일, backDate) >= 0 && daysBetween(backDate, o.발령시작일) <= 3);
+      const pseudo = [{ 발령구분: '출산휴가(무급)', 발령시작일: mu.start, _pt: 'unpaid', _pseudo: true }];
+      if (!contLeave) pseudo.push({ 발령구분: '출산휴가 복귀', 발령시작일: backDate, _pt: 'normal', _pseudo: true });
+      orders = orders.concat(pseudo);
     }
     const PT = o => o._pt || payTypeOf(o.발령구분);
     // 같은 날 충돌 시 '더 제한적인(낮은 지급) 상태'가 이기도록 정렬(날짜 asc, 지급순위 desc → 무급이 뒤).
