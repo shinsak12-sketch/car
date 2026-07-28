@@ -710,23 +710,25 @@
         const tot = curTotal(), td = tot - d.ledTotal;
         const totHd = '<div class="dtot"><span>총액 (세전)' + (isAlt() ? ' <b style="color:' + (view === 'alt2' ? 'var(--ok)' : 'var(--br)') + '">· ' + altModeLabel() + ' 재계산</b>' : '') + '</span><span>계산 ' + nf(tot) + ' &nbsp;/&nbsp; 대장 ' + nf(d.ledTotal) + ' &nbsp; <span class="' + (td > 0 ? 'dpos' : td < 0 ? 'dneg' : '') + '">' + (td ? (td > 0 ? '+' : '') + nf(td) : '일치') + '</span></span></div>';
         const nts = curNotes(); const notesHd = (nts && nts.length) ? '<div class="dnote">📌 ' + nts.join(' · ') + '</div>' : '';
-        // 재계산 박스: 항상 표시. 지급일 이후 변동이 있으면 당월적용/후단처리 버튼, 없으면 안내만.
-        const altChanged = d.alt && d.alt.total !== d.ourTotal;
-        const alt2Changed = d.alt2 && d.alt2.total !== d.ourTotal && d.alt2.total !== (d.alt ? d.alt.total : d.ourTotal);
+        // 재계산 박스 = '이번달' 지급일 이후 변동 처리용(당월적용/후단). 전월 소급은 아래 소급 박스가 담당.
+        //  판단 기준은 소급 제외 base(=전월이월무시 값). 그래야 '소급만 있는 사람'에게 재계산 버튼이 중복으로 안 뜸.
+        const baseNoSog = (d.hasSogeup && d.ignore) ? d.ignore.total : d.ourTotal;
+        const altChanged = d.alt && d.alt.total !== baseNoSog;
+        const alt2Changed = d.alt2 && d.alt2.total !== baseNoSog && d.alt2.total !== (d.alt ? d.alt.total : baseNoSog);
         const dsWarn = d.dayShift ? '<div style="width:100%;font-size:11.5px;color:var(--warn);font-weight:800;margin-bottom:6px;line-height:1.6">⚠ 당월(30−앞단)·익월(실제일수) 처리 시 유급일수가 달라집니다 — <u>익월 처리 권장</u>(1일 근로자 유리). 당월에 처리해야 하면 <b>후단처리</b>로 뒷구간 실제일수를 보장하세요.</div>' : '';
         let recalcH = '';
-        if (isAlt()) {
+        if (isAlt() && view !== 'ignore') {
           const a = curAlt(), matched = a.status === 'ok';
           const switchBtn = (view === 'alt' && alt2Changed) ? '<button class="rc-btn ghost" data-a="alt2">후단처리(30−뒷단)로 전환</button>'
             : (view === 'alt2' && altChanged) ? '<button class="rc-btn ghost" data-a="alt">당월적용(30−앞단)으로 전환</button>' : '';
           recalcH = '<div class="drecalc"><span class="' + (matched ? 'rc-done' : 'rc-info') + '"' + (matched ? '' : ' style="color:var(--bad);font-weight:800"') + '>' + (matched ? '✔ ' : '⚠ ') + altModeLabel() + ' 적용' + (matched ? ' — 대장과 일치' : ' — 대장과 불일치 (계산 ' + nf(a.total) + ' / 대장 ' + nf(d.ledTotal) + ') · 해결 아님') + '</span>'
             + (R.resolved && R.processedMode === (view === 'alt2' ? 'rear' : 'front') ? '' : '<button class="rc-btn" data-a="apply">이 값으로 처리</button>') + switchBtn + '<button class="rc-btn ghost" data-a="revert">원계산으로</button></div>';
-        } else if (altChanged || alt2Changed || d.dayShift) {
-          recalcH = '<div class="drecalc">' + dsWarn + '<span class="rc-info">지급일(20일) 이후 변동은 기본 다음달 소급. 담당자 판단으로 이번달에 바로 처리 시 방식을 선택하세요.</span>'
+        } else if (view === 'base' && (altChanged || alt2Changed || d.dayShift)) {
+          recalcH = '<div class="drecalc">' + dsWarn + '<span class="rc-info">이번달 지급일(20일) 이후 변동은 기본 다음달 소급. 담당자 판단으로 이번달에 바로 처리 시 방식을 선택하세요.</span>'
             + (altChanged ? '<button class="rc-btn" data-a="alt">⟳ 당월적용 (30−앞단) ' + nf(d.alt.total) + '</button>' : '')
             + (alt2Changed ? '<button class="rc-btn" style="background:var(--ok);border-color:var(--ok)" data-a="alt2">⟳ 후단처리 (30−뒷단) ' + nf(d.alt2.total) + '</button>' : '')
             + '</div>';
-        } else {
+        } else if (view === 'base' && !d.hasSogeup) {
           recalcH = '<div class="drecalc"><span class="rc-info" style="color:var(--tx3)">💡 지급일 이후 변동 없음 — 재계산 불필요 (지급일 기준 = 월말 기준 동일)</span></div>';
         }
         // 전월 지급일 이후 변동(소급) — 백데이터 좌우분할: 좌=변동발령 강조, 우=전월 이월 무시 버튼

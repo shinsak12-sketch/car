@@ -483,8 +483,11 @@ window.PV = window.PV || {};
     if (!deferred) return { carry: {}, sum: 0 }; // 전월 자체 이연 없음 → 소급 없음
     const carry = {}, cor = {}, pd = {}; let sum = 0;
     SOGEUP_ITEMS.forEach(k => {
-      const c = Math.round(correct.pay[k] || 0), p = Math.round(paid[k] || 0), d = c - p;
-      cor[k] = c; pd[k] = p; if (d) { carry[k] = d; sum += d; }
+      const cr = correct.real[k] || 0, pr = (paidCut.real && paidCut.real[k]) || 0, led = Math.round(paid[k] || 0);
+      // 전월 대장이 as-paid(단축만근 등)와 일치하면 raw 차액(정답−as-paid)을 한 번만 절상 → 이중 반올림 오차(10원) 제거.
+      //  대장이 as-paid와 다르면(담당자가 이미 다르게 처리/오류) 대장 기준으로 차액 산출.
+      const d = (ceilU(pr) === led) ? ceilU(cr - pr) : (ceilU(cr) - led);
+      cor[k] = ceilU(cr); pd[k] = led; if (d) { carry[k] = d; sum += d; }
     });
     return { carry, correct: cor, paid: pd, sum, absorb };
   }
