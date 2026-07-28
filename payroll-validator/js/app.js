@@ -14,6 +14,7 @@
     salary: null, roster: null, order: null, vacation: null, holiday: [], ledger: null,
     files: {}, fileCounts: {}, uploads: { annual: new Map(), prod: new Map(), etc: new Map() },
     discipline: [], carry: new Map(), overrides: { unpaidVac: new Map(), maternity: new Map() }, dutyextra: [],
+    resolutions: new Map(), // 전월 처리내역(사번 → {review, processedMode}) — 이번달 소급 계산 시 반영
   };
   let payrollResult = null, verifyResult = null;
 
@@ -86,7 +87,8 @@
     store.discipline = (a.discipline || []).map(d => Object.assign({}, d));
     store.overrides.unpaidVac = new Map((a.overrides && a.overrides.unpaidVac) || []);
     store.overrides.maternity = new Map((a.overrides && a.overrides.maternity) || []);
-    toast(`전월(${a.ym}) 처리내역 불러옴 — 이월휴직·징계 자동 반영`, 'ok');
+    store.resolutions = new Map(a.resolutions || []); // 전월 검증 처리내역(재계산/후단/정상/오류) → 소급 반영
+    toast(`전월(${a.ym}) 처리내역 불러옴 — 이월휴직·징계·검증처리 자동 반영`, 'ok');
   }
 
   function renderFolder() {
@@ -216,7 +218,7 @@
     $('#calcBtn').disabled = !(store.salary && store.roster && store.order);
     $('#verifyBtn').disabled = !(payrollResult && !payrollResult.blocked && store.ledger);
   }
-  const storeForEngine = () => ({ salary: store.salary, roster: store.roster, order: store.order, vacation: store.vacation, holiday: store.holiday, ledger: store.ledger, uploads: store.uploads, discipline: store.discipline, carry: store.carry, overrides: store.overrides, dutyExtra: store.dutyextra });
+  const storeForEngine = () => ({ salary: store.salary, roster: store.roster, order: store.order, vacation: store.vacation, holiday: store.holiday, ledger: store.ledger, uploads: store.uploads, discipline: store.discipline, carry: store.carry, overrides: store.overrides, dutyExtra: store.dutyextra, resolutions: store.resolutions });
 
   /* ---------- alerts ---------- */
   const ALERT_ICON = {
@@ -312,7 +314,7 @@
     const row = verifyResult.rows.find(r => r.사번 === 사번);
     if (!row) return;
     const matched = alt.matched !== false && alt.status === 'ok';
-    const label = alt.mode === 'rear' ? '후단처리' : '당월적용';
+    const label = alt.mode === 'rear' ? '후단처리' : alt.mode === 'ignore' ? '전월이월무시' : '당월적용';
     row.processedMode = alt.mode; row.resolved = matched; row.ourTotal = alt.total; row.review = matched ? 'resolved' : 'processed';
     if (alt.items) { const p = {}; alt.items.forEach(it => p[it.col] = it.ours); row.ours = p; }
     const keep = (row.notes || []).filter(n => !n.startsWith('불일치') && !/처리(완료|\(대장 불일치\))$/.test(n) && !n.startsWith('오류확인'));
@@ -428,6 +430,8 @@
       type: 'pv-archive', ym, savedAt: new Date().toISOString(),
       carry: [...store.carry.entries()], discipline: store.discipline,
       overrides: { unpaidVac: [...store.overrides.unpaidVac.entries()], maternity: [...store.overrides.maternity.entries()] },
+      // 검증 처리내역(재계산/후단/정상/오류) → 다음달 소급 계산에 반영
+      resolutions: (verifyResult ? verifyResult.rows : []).filter(r => r.review || r.processedMode).map(r => [r.사번, { review: r.review || null, processedMode: r.processedMode || null }]),
       summary: payrollResult.summary,
       rows: payrollResult.rows.map(r => ({ 사번: r.사번, 성명: r.성명, 소속: r.소속, pay: r.pay, total: r.total, notes: r.notes })),
     };
@@ -519,6 +523,13 @@
   .derr{margin-top:8px;padding:9px 12px;border:1px dashed var(--warn);border-radius:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:color-mix(in srgb,var(--warn) 7%,transparent)}
   .dnorm{margin-top:8px;padding:9px 12px;border:1px dashed var(--ok);border-radius:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:color-mix(in srgb,var(--ok) 7%,transparent)}
   .rc-btn.err{background:var(--warn);border-color:var(--warn);color:#fff}
+  .dsogeup{display:flex;gap:0;margin-top:12px;border:1px solid var(--warn);border-radius:10px;overflow:hidden;flex-wrap:wrap}
+  .dsogeup .sg-left{flex:1;min-width:220px;padding:11px 13px;background:color-mix(in srgb,var(--warn) 8%,transparent)}
+  .dsogeup .sg-right{flex:0 0 240px;padding:11px 13px;border-left:1px solid var(--bd);display:flex;flex-direction:column;gap:8px;justify-content:center}
+  .sg-h{font-size:11.5px;font-weight:800;color:var(--warn);margin-bottom:7px;line-height:1.5}
+  .sg-ord{font-size:12.5px;margin:3px 0}.sg-ord u{text-decoration-color:var(--warn);text-underline-offset:2px}
+  .sg-deriv{font-size:11.5px;color:var(--tx2);margin-top:8px;line-height:1.6}
+  .sg-info{font-size:11px;color:var(--tx3)}
   @media print{.top button,.chips,.search2,.drecalc{display:none}.tbl{max-height:none;overflow:visible}th{position:static}}
   `;
 
@@ -614,9 +625,9 @@
     //  처리해도 대장과 차이가 남으면(=status!=='ok') 해결이 아니므로 빨간색 유지.
     function resolveRow(R, alt, mode) {
       const matched = alt.status === 'ok';
-      const label = mode === 'rear' ? '후단처리' : '당월적용';
+      const label = mode === 'rear' ? '후단처리' : mode === 'ignore' ? '전월이월무시' : '당월적용';
       R.resolved = matched; R.processedMode = mode;
-      R.cls = !matched ? 'rbad' : (mode === 'rear' ? 'rresolved2' : 'rresolved');
+      R.cls = !matched ? 'rbad' : (mode === 'rear' ? 'rresolved2' : mode === 'ignore' ? 'rresolved2' : 'rresolved');
       if (R.vals) { R.vals.ourTotal = alt.total; R.vals.diff = alt.total - (R.detail.ledTotal || 0); R.vals.상태 = matched ? label + ' 처리완료' : label + '(불일치)'; }
       const noteTags = (alt.notes || []).filter(n => !n.startsWith('불일치')).map(n => '<span class="tag ilhal">' + n + '</span>').join('');
       const dv = alt.total - (R.detail.ledTotal || 0);
@@ -663,14 +674,14 @@
       const nf = n => n == null ? '' : (+n).toLocaleString('ko-KR');
       const 연봉H = Object.keys(d.연봉 || {}).filter(k => d.연봉[k]).map(k => k + ' <b>' + nf(d.연봉[k]) + '</b>').join(' · ') || '연봉정보 없음';
       // view: 'base'(원계산) | 'alt'(당월적용/30−앞단) | 'alt2'(후단처리/30−뒷단)
-      let view = R.resolved ? (R.processedMode === 'rear' ? 'alt2' : 'alt') : 'base';
-      const altObjFor = v => v === 'alt2' ? d.alt2 : v === 'alt' ? d.alt : null;
+      let view = R.resolved ? (R.processedMode === 'rear' ? 'alt2' : R.processedMode === 'ignore' ? 'ignore' : 'alt') : 'base';
+      const altObjFor = v => v === 'alt2' ? d.alt2 : v === 'alt' ? d.alt : v === 'ignore' ? d.ignore : null;
       const curAlt = () => altObjFor(view);
       const isAlt = () => view !== 'base' && !!curAlt();
       const curItems = () => isAlt() ? curAlt().items : d.items;
       const curTotal = () => isAlt() ? curAlt().total : d.ourTotal;
       const curNotes = () => isAlt() ? curAlt().notes : d.notes;
-      const altModeLabel = () => view === 'alt2' ? '후단처리 (30−뒷단)' : '당월적용 (30−앞단)';
+      const altModeLabel = () => view === 'alt2' ? '후단처리 (30−뒷단)' : view === 'ignore' ? '전월 이월 무시' : '당월적용 (30−앞단)';
       const itemsHtml = () => curItems().map(it => { const diff = it.ours - it.led; return '<tr class="' + (diff ? 'dd' : '') + '"><td class="l">' + it.col + '</td><td class="l fm">' + (it.formula || (isAlt() ? altModeLabel() + '(지급일 이후분 포함)' : '')) + '</td><td>' + (it.ours ? nf(it.ours) : '·') + '</td><td>' + (it.led ? nf(it.led) : '·') + '</td><td class="' + (diff > 0 ? 'dpos' : diff < 0 ? 'dneg' : '') + '">' + (diff ? (diff > 0 ? '+' : '') + nf(diff) : '0') + '</td></tr>'; }).join('');
       const mu = d.matUnpaid;
       const tagHtml = t => t ? ' <b style="color:' + (t === '무급' ? 'var(--bad)' : t === '혼재' ? 'var(--warn)' : 'var(--ok)') + '">[' + t + ']</b>' : '';
@@ -716,6 +727,16 @@
         } else {
           recalcH = '<div class="drecalc"><span class="rc-info" style="color:var(--tx3)">💡 지급일 이후 변동 없음 — 재계산 불필요 (지급일 기준 = 월말 기준 동일)</span></div>';
         }
+        // 전월 지급일 이후 변동(소급) — 백데이터 좌우분할: 좌=변동발령 강조, 우=전월 이월 무시 버튼
+        const sogeupH = d.hasSogeup && d.sogeup ? ('<div class="dsogeup"><div class="sg-left">'
+          + '<div class="sg-h">⚠ 전월 지급일 이후 변동 — 당월 소급 처리 대상 (담당자 누락 확인)</div>'
+          + ((d.prevChangeOrders || []).map(o => '<div class="sg-ord">📋 ' + (o.시작일 || '') + ' <b><u>' + (o.구분 || '') + '</u></b></div>').join('') || '<div class="sg-ord" style="color:var(--tx3)">연봉·기타 변동</div>')
+          + '<div class="sg-deriv">전월 재계산(정답) vs 전월 대장(실지급) 차액 = <b style="color:' + (d.sogeup.sum >= 0 ? 'var(--bad)' : 'var(--info)') + '">' + (d.sogeup.sum >= 0 ? '+' : '') + nf(d.sogeup.sum) + '</b> → 당월 소급 반영</div>'
+          + '</div><div class="sg-right">'
+          + (view === 'ignore'
+            ? '<span class="rc-done">✔ 전월 이월(소급) 무시됨 — ' + nf(d.ignore ? d.ignore.total : d.ourTotal) + (d.ignore && d.ignore.status === 'ok' ? ' · 대장 일치' : '') + '</span>' + (R.resolved && R.processedMode === 'ignore' ? '' : '<button class="rc-btn" data-a="apply">이 값으로 처리</button>') + '<button class="rc-btn ghost" data-a="revert">되돌리기</button>'
+            : '<div class="sg-info">이미 처리됐거나 소급 대상이 아니면 →</div><button class="rc-btn ghost" data-a="ignore">⊘ 전월 이월 무시</button>')
+          + '</div></div>') : '';
         const reviewable = R._cls0 === 'rbad' || R.review;
         // 정상처리 박스: 대장이 맞고 우리 계산이 근태·징계 등 수기입력 누락으로 다른 경우 (불일치 행에만 노출)
         const normH = reviewable ? ('<div class="dnorm">' + (R.review === 'normal'
@@ -736,15 +757,16 @@
           + '<div class="dcontract">📄 적용 연봉계약 <b>' + (d.연봉일자 || '-') + '</b><br>' + 연봉H + '</div>'
           + segHd
           + '<div class="dsub">항목별 계산</div><table class="dt"><thead><tr><th class="l">항목</th><th class="l">계산식</th><th>계산</th><th>대장</th><th>차이</th></tr></thead><tbody>' + itemsHtml() + '</tbody></table>'
-          + extraHd + totHd + recalcH + normH + errH + balH + notesHd + '</div></div>';
+          + extraHd + totHd + recalcH + sogeupH + normH + errH + balH + notesHd + '</div></div>';
         ov.querySelector('.dx').onclick = () => ov.remove();
         ov.querySelector('.dexp').onclick = e => { e.stopPropagation(); exportOne(d); };
         const rb = ov.querySelectorAll('.rc-btn'); rb.forEach(b => b.onclick = e => {
           e.stopPropagation(); const a = b.dataset.a;
           if (a === 'alt') { view = 'alt'; renderBody(); }
           else if (a === 'alt2') { view = 'alt2'; renderBody(); }
+          else if (a === 'ignore') { view = 'ignore'; renderBody(); }
           else if (a === 'revert') { view = 'base'; renderBody(); }
-          else if (a === 'apply') { const mode = view === 'alt2' ? 'rear' : 'front'; resolveRow(R, curAlt(), mode); renderBody(); }
+          else if (a === 'apply') { const mode = view === 'alt2' ? 'rear' : view === 'ignore' ? 'ignore' : 'front'; resolveRow(R, curAlt(), mode); renderBody(); }
           else if (a === 'error') { const memo = (window.prompt('오류 내용 (대장 오류 사유 등, 선택):', R.errMemo || '') || '').trim(); markError(R, memo); renderBody(); }
           else if (a === 'unerror') { unmarkError(R); renderBody(); }
           else if (a === 'normal') { const memo = (window.prompt('정상처리 사유 (예: 결근 3일 수기누락, 대장 정상 — 선택):', R.normMemo || '') || '').trim(); markNormal(R, memo); renderBody(); }
@@ -852,8 +874,11 @@
       const aitems = acols.map(c => ({ col: c, ours: Math.round((a.pay && a.pay[c]) || 0), led: Math.round((r.led && r.led[c]) || 0) }));
       return { total: a.total, status: a.status, items: aitems, notes: a.notes || [], diffCols: (a.diffs || []).map(d => d.col) };
     };
-    const alt = buildAlt(r.alt), alt2 = buildAlt(r.alt2);
-    return { 사번: r.사번, 성명: r.성명, 연봉일자: t.연봉일자, 연봉: 연봉, quarterMonth: t.quarterMonth, ilhal: t.ilhal, segments: t.segments || [], items, extras: t.extras || [], dutyLabel: t.dutyLabel, dutyFlat: t.dutyFlat, uvac: t.uvac, uvacDeduct: t.uvacDeduct, 발령: 발령, 휴가: 휴가, matUnpaid: t.matUnpaid || null, ym, ourTotal: r.ourTotal, ledTotal: r.ledTotal, notes: r.notes || [], alt, alt2, dayShift: !!r.dayShift };
+    const alt = buildAlt(r.alt), alt2 = buildAlt(r.alt2), ignore = buildAlt(r.ignore);
+    // 전월 지급일 이후 변동 발령(좌측 강조용) 표시 세트
+    const prevChg = new Set((r.prevChangeOrders || []).map(o => (o.시작일 || '') + '|' + (o.구분 || '')));
+    발령.forEach(o => { o.prevChg = prevChg.has((o.시작일 || '') + '|' + (o.구분 || '')); });
+    return { 사번: r.사번, 성명: r.성명, 연봉일자: t.연봉일자, 연봉: 연봉, quarterMonth: t.quarterMonth, ilhal: t.ilhal, segments: t.segments || [], items, extras: t.extras || [], dutyLabel: t.dutyLabel, dutyFlat: t.dutyFlat, uvac: t.uvac, uvacDeduct: t.uvacDeduct, 발령: 발령, 휴가: 휴가, matUnpaid: t.matUnpaid || null, ym, ourTotal: r.ourTotal, ledTotal: r.ledTotal, notes: r.notes || [], alt, alt2, ignore, dayShift: !!r.dayShift, hasSogeup: !!r.hasSogeup, sogeup: r.sogeup || null, prevChangeOrders: r.prevChangeOrders || null };
   }
   const tagHTML = notes => (notes || []).map(n => `<span class="tag ${n.startsWith('일할') ? 'ilhal' : n.includes('확인') ? 'warn' : 'sp'}">${esc(n)}</span>`).join('');
   const flagsOf = r => ({ ilhal: (r.notes || []).some(n => n.startsWith('일할')), special: (r.notes || []).some(n => n.includes('특례') || n.includes('소급') || n.includes('임금피크') || n.includes('정직') || n.includes('감봉')), warn: !!r.warn });
@@ -882,16 +907,16 @@
       const diff = r.ourTotal - r.ledTotal;
       const diffTags = (r.diffs || []).filter(d => d.col !== '—').map(d => `<span class="tag diff"><b>${esc(d.col)}</b>${d.diff > 0 ? '+' : ''}${won(d.diff)}</span>`).join('');
       const minwage = (r.notes || []).some(n => n.includes('최저임금'));
-      const noteTags = (r.notes || []).filter(n => !n.startsWith('불일치')).map(n => `<span class="tag ${n.includes('최저임금') || n.includes('일수 차이') ? 'warn' : n.startsWith('일할') ? 'ilhal' : 'sp'}">${esc(n)}</span>`).join('');
+      const noteTags = (r.notes || []).filter(n => !n.startsWith('불일치')).map(n => `<span class="tag ${n.includes('최저임금') || n.includes('일수 차이') || n.includes('소급') || n.includes('전월') ? 'warn' : n.startsWith('일할') ? 'ilhal' : 'sp'}">${esc(n)}</span>`).join('');
       const cls0 = r.status === 'bad' ? 'rbad' : '';
       const tags0 = (diffTags || noteTags)
         ? `<div class="vgrp">${diffTags ? '<div class="vg vg-d">' + diffTags + '</div>' : ''}${noteTags ? '<div class="vg vg-n">' + noteTags + '</div>' : ''}</div>`
         : (r.status === 'ok' ? '<span class="pill ok">일치</span>' : '');
       return { cls: cls0, _cls0: cls0, _tags0: tags0, vals: { no: i + 1, 사번: r.사번, 성명: r.성명, 소속: r.소속, ourTotal: r.ourTotal, ledTotal: r.ledTotal, diff, 상태: r.status === 'ok' ? '일치' : '불일치', 비고: ((r.diffs || []).map(d => d.col).join(' ') + ' ' + (r.notes || []).join(' ')) },
-        tagsHtml: tags0, flags: { bad: r.status === 'bad', ok: r.status === 'ok', warn: !!r.warn, minwage, dayshift: !!r.dayShift, error: false },
+        tagsHtml: tags0, flags: { bad: r.status === 'bad', ok: r.status === 'ok', warn: !!r.warn, minwage, dayshift: !!r.dayShift, error: false, sogeup: !!r.hasSogeup },
         detail: buildDetail(r) };
     });
-    const chips = [{ k: 'all', label: '전체' }, { k: 'bad', label: '불일치', flag: 'bad' }, { k: 'ok', label: '일치', flag: 'ok' }, { k: 'error', label: '⚑오류', flag: 'error' }, { k: 'warn', label: '점검', flag: 'warn' }, { k: 'minwage', label: '⚠최저보전', flag: 'minwage' }, { k: 'dayshift', label: '⚠익월권장', flag: 'dayshift' }];
+    const chips = [{ k: 'all', label: '전체' }, { k: 'bad', label: '불일치', flag: 'bad' }, { k: 'ok', label: '일치', flag: 'ok' }, { k: 'error', label: '⚑오류', flag: 'error' }, { k: 'sogeup', label: '⚠전월변동/소급', flag: 'sogeup' }, { k: 'warn', label: '점검', flag: 'warn' }, { k: 'minwage', label: '⚠최저보전', flag: 'minwage' }, { k: 'dayshift', label: '⚠익월권장', flag: 'dayshift' }];
     const sumHTML = `<div class="sum"><div class="sc"><div class="k">대상</div><div class="v">${res.summary.total}</div></div><div class="sc"><div class="k" style="color:var(--ok)">일치</div><div class="v" style="color:var(--ok)">${res.summary.ok}</div></div><div class="sc"><div class="k" style="color:var(--bad)">불일치</div><div class="v" style="color:var(--bad)">${res.summary.bad}</div></div></div>`;
     openSearchWin(`검증결과 ${ym}`, `${ym} · 계산 vs 급여대장(세전)`, columns, rows, chips, sumHTML, ym, { saveVerify: true });
   }

@@ -15,6 +15,11 @@ window.PV = window.PV || {};
     변동역량1: '변동역량가급1', 변동역량2: '변동역량가급2',
   };
   const LEDGER_ITEMS = ['기본급', '능력급', '성과급', '성과가급', '변동역량가급1', '변동역량가급2', '고정역량가급', '감액'];
+  // 소급(전월 대장 대비 재계산 차액) 대상 = 발령·연봉 변동에 영향받는 정규 급여항목. 일회성(연차수당 등)·감액 제외.
+  const SOGEUP_ITEMS = ['기본급', '능력급', '성과급', '성과가급', '변동역량가급1', '변동역량가급2', '고정역량가급'];
+  // 귀속년월 문자열 → 'YYYY-MM' (다양한 표기 정규화: '2026-01','202601','2026년 1월' 등)
+  function normYM(s) { const t = String(s == null ? '' : s).match(/(\d{4})\D*(\d{1,2})/); return t ? t[1] + '-' + String(+t[2]).padStart(2, '0') : ''; }
+  PV.normYM = normYM;
   const SICK_EXCL = new Set(['성과가급', '변동역량가급1', '변동역량가급2', '고정역량가급']);
   const SUSPEND_EXCL = new Set(['변동역량가급1', '변동역량가급2', '고정역량가급']);
 
@@ -300,13 +305,20 @@ window.PV = window.PV || {};
         const span = (i < n - 1) ? (merged[i + 1].startDay - merged[i].startDay) : (monthEndDay + 1 - merged[i].startDay);
         merged[i].days = span; acc += span;
       }
-      let first = total - acc; if (first <= 0) first = isPaid(merged[0].payType) ? 1 : 0;
+      let first = total - acc;
+      if (first <= 0) { const want = isPaid(merged[0].payType) ? 1 : 0; if (want > 0) merged[1].days = Math.max((merged[1].days || 0) - (want - first), 0); first = want; }
       merged[0].days = first;
     } else {
       let acc = 0;
       for (let i = 0; i < n; i++) {
         if (i < n - 1) { const span = merged[i + 1].startDay - merged[i].startDay; merged[i].days = span; acc += span; }
-        else { let last = total - acc; if (last <= 0) last = isPaid(merged[i].payType) ? 1 : 0; merged[i].days = last; }
+        else {
+          let last = total - acc;
+          // 30일모델 초과 시(마지막 구간이 말일 1일 등) 유급 최소 1일 보장하되, 초과분은 앞 구간에서 회수해
+          //  총합=total 유지 → '하루 추가지급'이 아니라 '해당 1일 상향(차액)'이 되도록(예: 이유영 단축종료 말일).
+          if (last <= 0) { const want = isPaid(merged[i].payType) ? 1 : 0; if (want > 0 && i > 0) merged[i - 1].days = Math.max((merged[i - 1].days || 0) - (want - last), 0); last = want; }
+          merged[i].days = last;
+        }
       }
     }
     return { segments: merged, retired: false };
@@ -451,9 +463,31 @@ window.PV = window.PV || {};
     return acc;
   }
 
+  // 전월 대장 기반 소급: (전월을 지금 전체데이터로 재계산한 정답) − (전월 대장 실지급). 정규항목만, 정수 차액.
+  //  전월 처리내역(resolution)이 정상처리/오류확인이면 소급 0(그 달을 담당자가 인정/오류처리). 후단이면 후단으로 재계산.
+  //  반환: { carry:{item:diff}, correct:{item}, paid:{item}, sum } (UI 표기용 근거 포함)
+  function prevLedgerCarry(ctx, sabun) {
+    const res = ctx.resolutions && ctx.resolutions.get(sabun);
+    if (res && (res.review === 'normal' || res.review === 'error')) return { carry: {}, sum: 0, skipped: res.review };
+    const absorb = res && res.processedMode === 'rear' ? 'rear' : 'front';
+    const paid = ctx.prevLedgerBase.get(sabun) || {};
+    // 전월이 이미 지급된 달(만근 등 양수)이면 30일모델 기준(이미 지급된 날의 상향 차액), 미지급(0) 달이면
+    //  실일수 기준(전액 신규 지급·근로자 유리 협의). → 지급여부에 따라 day 기준을 맞춰야 차액이 깔끔.
+    const paidSum = SOGEUP_ITEMS.reduce((a, k) => a + (Math.round(paid[k] || 0)), 0);
+    const calMode = paidSum > 0 ? false : true;
+    const correct = computeBase(ctx, sabun, ctx.prevY, ctx.prevM, 'actual', [], null, null, calMode, absorb);
+    if (correct.retired) return { carry: {}, sum: 0 };
+    const carry = {}, cor = {}, pd = {}; let sum = 0;
+    SOGEUP_ITEMS.forEach(k => {
+      const c = Math.round(correct.pay[k] || 0), p = Math.round(paid[k] || 0), d = c - p;
+      cor[k] = c; pd[k] = p; if (d) { carry[k] = d; sum += d; }
+    });
+    return { carry, correct: cor, paid: pd, sum, absorb };
+  }
+
   // ---------- 한 사람 종합 ----------
   // baseCutoff: 'pay'=지급일 기준(기본), 'actual'=월말 기준(지급일 이후분까지 당월 적용, 예외 재계산)
-  // skipCarry: 예외 재계산(당월적용)은 이번달 실제 근무분만 — 전월 소급은 제외.
+  // skipCarry: 예외 재계산(당월적용)·전월이월무시는 이번달 실제 근무분만 — 전월 소급은 제외.
   function computePerson(ctx, sabun, y, m, baseCutoff, skipCarry, absorb) {
     const exc = [];
     const trace = { extras: [] };
@@ -490,20 +524,30 @@ window.PV = window.PV || {};
       }
     });
 
-    // 누적 소급정산: 급여 나오는 달에 반영. base(raw) + 소급(raw)을 합산 후 한 번만 절상(이중 반올림 방지).
+    // 소급정산: 급여 나오는 달에 반영.
     const paidThisMonth = LEDGER_ITEMS.reduce((a, k) => a + (base.pay[k] || 0), 0) > 0;
     if (paidThisMonth && !skipCarry) {
-      const carry = carryIn(ctx, sabun, y, m);
-      let s = 0;
-      LEDGER_ITEMS.forEach(k => {
-        const adj = (pay[k] || 0) - (base.pay[k] || 0);     // 업로드·징계 등 base 이후 조정분 보존
-        const combined = (base.real[k] || 0) + (carry[k] || 0);
-        const rounded = k === '감액' ? Math.round(combined) : ceilU(combined); // 감액=정수, 그 외 십원 절상
-        const before = pay[k] || 0;
-        pay[k] = rounded + adj;
-        s += pay[k] - before;
-      });
-      if (s !== 0) { notes.push(`소급정산 ${s >= 0 ? '+' : ''}${s.toLocaleString()}`); trace.extras.push({ label: '소급정산 (전월 이전 지급일 이후 변동 정산)', amount: s }); }
+      if (ctx.prevLedgerBase) {
+        // ★ 전월 대장 기반: (전월 재계산 정답) − (전월 대장 실지급) 정수 차액을 그대로 가산.
+        const pl = prevLedgerCarry(ctx, sabun);
+        let s = 0;
+        SOGEUP_ITEMS.forEach(k => { const c = pl.carry[k] || 0; if (c) { pay[k] = (pay[k] || 0) + c; s += c; } });
+        if (s !== 0) { notes.push(`소급정산 ${s >= 0 ? '+' : ''}${s.toLocaleString()}`); trace.extras.push({ label: '소급정산 (전월 대장 대비 재계산 차액)', amount: s }); }
+        trace.sogeup = pl;
+      } else {
+        // 폴백(전월 대장 미제공): 다개월 as-paid 추정 모델. base(raw)+소급(raw) 합산 후 한 번만 절상.
+        const carry = carryIn(ctx, sabun, y, m);
+        let s = 0;
+        LEDGER_ITEMS.forEach(k => {
+          const adj = (pay[k] || 0) - (base.pay[k] || 0);
+          const combined = (base.real[k] || 0) + (carry[k] || 0);
+          const rounded = k === '감액' ? Math.round(combined) : ceilU(combined);
+          const before = pay[k] || 0;
+          pay[k] = rounded + adj;
+          s += pay[k] - before;
+        });
+        if (s !== 0) { notes.push(`소급정산 ${s >= 0 ? '+' : ''}${s.toLocaleString()}`); trace.extras.push({ label: '소급정산 (전월 이전 지급일 이후 변동 정산)', amount: s }); }
+      }
     }
 
     const segNote = base.segments && (base.segments.length > 1 || (base.segments[0] && base.segments[0].payType !== 'normal'));
@@ -521,6 +565,18 @@ window.PV = window.PV || {};
   PV.computePayroll = function (store, target) {
     const ctx = PV.buildContext(store);
     const { y, m } = target;
+    // ★ 전월 대장 기반 소급 준비: 누적 급여대장에서 전월(귀속년월) 정규항목 실지급액 추출.
+    //   전월 대장이 있으면 소급을 '추정' 대신 '실지급 대조'로 계산(정확). 없으면 carryIn 폴백.
+    const pm = prevMonth(y, m);
+    const prevYM = `${pm.y}-${String(pm.m).padStart(2, '0')}`;
+    const prevRows = (store.ledger || []).filter(r => (r.지급유형 || '').trim() === '급여' && normYM(r.귀속년월) === prevYM);
+    if (prevRows.length) {
+      const pmap = new Map();
+      prevRows.forEach(r => { const o = {}; SOGEUP_ITEMS.forEach(k => o[k] = Math.round((r.pay && r.pay[k]) || 0)); pmap.set(r.사번, o); });
+      ctx.prevLedgerBase = pmap; ctx.prevY = pm.y; ctx.prevM = pm.m;
+      ctx.resolutions = store.resolutions instanceof Map ? store.resolutions : new Map(Object.entries(store.resolutions || {}));
+    }
+    const prevPayday = ctx.prevLedgerBase ? payday(pm.y, pm.m, ctx.holidays) : null;
     const block = [];
     const ids = new Set([...ctx.salaryBy.keys()]);
     ids.forEach(id => computeBase(ctx, id, y, m, 'actual', block, null));
@@ -551,11 +607,23 @@ window.PV = window.PV || {};
         const hasPostPayChange = !rAlt.retired && r.paidUnits !== rAlt.paidUnits;
         const dayShift = hasPostPayChange && paid30 !== paidReal;
         if (dayShift) notes.push(`⚠당월/익월 처리 일수 차이 ${Math.abs(paidReal - paid30)}일 — 익월 처리 권장 (근로자 유리)`);
+        // 전월 대장 대비 소급 + '전월 이월 무시'(소급 제외) 값
+        const sog = r.trace && r.trace.sogeup;
+        const hasSogeup = !!(sog && sog.sum);
+        let ignorePay = null, ignoreTotal = total, ignoreNotes = null, prevChangeOrders = null;
+        if (ctx.prevLedgerBase) {
+          const rIg = computePerson(ctx, id, y, m, 'pay', true); // 소급 제외(전월 이월 무시)
+          if (!rIg.retired) { ignorePay = rIg.pay; ignoreTotal = Math.round(Object.values(rIg.pay).reduce((a, b) => a + b, 0)); ignoreNotes = rIg.notes || []; }
+          // 전월 지급일 이후 발생한 변동 발령(급여영향) — 좌측 강조용
+          prevChangeOrders = (ctx.ordersBy.get(id) || []).filter(o => o.발령시작일 && normYM(o.발령시작일) === prevYM && cmp(o.발령시작일, prevPayday) > 0 && /복직|휴직|단축|퇴직/.test(o.발령구분 || '')).map(o => ({ 구분: o.발령구분, 시작일: o.발령시작일 }));
+          if (hasSogeup) notes.push(`전월(${prevYM}) 지급일 이후 변동 → 소급 ${sog.sum >= 0 ? '+' : ''}${sog.sum.toLocaleString()} (누락 확인)`);
+        }
         rows.push({
           사번: id, 성명: (roster && roster.성명) || sal.성명 || '', 소속: (roster && roster.소속) || sal.소속 || '',
           pay: r.pay, notes, warn: (r.exc || []).length > 0, trace: r.trace, total, dayShift,
           altPay: rAlt.retired ? null : rAlt.pay, altNotes: rAlt.retired ? null : (rAlt.notes || []), altTotal, hasAlt,
           altPay2: rAlt2.retired ? null : rAlt2.pay, altNotes2: rAlt2.retired ? null : (rAlt2.notes || []), altTotal2, hasAlt2,
+          sogeup: sog || null, hasSogeup, ignorePay, ignoreTotal, ignoreNotes, prevChangeOrders,
         });
       });
       rows.sort((a, b) => (a.소속 || '').localeCompare(b.소속 || '') || a.사번.localeCompare(b.사번));
@@ -570,19 +638,26 @@ window.PV = window.PV || {};
     if (ilhal) alerts.push({ level: 'info', title: `일할계산 ${ilhal}명`, desc: '휴직·복직·단축 등으로 일할 적용된 인원' });
     const shiftRows = rows.filter(r => r.dayShift);
     if (shiftRows.length) alerts.push({ level: 'warn', title: `당월/익월 일수 차이 ${shiftRows.length}명`, desc: '당월(30−앞단)과 익월(실제일수) 처리 시 유급일수가 달라짐 → 익월 처리 권장(1일 근로자 유리): ' + shiftRows.map(r => r.성명 || r.사번).join(', ') });
+    const sogRows = rows.filter(r => r.hasSogeup);
+    if (sogRows.length) alerts.push({ level: 'warn', title: `전월 지급일 이후 변동(소급) ${sogRows.length}명`, desc: `전월 대장 대비 재계산 차액 발생 → 당월 추가처리 필요. 담당자 누락 여부 확인: ` + sogRows.map(r => `${r.성명 || r.사번}(${r.sogeup.sum >= 0 ? '+' : ''}${r.sogeup.sum.toLocaleString()})`).join(', ') });
     const seen = new Set();
     allExc.forEach(e => { const k = e.사번 + e.title; if (seen.has(k)) return; seen.add(k); alerts.push({ level: e.type || 'warn', title: `${e.title} — ${e.사번} ${e.성명 || ''}`, desc: e.desc, 사번: e.사번, 성명: e.성명, kind: e.kind }); });
 
     return {
       target, blocked, block, payday: payday(y, m, ctx.holidays),
+      prevLedger: !!ctx.prevLedgerBase, prevYM: ctx.prevLedgerBase ? prevYM : null, prevPayday,
       rows, alerts,
-      summary: { total: rows.length, block: block.length, warn: rows.filter(r => r.warn).length, ilhal, special: cnt14 + retroP.length },
+      summary: { total: rows.length, block: block.length, warn: rows.filter(r => r.warn).length, ilhal, special: cnt14 + retroP.length, sogeup: rows.filter(r => r.hasSogeup).length },
     };
   };
 
   // ---------- 검증 (계산 vs 급여대장) ----------
   PV.compareLedger = function (payroll, store) {
-    const ledger = (store.ledger || []).filter(r => (r.지급유형 || '').trim() === '급여');
+    // 누적 급여대장 → 당월(귀속년월)만 대조 대상.
+    const curYM = `${payroll.target.y}-${String(payroll.target.m).padStart(2, '0')}`;
+    const allG = (store.ledger || []).filter(r => (r.지급유형 || '').trim() === '급여');
+    const hasYM = allG.some(r => normYM(r.귀속년월));
+    const ledger = hasYM ? allG.filter(r => normYM(r.귀속년월) === curYM) : allG;
     const byId = new Map(); payroll.rows.forEach(r => byId.set(r.사번, r));
     const rows = [], alerts = [];
     let okCnt = 0, badCnt = 0;
@@ -611,7 +686,14 @@ window.PV = window.PV || {};
       };
       let alt = altOf('altPay', 'altTotal'); if (alt) { alt.notes = r.altNotes || []; }
       let alt2 = altOf('altPay2', 'altTotal2'); if (alt2) { alt2.notes = r.altNotes2 || []; }
-      rows.push({ 사번: L.사번, 성명: L.성명 || r.성명, 소속: L.소속 || r.소속, status, diffs, ours: r.pay, led: L.pay || {}, notes, warn: r.warn, trace: r.trace, ourTotal: r.total, ledTotal: Math.round(L.총지급액 || 0), alt, alt2, dayShift: !!r.dayShift });
+      // 전월 이월 무시(소급 제외) 값 vs 대장
+      let ignore = null;
+      if (r.ignorePay) {
+        const iCols = new Set(PV.LEDGER_ITEMS); Object.keys(r.ignorePay).forEach(k => { if (r.ignorePay[k] !== 0) iCols.add(k); });
+        const iDiffs = []; iCols.forEach(col => { const ours = Math.round(r.ignorePay[col] || 0), led = Math.round((L.pay && L.pay[col]) || 0); if (ours !== led) iDiffs.push({ col, ours, led, diff: ours - led }); });
+        ignore = { pay: r.ignorePay, total: r.ignoreTotal, diffs: iDiffs, notes: r.ignoreNotes || [], status: iDiffs.length ? 'bad' : 'ok' };
+      }
+      rows.push({ 사번: L.사번, 성명: L.성명 || r.성명, 소속: L.소속 || r.소속, status, diffs, ours: r.pay, led: L.pay || {}, notes, warn: r.warn, trace: r.trace, ourTotal: r.total, ledTotal: Math.round(L.총지급액 || 0), alt, alt2, ignore, dayShift: !!r.dayShift, hasSogeup: !!r.hasSogeup, sogeup: r.sogeup || null, prevChangeOrders: r.prevChangeOrders || null });
     });
 
     rows.sort((a, b) => (a.status === b.status ? 0 : a.status === 'bad' ? -1 : 1));
