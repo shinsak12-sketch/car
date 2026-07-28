@@ -507,6 +507,8 @@
   table.dt td{padding:8px 10px}
   table.dt td.fm{color:var(--tx3);font-size:11px;white-space:normal}
   table.dt tr.dd td{background:var(--bads)}
+  table.dt2 th.grp{text-align:center;background:var(--su2);font-size:10px;padding:6px}
+  table.dt2 .gl{border-left:2px solid var(--bd)}
   .dtot{display:flex;justify-content:space-between;margin-top:12px;padding:11px 13px;background:var(--su2);border-radius:10px;font-weight:800;font-size:13px}
   .dtot .dpos{color:var(--bad)}.dtot .dneg{color:var(--info)}
   .dnote{margin-top:12px;font-size:12px;color:var(--tx2);background:var(--su2);border-radius:9px;padding:10px 12px}
@@ -753,10 +755,20 @@
             : R.resolved
               ? ' <span class="pill" style="background:' + (R.processedMode === 'rear' ? 'var(--ok)' : 'var(--br)') + ';color:#fff">' + (R.processedMode === 'rear' ? '후단처리' : '당월적용') + ' 처리완료</span>'
               : (R.cls === 'rbad' && R.processedMode ? ' <span class="pill bad">처리했으나 불일치</span>' : '');
+        // 항목별 계산: 전월 소급이 있으면 2개월치(전월→이번달) 병렬 표. 아니면 단일(계산식 포함).
+        const cellN = v => v ? nf(v) : '·';
+        const dcell = v => '<td class="' + (v > 0 ? 'dpos' : v < 0 ? 'dneg' : '') + '">' + (v ? (v > 0 ? '+' : '') + nf(v) : '0') + '</td>';
+        const itemsTable = (!isAlt() && d.dualItems && d.dualItems.length)
+          ? '<div class="dsub">항목별 계산 <span style="color:var(--br)">· 2개월 (전월 → 이번달)</span></div>'
+            + '<table class="dt dt2"><thead><tr><th class="l" rowspan="2">항목</th><th colspan="3" class="grp">전월 ' + (d.prevYMlabel || '') + '</th><th colspan="3" class="grp gl">이번달 ' + (d.ym || '') + '</th></tr>'
+            + '<tr><th>계산</th><th>대장</th><th>차이</th><th class="gl">계산</th><th>대장</th><th>차이</th></tr></thead><tbody>'
+            + d.dualItems.map(x => { const pd = x.pOurs - x.pLed, cd = x.cOurs - x.cLed; return '<tr class="' + ((pd || cd) ? 'dd' : '') + '"><td class="l">' + x.col + '</td><td>' + cellN(x.pOurs) + '</td><td>' + cellN(x.pLed) + '</td>' + dcell(pd) + '<td class="gl">' + cellN(x.cOurs) + '</td><td>' + cellN(x.cLed) + '</td>' + dcell(cd) + '</tr>'; }).join('')
+            + '</tbody></table>'
+          : '<div class="dsub">항목별 계산</div><table class="dt"><thead><tr><th class="l">항목</th><th class="l">계산식</th><th>계산</th><th>대장</th><th>차이</th></tr></thead><tbody>' + itemsHtml() + '</tbody></table>';
         ov.innerHTML = '<div class="dcard"><div class="dhead"><b>' + d.사번 + ' ' + (d.성명 || '') + '</b> 계산 근거 (연봉 → 월급여 · 세전)' + headPill + '<span class="dexp" title="이 사람의 계산근거·백데이터를 파일로 저장">⬇ 내보내기</span><span class="dx">✕</span></div><div class="dbody">'
           + '<div class="dcontract">📄 적용 연봉계약 <b>' + (d.연봉일자 || '-') + '</b><br>' + 연봉H + '</div>'
           + segHd
-          + '<div class="dsub">항목별 계산</div><table class="dt"><thead><tr><th class="l">항목</th><th class="l">계산식</th><th>계산</th><th>대장</th><th>차이</th></tr></thead><tbody>' + itemsHtml() + '</tbody></table>'
+          + itemsTable
           + extraHd + totHd + recalcH + sogeupH + normH + errH + balH + notesHd + '</div></div>';
         ov.querySelector('.dx').onclick = () => ov.remove();
         ov.querySelector('.dexp').onclick = e => { e.stopPropagation(); exportOne(d); };
@@ -878,7 +890,17 @@
     // 전월 지급일 이후 변동 발령(좌측 강조용) 표시 세트
     const prevChg = new Set((r.prevChangeOrders || []).map(o => (o.시작일 || '') + '|' + (o.구분 || '')));
     발령.forEach(o => { o.prevChg = prevChg.has((o.시작일 || '') + '|' + (o.구분 || '')); });
-    return { 사번: r.사번, 성명: r.성명, 연봉일자: t.연봉일자, 연봉: 연봉, quarterMonth: t.quarterMonth, ilhal: t.ilhal, segments: t.segments || [], items, extras: t.extras || [], dutyLabel: t.dutyLabel, dutyFlat: t.dutyFlat, uvac: t.uvac, uvacDeduct: t.uvacDeduct, 발령: 발령, 휴가: 휴가, matUnpaid: t.matUnpaid || null, ym, ourTotal: r.ourTotal, ledTotal: r.ledTotal, notes: r.notes || [], alt, alt2, ignore, dayShift: !!r.dayShift, hasSogeup: !!r.hasSogeup, sogeup: r.sogeup || null, prevChangeOrders: r.prevChangeOrders || null };
+    // 2개월치 항목별 계산(전월 소급 발생 시): 전월(계산/대장) + 이번달(계산/대장)
+    let dualItems = null;
+    if (r.hasSogeup && r.sogeup) {
+      const sg = r.sogeup, curMap = {}; items.forEach(it => curMap[it.col] = it);
+      const cols2 = [...new Set([...Object.keys(sg.correct || {}), ...Object.keys(sg.paid || {}), ...items.map(i => i.col)])];
+      dualItems = cols2.map(c => ({ col: c, pOurs: Math.round((sg.correct && sg.correct[c]) || 0), pLed: Math.round((sg.paid && sg.paid[c]) || 0), cOurs: curMap[c] ? curMap[c].ours : 0, cLed: curMap[c] ? curMap[c].led : 0 }))
+        .filter(x => x.pOurs || x.pLed || x.cOurs || x.cLed);
+    }
+    const pm2 = (t.year && t.month) ? (t.month === 1 ? { y: t.year - 1, m: 12 } : { y: t.year, m: t.month - 1 }) : null;
+    const prevYMlabel = pm2 ? `${pm2.y}-${String(pm2.m).padStart(2, '0')}` : '';
+    return { 사번: r.사번, 성명: r.성명, 연봉일자: t.연봉일자, 연봉: 연봉, quarterMonth: t.quarterMonth, ilhal: t.ilhal, segments: t.segments || [], items, extras: t.extras || [], dutyLabel: t.dutyLabel, dutyFlat: t.dutyFlat, uvac: t.uvac, uvacDeduct: t.uvacDeduct, 발령: 발령, 휴가: 휴가, matUnpaid: t.matUnpaid || null, ym, ourTotal: r.ourTotal, ledTotal: r.ledTotal, notes: r.notes || [], alt, alt2, ignore, dayShift: !!r.dayShift, hasSogeup: !!r.hasSogeup, sogeup: r.sogeup || null, prevChangeOrders: r.prevChangeOrders || null, dualItems, prevYMlabel };
   }
   const tagHTML = notes => (notes || []).map(n => `<span class="tag ${n.startsWith('일할') ? 'ilhal' : n.includes('확인') ? 'warn' : 'sp'}">${esc(n)}</span>`).join('');
   const flagsOf = r => ({ ilhal: (r.notes || []).some(n => n.startsWith('일할')), special: (r.notes || []).some(n => n.includes('특례') || n.includes('소급') || n.includes('임금피크') || n.includes('정직') || n.includes('감봉')), warn: !!r.warn });

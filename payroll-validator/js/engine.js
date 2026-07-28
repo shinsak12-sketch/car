@@ -471,12 +471,16 @@ window.PV = window.PV || {};
     if (res && (res.review === 'normal' || res.review === 'error')) return { carry: {}, sum: 0, skipped: res.review };
     const absorb = res && res.processedMode === 'rear' ? 'rear' : 'front';
     const paid = ctx.prevLedgerBase.get(sabun) || {};
-    // 전월이 이미 지급된 달(만근 등 양수)이면 30일모델 기준(이미 지급된 날의 상향 차액), 미지급(0) 달이면
-    //  실일수 기준(전액 신규 지급·근로자 유리 협의). → 지급여부에 따라 day 기준을 맞춰야 차액이 깔끔.
+    // ★ 전월에 '지급일 이후 이연'이 실제로 있었는지 확인(전월 as-paid ≠ actual). 없으면 소급 0.
+    //   (전월 대장에 전전월 소급이 섞여 있어도, 전월 자체 이연이 없으면 비교하지 않음 → 유령 소급 방지. 예: 채경운 2월)
+    const paidCut = computeBase(ctx, sabun, ctx.prevY, ctx.prevM, 'pay', [], null);
     const paidSum = SOGEUP_ITEMS.reduce((a, k) => a + (Math.round(paid[k] || 0)), 0);
+    // 전월이 지급된 달(양수)이면 30일모델(상향 차액), 미지급(0)이면 실일수(전액·근로자 유리) 기준.
     const calMode = paidSum > 0 ? false : true;
     const correct = computeBase(ctx, sabun, ctx.prevY, ctx.prevM, 'actual', [], null, null, calMode, absorb);
-    if (correct.retired) return { carry: {}, sum: 0 };
+    if (correct.retired || paidCut.retired) return { carry: {}, sum: 0 };
+    const deferred = SOGEUP_ITEMS.some(k => Math.round(correct.pay[k] || 0) !== Math.round((paidCut.pay && paidCut.pay[k]) || 0));
+    if (!deferred) return { carry: {}, sum: 0 }; // 전월 자체 이연 없음 → 소급 없음
     const carry = {}, cor = {}, pd = {}; let sum = 0;
     SOGEUP_ITEMS.forEach(k => {
       const c = Math.round(correct.pay[k] || 0), p = Math.round(paid[k] || 0), d = c - p;
