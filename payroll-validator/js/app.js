@@ -164,19 +164,33 @@
   function orderLeaveType(g) { g = g || ''; if (/의병/.test(g)) return '의병휴직'; if (/무급/.test(g)) return '무급휴직'; return null; }
   function detectLeaves() {
     if (!store.roster) return;
+    const { y, m } = target();
+    const mmStr = String(m).padStart(2, '0');
+    const monthStart = `${y}-${mmStr}-01`;
+    const monthEnd = `${y}-${mmStr}-${String(PV.dim(y, m)).padStart(2, '0')}`;
     const orderBy = new Map(); (store.order || []).forEach(o => { if (!orderBy.has(o.사번)) orderBy.set(o.사번, []); orderBy.get(o.사번).push(o); });
+    // 이미 퇴직(이번 달 말 이전 퇴직) → 휴직 확인 불필요
+    const retiredSet = new Set();
+    (store.order || []).forEach(o => { if (/퇴직/.test(o.발령구분 || '')) { const d = o.퇴직일 || o.발령시작일 || ''; if (d && d <= monthEnd) retiredSet.add(o.사번); } });
+    // 이미 종료(담당자 입력 종료일이 이번 달 시작 전) → 휴직 확인 불필요
+    const ended = sabun => { const cur = store.carry.get(sabun) || {}; return cur.종료일 && cur.종료일 < monthStart; };
+    const skip = sabun => retiredSet.has(sabun) || ended(sabun);
     const nameOf = sabun => (store.roster.find(x => x.사번 === sabun) || {}).성명 || '';
     const cand = new Map(); // 사번 → {성명, source, 종류fix, 시작일fix}
     // 이월 휴직 (명부 (휴직) & 발령에 휴직 없음)
     store.roster.forEach(r => {
+      if (skip(r.사번)) return;
       if ((r.직무 || '').includes('(휴직)') && !(orderBy.get(r.사번) || []).some(o => /휴직/.test(o.발령구분 || '')))
         cand.set(r.사번, { 성명: r.성명, source: 'carry' });
     });
     // 발령상 "현재" 무급·의병휴직자만 (최신 휴직/복직 발령 기준 — 복직했거나 다른 휴직으로 넘어갔으면 제외)
+    //  퇴직했거나(retiredSet) 종료일이 지난 사람은 제외.
     orderBy.forEach((os, sabun) => {
-      const chain = os.filter(o => /휴직|복직/.test(o.발령구분 || '') && o.발령시작일).slice().sort((a, b) => a.발령시작일 < b.발령시작일 ? -1 : 1);
+      if (skip(sabun)) return;
+      const chain = os.filter(o => /휴직|복직|퇴직/.test(o.발령구분 || '') && o.발령시작일).slice().sort((a, b) => a.발령시작일 < b.발령시작일 ? -1 : 1);
       if (!chain.length) return;
       const last = chain[chain.length - 1];
+      if (/퇴직/.test(last.발령구분 || '')) return; // 최신이 퇴직 → 제외
       const t = orderLeaveType(last.발령구분); // 복직·육아휴직 등이 최신이면 null → 제외
       if (!t) return;
       const prev = cand.get(sabun);
