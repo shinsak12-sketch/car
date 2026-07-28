@@ -338,7 +338,9 @@ window.PV = window.PV || {};
   // ---------- 한 사람·한 달 base 계산 (cutoff: 'actual'|'pay') ----------
   function computeBase(ctx, sabun, y, m, cutoff, block, exc, trace, calMode, absorb) {
     const monthEnd = iso(y, m, dim(y, m));
-    const cutoffISO = cutoff === 'pay' ? payday(y, m, ctx.holidays) : monthEnd;
+    // 지급일 커트라인: 지급일 '당일'(20일 등) 발생분도 그 날 수정이 어려우므로 이연 대상.
+    //  → as-paid 반영은 '지급일 전날'까지. (지급일 당일 이후 = 다음달 소급/당월적용 검토)
+    const cutoffISO = cutoff === 'pay' ? addDays(payday(y, m, ctx.holidays), -1) : monthEnd;
     const roster = ctx.rosterBy.get(sabun);
 
     if (roster && (roster.피크적용 || '').includes('적용') && roster.피크예상일) {
@@ -641,7 +643,7 @@ window.PV = window.PV || {};
           const rIg = computePerson(ctx, id, y, m, 'pay', true); // 소급 제외(전월 이월 무시)
           if (!rIg.retired) { ignorePay = rIg.pay; ignoreTotal = Math.round(Object.values(rIg.pay).reduce((a, b) => a + b, 0)); ignoreNotes = rIg.notes || []; }
           // 전월 지급일 이후 발생한 변동 발령(급여영향) — 좌측 강조용
-          prevChangeOrders = (ctx.ordersBy.get(id) || []).filter(o => o.발령시작일 && normYM(o.발령시작일) === prevYM && cmp(o.발령시작일, prevPayday) > 0 && /복직|휴직|단축|퇴직/.test(o.발령구분 || '')).map(o => ({ 구분: o.발령구분, 시작일: o.발령시작일 }));
+          prevChangeOrders = (ctx.ordersBy.get(id) || []).filter(o => o.발령시작일 && normYM(o.발령시작일) === prevYM && cmp(o.발령시작일, prevPayday) >= 0 && /복직|휴직|단축|퇴직/.test(o.발령구분 || '')).map(o => ({ 구분: o.발령구분, 시작일: o.발령시작일 }));
           if (hasSogeup) notes.push(`전월(${prevYM}) 지급일 이후 변동 → 소급 ${sog.sum >= 0 ? '+' : ''}${sog.sum.toLocaleString()} (누락 확인)`);
         }
         rows.push({
