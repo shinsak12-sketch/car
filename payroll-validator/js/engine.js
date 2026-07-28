@@ -469,7 +469,6 @@ window.PV = window.PV || {};
   function prevLedgerCarry(ctx, sabun) {
     const res = ctx.resolutions && ctx.resolutions.get(sabun);
     if (res && (res.review === 'normal' || res.review === 'error')) return { carry: {}, sum: 0, skipped: res.review };
-    const absorb = res && res.processedMode === 'rear' ? 'rear' : 'front';
     const paid = ctx.prevLedgerBase.get(sabun) || {};
     // ★ 전월에 '지급일 이후 이연'이 실제로 있었는지 확인(전월 as-paid ≠ actual). 없으면 소급 0.
     //   (전월 대장에 전전월 소급이 섞여 있어도, 전월 자체 이연이 없으면 비교하지 않음 → 유령 소급 방지. 예: 채경운 2월)
@@ -477,7 +476,20 @@ window.PV = window.PV || {};
     const paidSum = SOGEUP_ITEMS.reduce((a, k) => a + (Math.round(paid[k] || 0)), 0);
     // 전월이 지급된 달(양수)이면 30일모델(상향 차액), 미지급(0)이면 실일수(전액·근로자 유리) 기준.
     const calMode = paidSum > 0 ? false : true;
-    const correct = computeBase(ctx, sabun, ctx.prevY, ctx.prevM, 'actual', [], null, null, calMode, absorb);
+    // 전월 처리 방식(앞단/후단): resolution(전월 검증처리) 우선 → 없으면 전월 대장과 일치하는 방식 자동 감지.
+    //  (전월에 후단처리했으면 후단으로 재계산해야 유령 소급이 안 생김. 예: 한지혜 전월 30−후단)
+    const ledMatch = a => SOGEUP_ITEMS.every(k => Math.round(a.pay[k] || 0) === Math.round(paid[k] || 0));
+    let absorb = (res && res.processedMode === 'rear') ? 'rear' : (res && res.processedMode) ? 'front' : null;
+    let correct;
+    if (absorb) {
+      correct = computeBase(ctx, sabun, ctx.prevY, ctx.prevM, 'actual', [], null, null, calMode, absorb);
+    } else {
+      const cf = computeBase(ctx, sabun, ctx.prevY, ctx.prevM, 'actual', [], null, null, calMode, 'front');
+      if (paidSum > 0) {
+        const cr = computeBase(ctx, sabun, ctx.prevY, ctx.prevM, 'actual', [], null, null, calMode, 'rear');
+        if (ledMatch(cr) && !ledMatch(cf)) { correct = cr; absorb = 'rear'; } else { correct = cf; absorb = 'front'; }
+      } else { correct = cf; absorb = 'front'; }
+    }
     if (correct.retired || paidCut.retired) return { carry: {}, sum: 0 };
     const deferred = SOGEUP_ITEMS.some(k => Math.round(correct.pay[k] || 0) !== Math.round((paidCut.pay && paidCut.pay[k]) || 0));
     if (!deferred) return { carry: {}, sum: 0 }; // 전월 자체 이연 없음 → 소급 없음
