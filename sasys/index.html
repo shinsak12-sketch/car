@@ -204,6 +204,90 @@ main.ws{max-width:1300px}
 .rowln{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
 .rowln:last-child{border-bottom:none}
 @media(max-width:860px){ .workspace{flex-direction:column} .left{width:100%} .llist{max-height:360px} }
+
+/* ===== 앱 느낌: 넓은 레이아웃 + 모션/디자인 폴리시 ===== */
+main{max-width:1180px}
+main.ws{max-width:1780px}
+.workspace{gap:16px}
+.left{width:384px;border-radius:14px;box-shadow:0 2px 10px rgba(20,40,30,.05)}
+.llist{max-height:calc(100vh - 232px)}
+/* 부드러운 스크롤바 */
+.llist::-webkit-scrollbar{width:8px}
+.llist::-webkit-scrollbar-thumb{background:#d7e2dc;border-radius:8px}
+.llist::-webkit-scrollbar-thumb:hover{background:#bcd0c6}
+
+/* 헤더 강조 */
+header.app{box-shadow:0 1px 0 rgba(0,133,74,.08)}
+header.app .title{letter-spacing:-.3px}
+
+/* 진입 애니메이션 */
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes modalIn{from{opacity:0;transform:translateY(-14px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes pop{0%{transform:scale(.9)}60%{transform:scale(1.04)}100%{transform:scale(1)}}
+
+/* 패널: 라운드/그림자 + 등장 모션(스태거) */
+.panel{border-radius:14px;box-shadow:0 2px 10px rgba(20,40,30,.05);border-color:#eef1ef;animation:fadeUp .34s cubic-bezier(.2,.7,.2,1) both}
+.right>.panel:nth-child(1){animation-delay:.02s}
+.right>.panel:nth-child(2){animation-delay:.06s}
+.right>.panel:nth-child(3){animation-delay:.10s}
+.right>.panel:nth-child(4){animation-delay:.14s}
+.right>.panel:nth-child(5){animation-delay:.18s}
+.right>.panel:nth-child(6){animation-delay:.22s}
+.right>.panel:nth-child(7){animation-delay:.26s}
+.panel .phd{background:linear-gradient(180deg,#fbfdfc,#f6f9f7)}
+
+/* 리스트 아이템 인터랙션 */
+.litem{transition:background .16s,box-shadow .16s,transform .12s}
+.litem:hover{transform:translateX(3px)}
+.litem.sel{box-shadow:inset 4px 0 0 var(--green)}
+.litem .addr{transition:color .15s}
+.litem:hover .addr{color:var(--green-d)}
+
+/* 버튼: 그림자 + 눌림 모션 */
+.btn{transition:transform .09s ease,box-shadow .16s,background .16s;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.btn:hover{box-shadow:0 4px 14px rgba(0,133,74,.28)}
+.btn:active{transform:translateY(1px) scale(.98)}
+.btn.ghost,.btn.gray{box-shadow:none}
+.btn.ghost:hover{box-shadow:0 3px 10px rgba(0,133,74,.14)}
+
+/* 요약 스트립 pill */
+.pill{transition:transform .14s,border-color .15s,color .15s,background .15s}
+.pill:hover{transform:translateY(-1px);border-color:var(--green);color:var(--green-d)}
+.pill.active{box-shadow:0 3px 10px rgba(0,133,74,.15)}
+nav.tabs{box-shadow:0 2px 8px rgba(20,40,30,.04)}
+
+/* 필터 칩 */
+.left .chips button{transition:all .14s}
+.left .chips button:hover{border-color:var(--green);color:var(--green-d)}
+.left .chips button.on{box-shadow:0 2px 8px rgba(0,133,74,.22)}
+
+/* 대시보드 카드 hover */
+.card{transition:transform .16s,box-shadow .16s;border-radius:14px}
+.card:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(20,40,30,.10)}
+
+/* 진행 상태 스텝 */
+.step{transition:background .3s,color .3s,transform .2s}
+.step.cur{box-shadow:0 4px 14px rgba(0,133,74,.35);animation:pop .3s ease}
+.steps{gap:6px}
+
+/* 배지 */
+.badge{transition:transform .12s}
+
+/* 모달 등장 */
+.overlay{animation:fadeIn .18s ease;backdrop-filter:blur(2px)}
+.modal{animation:modalIn .26s cubic-bezier(.2,.8,.2,1);border-radius:16px}
+.x{transition:transform .15s,color .15s}
+.x:hover{transform:rotate(90deg);color:var(--ink)}
+
+/* 토스트 */
+.toast{border-radius:26px;padding:12px 22px;box-shadow:0 10px 30px rgba(0,0,0,.35);background:#12241c}
+
+/* 입력 포커스 */
+.fld input:focus,.fld select:focus,.fld textarea:focus,.left .lhead input:focus{box-shadow:0 0 0 3px rgba(0,133,74,.12)}
+
+/* 접근성: 모션 최소화 선호 시 */
+@media (prefers-reduced-motion: reduce){ *{animation:none!important;transition:none!important} }
 </style>
 
 <header class="app">
@@ -496,9 +580,9 @@ function parseApprovalText(text){
     const others = wonAmts.filter(a=>a!==deposit);   // 보증금을 제외한 금액 = 월세
     monthlyRent = others.length? others[0] : "";
   }
-  // 월세 지급일: 'N일(선불/후불)' 토큰 우선
+  // 월세 지급일: 일자(N일)만 추출. 선불/후불은 별도 필드(rentPayType)로 분리.
   const payDayM = t.match(/(\d{1,2})\s*일\s*\(\s*([선후])\s*[불납]?\s*\)/);
-  const rentPayDay = payDayM? payDayM[0].replace(/\s/g,"") : "";
+  const rentPayDay = payDayM? payDayM[1]+"일" : "";              // 예: "13일" (괄호/선후불 제외)
   const rentPayType = (t.match(/선불|선납|후불|후납/)||[""])[0].replace("선납","선불").replace("후납","후불");
   // 보증금 지급일(계약/입주 기준일 추정) → 시작일 채움
   const kd = t.match(/지급일\s*(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
@@ -558,6 +642,7 @@ function saveNewContract(data){
   ["owner","ownerContact","ownerAccount","floor","area","region"].forEach(k=>{ if(!prop[k]&&data[k]) prop[k]=data[k]; });
   const c = {
     contractId: nextId("contract"), propertyId: prop.propertyId,
+    round:1, renewedFrom:"",
     docNumber:data.docNumber, centerName:data.centerName, tenantName:data.tenantName,
     employeeId:data.employeeId, homeAddress:data.homeAddress, contractType:data.contractType,
     deposit:Number(data.deposit||0), monthlyRent:Number(data.monthlyRent||0),
@@ -569,7 +654,7 @@ function saveNewContract(data){
   };
   db.contracts.push(c);
   prop.status="입주중";
-  logChange("contract",c.contractId,"status","","계약중","신규 계약 등록");
+  logChange("contract",c.contractId,"status","","계약중","신규 계약 등록 (1회차)");
   save(); return c;
 }
 // 계약 변경(수정 폼) — changelog 자동기록 + 월세변경 시 한도 재판정
@@ -581,6 +666,25 @@ function updateContract(id, newData, reason){
   c.deposit=Number(c.deposit||0); c.monthlyRent=Number(c.monthlyRent||0);
   logDiff("contract",id,before,c,fields,reason||"계약 정보 수정");
   save();
+}
+// 계약 갱신(자동갱신/재계약) — 이전 계약은 '갱신완료'로 닫고 다음 회차 계약을 새로 생성
+//   → 회차(round)로 1회차/2회차… 구분, renewedFrom 으로 연결. 이력 보존.
+function renewContract(id, data, reason){
+  const prev=db.contracts.find(x=>x.contractId===id); if(!prev) return;
+  logChange("contract",id,"status",prev.status,"갱신완료",reason||"계약 갱신");
+  prev.status="갱신완료";
+  const c=Object.assign({}, prev, data, {
+    contractId: nextId("contract"),
+    round: (prev.round||1)+1,
+    renewedFrom: prev.contractId,
+    status: "계약중"
+  });
+  c.deposit=Number(c.deposit||0); c.monthlyRent=Number(c.monthlyRent||0);
+  db.contracts.push(c);
+  const p=db.properties.find(x=>x.propertyId===c.propertyId); if(p) p.status="입주중";
+  // 갱신 시 바뀐 주요 값 기록
+  ["deposit","monthlyRent","rentPayDay","rentPayType","startDate","endDate","tenantName","limitCheck"].forEach(f=>logChange("contract",c.contractId,f,prev[f],c[f], (reason||"계약 갱신")+" ("+c.round+"회차)"));
+  save(); return c;
 }
 // 해지: status→해지예정, settlement 자동생성(진행중)
 function terminateContract(id){
@@ -630,10 +734,14 @@ function seedSample(){
   const p3={propertyId:nextId("property"),address:"대전 유성구 대학로 99, 1004호",owner:"박대전",contractType:"월세",floor:"10층",area:"49.6㎡",region:"대전",status:"공실"};
   db.properties.push(p1,p2,p3);
 
-  const c1={contractId:nextId("contract"),propertyId:p1.propertyId,docNumber:"총무-2026-0012",centerName:"서울센터",tenantName:"홍길동",employeeId:"20180412",homeAddress:"부산 해운대구 …",contractType:"전세",deposit:280000000,monthlyRent:0,rentPayDay:"",startDate:"2026-03-01",endDate:"2028-02-28",approvalDate:"2026-02-20",region:"서울",limitCheck:"적정",limitReason:"",status:"계약중"};
-  const c2={contractId:nextId("contract"),propertyId:p2.propertyId,docNumber:"총무-2026-0021",centerName:"판교센터",tenantName:"김영희",employeeId:"20200133",homeAddress:"광주 …",contractType:"월세",deposit:30000000,monthlyRent:1200000,rentPayDay:"13일(후불)",startDate:"2026-01-15",endDate:"2026-09-14",approvalDate:"2026-01-05",region:"경기",limitCheck:"초과",limitReason:"월세 한도(100만원) 초과 — 팀장 승인",status:"계약중"};
-  const c3={contractId:nextId("contract"),propertyId:p3.propertyId,docNumber:"총무-2025-0088",centerName:"대전센터",tenantName:"이철수",employeeId:"20150077",homeAddress:"서울 …",contractType:"월세",deposit:20000000,monthlyRent:700000,rentPayDay:"25일(선불)",startDate:"2024-08-01",endDate:"2026-07-31",approvalDate:"2024-07-15",region:"대전",limitCheck:"적정",limitReason:"",status:"해지완료"};
-  db.contracts.push(c1,c2,c3);
+  const c1={contractId:nextId("contract"),propertyId:p1.propertyId,round:1,renewedFrom:"",docNumber:"총무-2026-0012",centerName:"서울센터",tenantName:"홍길동",employeeId:"20180412",homeAddress:"부산 해운대구 …",contractType:"전세",deposit:280000000,monthlyRent:0,rentPayDay:"",rentPayType:"",startDate:"2026-03-01",endDate:"2028-02-28",approvalDate:"2026-02-20",region:"서울",limitCheck:"적정",limitReason:"",status:"계약중"};
+  // 김영희: 1회차(갱신완료) → 2회차(계약중) — 자동갱신 이력 예시
+  const c2a={contractId:nextId("contract"),propertyId:p2.propertyId,round:1,renewedFrom:"",docNumber:"총무-2025-0021",centerName:"판교센터",tenantName:"김영희",employeeId:"20200133",homeAddress:"광주 …",contractType:"월세",deposit:30000000,monthlyRent:1100000,rentPayDay:"13일",rentPayType:"후불",startDate:"2025-01-15",endDate:"2026-01-14",approvalDate:"2025-01-05",region:"경기",limitCheck:"초과",limitReason:"월세 한도 초과 — 팀장 승인",status:"갱신완료"};
+  const c2={contractId:nextId("contract"),propertyId:p2.propertyId,round:2,renewedFrom:c2a.contractId,docNumber:"총무-2026-0021",centerName:"판교센터",tenantName:"김영희",employeeId:"20200133",homeAddress:"광주 …",contractType:"월세",deposit:30000000,monthlyRent:1200000,rentPayDay:"13일",rentPayType:"후불",startDate:"2026-01-15",endDate:"2027-01-14",approvalDate:"2026-01-05",region:"경기",limitCheck:"초과",limitReason:"월세 한도(100만원) 초과 — 팀장 승인",status:"계약중"};
+  const c3={contractId:nextId("contract"),propertyId:p3.propertyId,round:1,renewedFrom:"",docNumber:"총무-2025-0088",centerName:"대전센터",tenantName:"이철수",employeeId:"20150077",homeAddress:"서울 …",contractType:"월세",deposit:20000000,monthlyRent:700000,rentPayDay:"25일",rentPayType:"선불",startDate:"2024-08-01",endDate:"2026-07-31",approvalDate:"2024-07-15",region:"대전",limitCheck:"적정",limitReason:"",status:"해지완료"};
+  // 이철수: 대전 이전에 서울 사택도 사용(직원별 다건 이력 예시)
+  const c4={contractId:nextId("contract"),propertyId:p1.propertyId,round:1,renewedFrom:"",docNumber:"총무-2022-0011",centerName:"서울센터",tenantName:"이철수",employeeId:"20150077",homeAddress:"서울 …",contractType:"전세",deposit:250000000,monthlyRent:0,rentPayDay:"",rentPayType:"",startDate:"2022-03-01",endDate:"2024-02-29",approvalDate:"2022-02-10",region:"서울",limitCheck:"적정",limitReason:"",status:"해지완료"};
+  db.contracts.push(c1,c2a,c2,c3,c4);
 
   // 해지완료된 c3 정산(완료)
   const s3={settlementId:nextId("settlement"),contractId:c3.contractId,moveOutDate:"2026-07-10",status:"완료",completedDate:"2026-07-15",notes:"원상복구 경미, 입주자 부담",
@@ -641,24 +749,26 @@ function seedSample(){
     restorationFee:{amount:350000,payer:"입주자"}, utilityBill:{amount:80000,payer:"입주자"}, longTermRepairFund:{amount:120000,received:true}};
   db.settlements.push(s3);
 
-  // 이슈 2건
+  // 이슈
   db.issues.push(
     {issueId:nextId("issue"),targetType:"property",targetId:p1.propertyId,occurredDate:"2026-06-10",type:"누수",content:"화장실 천장 누수 발생, 윗집 배관 문제",status:"진행",resolution:"집주인 통해 배관 수리 요청",closedDate:""},
-    {issueId:nextId("issue"),targetType:"contract",targetId:c2.contractId,occurredDate:"2026-05-02",type:"집주인분쟁",content:"월세 인상 요구 분쟁",status:"종결",resolution:"계약서상 인상 불가 확인, 유지",closedDate:"2026-05-20"}
+    {issueId:nextId("issue"),targetType:"contract",targetId:c2.contractId,occurredDate:"2026-05-02",type:"집주인분쟁",content:"월세 인상 요구 분쟁",status:"종결",resolution:"계약서상 인상 불가 확인, 유지",closedDate:"2026-05-20"},
+    {issueId:nextId("issue"),targetType:"contract",targetId:c4.contractId,occurredDate:"2023-05-02",type:"설비고장",content:"보일러 고장",status:"종결",resolution:"집주인 수리",closedDate:"2023-05-10"}
   );
 
-  // 변경이력 샘플
-  logChange("contract",c2.contractId,"monthlyRent","1100000","1200000","재계약 월세 인상");
+  // 변경이력 샘플(갱신)
+  logChange("contract",c2.contractId,"status","","계약중","자동갱신 (2회차, 월세 110→120만)");
 }
 
 /* ============================ [RENDER] 렌더링 ============================ */
 // 화면 상태
-let ui = { sel:null, filter:"all", q:"", settings:false };
+let ui = { sel:null, filter:"all", q:"", settings:false, employees:false, selEmp:null, empQ:"" };
 
 // 공용 헬퍼
 function prop(id){ return db.properties.find(p=>p.propertyId===id); }
 function contract(id){ return db.contracts.find(c=>c.contractId===id); }
-function statusBadge(s){ const m={"입주중":"b-green","공실":"b-gray","계약중":"b-green","해지예정":"b-amber","해지완료":"b-gray","신청":"b-blue"}; return `<span class="badge ${m[s]||'b-gray'}">${s}</span>`; }
+function statusBadge(s){ const m={"입주중":"b-green","공실":"b-gray","계약중":"b-green","해지예정":"b-amber","해지완료":"b-gray","갱신완료":"b-blue","신청":"b-blue"}; return `<span class="badge ${m[s]||'b-gray'}">${s}</span>`; }
+function roundBadge(n){ return `<span class="badge b-blue">${n||1}회차</span>`; }
 function limitBadge(v){ if(v==="초과") return `<span class="badge b-red">초과</span>`; if(v==="적정") return `<span class="badge b-green">적정</span>`; return `<span class="badge b-gray">${v||"-"}</span>`; }
 function tbl(cols,body){ return `<div class="tblwrap"><table><thead><tr>${cols.map(c=>`<th class="${/주소|내용|사유/.test(c)?'wrap':''}">${c}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`; }
 function kv(k,v){ return `<div><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`; }
@@ -700,7 +810,8 @@ function renderStrip(){
     ${pill('정산중','정산중',s.settle, s.settle?'warn':'')}
     ${pill('이슈','미종결이슈',s.issue, s.issue?'warn':'')}
     <span class="spacer"></span>
-    <button class="pill" onclick="openSettings()">⚙ 한도·데이터</button>
+    <button class="pill ${ui.employees?'active':''}" onclick="openEmployees()">👤 직원 이력</button>
+    <button class="pill ${ui.settings?'active':''}" onclick="openSettings()">⚙ 한도·데이터</button>
   </div>`;
 }
 
@@ -717,13 +828,14 @@ function render(){
   const v=$("#view");
   v.className="ws";
   if(ui.settings){ v.innerHTML=viewSettings(); return; }
+  if(ui.employees){ v.innerHTML=viewEmployees(); return; }
   v.innerHTML = storeBanner() + `<div class="workspace">
     <aside class="left">${leftList()}</aside>
     <section class="right">${rightPanel()}</section>
   </div>`;
 }
-function setFilter(k){ ui.filter=k; render(); }
-function selectProp(pid){ ui.sel=pid; render(); }
+function setFilter(k){ ui.filter=k; ui.settings=false; ui.employees=false; render(); }
+function selectProp(pid){ ui.sel=pid; ui.settings=false; ui.employees=false; render(); }
 
 // ── 좌측: 사택 목록(마스터) ──
 function propInFilter(p,f){
@@ -790,20 +902,22 @@ function lifecyclePanel(p,c){
   else if(c.status==="해지완료") cur=4;
   const bar=steps.map((s,i)=>`<div class="step ${i<cur?'done':(i===cur?'cur':'')}">${s}</div>`).join("");
   let acts="";
-  if(c.status==="계약중") acts=`<button class="btn sm" onclick="openContract('${c.contractId}')">계약 수정</button><button class="btn sm gray" onclick="doTerminate('${c.contractId}')">해지</button>`;
-  else if(c.status==="해지예정") acts=`<button class="btn sm" onclick="openSettleFor('${c.contractId}')">정산 입력</button><button class="btn sm ghost" onclick="openContract('${c.contractId}')">수정</button>`;
+  if(c.status==="계약중") acts=`<button class="btn sm" onclick="openRenew('${c.contractId}')">🔄 갱신</button><button class="btn sm ghost" onclick="openContract('${c.contractId}')">✏ 변경</button><button class="btn sm gray" onclick="doTerminate('${c.contractId}')">해지</button>`;
+  else if(c.status==="해지예정") acts=`<button class="btn sm" onclick="openSettleFor('${c.contractId}')">정산 입력</button><button class="btn sm ghost" onclick="openContract('${c.contractId}')">변경</button>`;
   else if(c.status==="해지완료") acts=`<button class="btn sm" onclick="openNewContract('${p.propertyId}')">＋ 재계약(재배정)</button>`;
   else if(c.status==="신청") acts=`<button class="btn sm" onclick="openContract('${c.contractId}')">검토·확정</button>`;
-  return `<div class="panel"><div class="phd">진행 상태 <span>${acts}</span></div><div class="pbd"><div class="steps">${bar}</div></div></div>`;
+  return `<div class="panel anim"><div class="phd">진행 상태 <span>${acts}</span></div><div class="pbd"><div class="steps">${bar}</div></div></div>`;
 }
 function contractPanel(p,c){
   const lim=judgeLimit(c);
-  return `<div class="panel"><div class="phd">현재 계약 · ${c.contractId} <span>${statusBadge(c.status)}${limitBadge(c.limitCheck)}</span></div>
+  const cnt=db.contracts.filter(x=>x.propertyId===p.propertyId&&x.tenantName===c.tenantName).length;
+  return `<div class="panel anim"><div class="phd">현재 계약 · ${c.contractId} <span>${roundBadge(c.round)}${statusBadge(c.status)}${limitBadge(c.limitCheck)}</span></div>
   <div class="pbd"><div class="kv">
     ${kv("입주자",c.tenantName)}${kv("사번",c.employeeId)}${kv("센터",c.centerName)}
     ${kv("계약구분",c.contractType)}${kv("보증금",won(c.deposit))}${kv("월세",c.monthlyRent?won(c.monthlyRent):"-")}
     ${kv("월세 지급일",(c.rentPayDay||"-")+(c.rentPayType?" ("+c.rentPayType+")":""))}
     ${kv("계약기간",(c.startDate||"?")+" ~ "+(c.endDate||"?"))}
+    ${kv("계약 회차",(c.round||1)+"회차"+(c.renewedFrom?" (갱신)":" (신규)"))}
     ${kv("결재완료일",c.approvalDate||"-")}${kv("문서번호",c.docNumber||"-")}
     ${kv("연고지",c.homeAddress||"-")}
     ${kv("임대인",p.owner||"-")}${kv("임대인 연락처",p.ownerContact||"-")}${kv("임대인 계좌",p.ownerAccount||"-")}
@@ -834,8 +948,8 @@ function issuePanel(p){
 function historyPanel(p){
   const cs=db.contracts.filter(c=>c.propertyId===p.propertyId).sort((a,b)=>(a.startDate||"")<(b.startDate||"")?1:-1);
   if(cs.length<=1) return "";
-  return `<div class="panel"><div class="phd">계약 이력 (${cs.length})</div><div class="pbd">${cs.map(c=>`<div class="rowln click" onclick="openContract('${c.contractId}')" style="cursor:pointer">
-    <span>${esc(c.tenantName)} · ${esc(c.centerName)} <span class="muted small">${c.startDate||"?"}~${c.endDate||"?"}</span></span>
+  return `<div class="panel anim"><div class="phd">계약 이력 (${cs.length}건)</div><div class="pbd">${cs.map(c=>`<div class="rowln click" onclick="openContract('${c.contractId}')" style="cursor:pointer">
+    <span>${roundBadge(c.round)} <b>${esc(c.tenantName)}</b> · ${esc(c.centerName)} <span class="muted small">${c.startDate||"?"}~${c.endDate||"?"}${c.renewedFrom?" · 갱신":""}</span></span>
     <span class="small">${c.contractType} ${won(c.deposit)}${c.monthlyRent?" / 월 "+won(c.monthlyRent):""} ${statusBadge(c.status)}</span></div>`).join("")}</div></div>`;
 }
 function changelogPanel(p){
@@ -854,8 +968,82 @@ function rightOverview(){
   <div class="panel"><div class="phd">미종결 이슈 (${iss.length})</div><div class="pbd">${issH}</div></div>`;
 }
 
+// ── 직원별 사택 사용 이력 ──
+function openEmployees(){ ui.employees=true; ui.settings=false; render(); }
+function closeEmployees(){ ui.employees=false; render(); }
+// 계약 사용 개월수(종료일 없거나 미래면 오늘까지)
+function contractMonths(c){
+  if(!c.startDate) return 0;
+  let e=c.endDate||today(); if(new Date(e)>new Date(today())) e=today();
+  return Math.max(0, daysBetween(c.startDate,e)/30.44);
+}
+function fmtMonths(m){ const t=Math.round(m); return t>=12? (Math.floor(t/12)+"년 "+(t%12)+"개월") : (t+"개월"); }
+function empKey(c){ return c.employeeId||c.tenantName||""; }
+// 직원 집계
+function employees(){
+  const map={};
+  db.contracts.forEach(c=>{ const k=empKey(c); if(!k) return; (map[k]=map[k]||{key:k,id:c.employeeId||"",name:c.tenantName||"",contracts:[]}).contracts.push(c); });
+  return Object.values(map).map(e=>{
+    e.name=e.contracts[0].tenantName; e.id=e.contracts[0].employeeId||"";
+    e.months=e.contracts.reduce((s,c)=>s+contractMonths(c),0);
+    e.props=new Set(e.contracts.map(c=>c.propertyId)).size;
+    const act=e.contracts.find(c=>["계약중","해지예정"].includes(c.status));
+    e.current=act?prop(act.propertyId):null;
+    e.currentC=act||null;
+    return e;
+  }).sort((a,b)=>b.months-a.months);
+}
+// 특정 직원 재직 중 발생 이슈(계약 대상 + 재직기간 내 물건 이슈)
+function empIssues(e){
+  const out=[];
+  e.contracts.forEach(c=>{
+    db.issues.forEach(i=>{
+      const hit = (i.targetType==="contract"&&i.targetId===c.contractId) ||
+        (i.targetType==="property"&&i.targetId===c.propertyId&&c.startDate&&i.occurredDate>=c.startDate&&(!c.endDate||i.occurredDate<=c.endDate));
+      if(hit && !out.includes(i)) out.push(i);
+    });
+  });
+  return out.sort((a,b)=>a.occurredDate<b.occurredDate?1:-1);
+}
+function viewEmployees(){
+  const q=(ui.empQ||"").trim();
+  let list=employees(); if(q) list=list.filter(e=>(e.name+e.id).includes(q));
+  return `<div class="btnrow"><button class="btn ghost sm" onclick="closeEmployees()">← 사택 관리로</button></div>
+  <span class="chip">직원별 사택 사용 이력</span>
+  <div class="workspace">
+    <aside class="left">
+      <div class="lhead"><input placeholder="이름·사번 검색" value="${esc(q)}" oninput="ui.empQ=this.value;refreshEmpList()"></div>
+      <div class="llist">${list.length?list.map(e=>empItem(e)).join(""):"<div class='empty'>직원 데이터가 없습니다</div>"}</div>
+    </aside>
+    <section class="right">${ui.selEmp?empDetail(ui.selEmp):`<div class="panel"><div class="empty">← 왼쪽에서 직원을 선택하면<br>사용한 사택·누적 기간·당시 이슈가 표시됩니다.</div></div>`}</section>
+  </div>`;
+}
+function empItem(e){
+  return `<div class="litem ${ui.selEmp===e.key?'sel':''}" onclick="ui.selEmp='${e.key}';render()">
+    <div class="a1"><div class="addr">${esc(e.name)} <span class="muted small">${esc(e.id)}</span></div>${e.current?'<span class="badge b-green">입주중</span>':'<span class="badge b-gray">이력</span>'}</div>
+    <div class="sub">사택 ${e.props}곳 · 누적 ${fmtMonths(e.months)}${e.current?" · 현재 "+esc(e.current.address.slice(0,14))+"…":""}</div>
+  </div>`;
+}
+function refreshEmpList(){ const el=document.querySelector(".llist"); if(!el) return; const q=(ui.empQ||"").trim(); let list=employees(); if(q) list=list.filter(e=>(e.name+e.id).includes(q)); el.innerHTML=list.length?list.map(empItem).join(""):"<div class='empty'>직원 데이터가 없습니다</div>"; }
+function empDetail(key){
+  const e=employees().find(x=>x.key===key); if(!e) return "";
+  const cs=e.contracts.slice().sort((a,b)=>(a.startDate||"")<(b.startDate||"")?1:-1);
+  const iss=empIssues(e);
+  const rows=cs.map(c=>{const p=prop(c.propertyId);return `<div class="rowln click" style="cursor:pointer" onclick="gotoProp('${c.propertyId}')">
+    <span>${roundBadge(c.round)} <b>${esc(p?p.address:"")}</b><div class="muted small">${esc(c.centerName)} · ${c.startDate||"?"}~${c.endDate||"현재"} · ${fmtMonths(contractMonths(c))}</div></span>
+    <span class="small right">${c.contractType} ${won(c.deposit)}${c.monthlyRent?" / 월 "+won(c.monthlyRent):""}<br>${statusBadge(c.status)}</span></div>`;}).join("");
+  return `<div class="panel anim"><div class="pbd" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+    <div><div style="font-size:18px;font-weight:800">${esc(e.name)} <span class="muted" style="font-size:13px">${esc(e.id)}</span></div>
+    <div class="muted small" style="margin-top:3px">사용 사택 ${e.props}곳 · 계약 ${cs.length}건 · 이슈 ${iss.length}건</div></div>
+    <div style="text-align:right"><div class="muted small">누적 사용</div><div style="font-size:22px;font-weight:800;color:var(--green)">${fmtMonths(e.months)}</div></div>
+  </div></div>
+  <div class="panel anim"><div class="phd">거쳐간 사택 (${cs.length})</div><div class="pbd">${rows}</div></div>
+  <div class="panel anim"><div class="phd">재직 중 이슈 (${iss.length})</div><div class="pbd">${iss.length?iss.map(i=>{const p=prop(i.targetType==="property"?i.targetId:(contract(i.targetId)||{}).propertyId);return `<div class="rowln"><span><span class="badge ${i.status==='종결'?'b-gray':(i.status==='진행'?'b-amber':'b-blue')}">${i.status}</span> <b>${esc(i.type)}</b> ${esc(i.content)}<div class="muted small">${i.occurredDate} · ${esc(p?p.address:"")}</div></span></div>`;}).join(""):"<div class='muted small'>재직 중 발생한 이슈 없음</div>"}</div></div>`;
+}
+function gotoProp(pid){ ui.employees=false; ui.selEmp=null; ui.sel=pid; render(); }
+
 // ── 설정: 한도 기준 + 데이터(폴더/백업) ──
-function openSettings(){ ui.settings=true; render(); }
+function openSettings(){ ui.settings=true; ui.employees=false; render(); }
 function closeSettings(){ ui.settings=false; render(); }
 function viewSettings(){
   return `<div class="btnrow"><button class="btn ghost sm" onclick="closeSettings()">← 사택 관리로</button></div>
@@ -1015,12 +1203,12 @@ function submitNewContract(pid){
 /* ---- 계약 수정 ---- */
 function openContract(id){
   const c=contract(id); if(!c) return;
-  modal("계약 수정 · "+id,
-    `<div class="notice gray">수정 내용은 <b>변경이력(changelog)</b>에 전/후 값이 자동 기록됩니다. 월세 변경 시 한도가 재판정됩니다.</div>
+  modal("계약 변경 · "+id+" ("+(c.round||1)+"회차)",
+    `<div class="notice gray">현재 계약 내용을 <b>수정</b>합니다(같은 회차). 월세·입주자 등 변경 시 <b>변경이력</b>에 전/후 값이 자동 기록되고, 월세 변경 시 한도가 재판정됩니다. <br>계약 기간이 끝나 <b>새 기간으로 이어가는 경우(자동갱신)</b>는 [취소] 후 <b>🔄 갱신</b>을 사용하세요.</div>
      ${contractFormFields(c)}
-     <div class="fld" style="margin-top:10px"><label>수정 사유(변경이력에 기록)</label><input id="c_reason" placeholder="예: 재계약 월세 인상"></div>`,
+     <div class="fld" style="margin-top:10px"><label>변경 사유(변경이력에 기록)</label><input id="c_reason" placeholder="예: 월세 인상, 입주자 정보 정정"></div>`,
     `<button class="btn gray" onclick="closeModal()">취소</button>
-     <button class="btn" onclick="submitEditContract('${id}')">저장</button>`);
+     <button class="btn" onclick="submitEditContract('${id}')">변경 저장</button>`);
 }
 function submitEditContract(id){
   const c=contract(id); const d=readContractForm();
@@ -1031,7 +1219,33 @@ function submitEditContract(id){
     d.limitReason=reason;
   }
   updateContract(id, d, val("c_reason"));
-  closeModal(); render(); toast("계약 수정 저장 + 변경이력 기록");
+  closeModal(); render(); toast("계약 변경 저장 + 변경이력 기록");
+}
+/* ---- 계약 갱신(자동갱신/재계약) : 다음 회차 신규 생성 ---- */
+function openRenew(id){
+  const c=contract(id); if(!c) return;
+  // 기본값: 시작=기존 종료 다음날, 종료=+1년, 나머지 승계
+  const draft={...c};
+  if(c.endDate){ const s=new Date(c.endDate); s.setDate(s.getDate()+1); draft.startDate=s.toISOString().slice(0,10);
+    const e=new Date(s); e.setFullYear(e.getFullYear()+1); e.setDate(e.getDate()-1); draft.endDate=e.toISOString().slice(0,10); }
+  modal("계약 갱신 · "+id+" → "+((c.round||1)+1)+"회차",
+    `<div class="notice info">기존 계약을 <b>갱신완료</b>로 닫고 <b>${(c.round||1)+1}회차</b> 계약을 새로 만듭니다. 기간·월세·입주자 등 바뀐 값만 수정하세요. (변경 전/후가 이력에 기록됩니다)</div>
+     ${contractFormFields(draft)}
+     <div class="fld" style="margin-top:10px"><label>갱신 사유</label><input id="c_reason" placeholder="예: 2년 자동갱신, 월세 5% 인상"></div>`,
+    `<button class="btn gray" onclick="closeModal()">취소</button>
+     <button class="btn" onclick="submitRenew('${id}')">갱신 확정</button>`);
+}
+function submitRenew(id){
+  const c=contract(id); const d=readContractForm();
+  const j=judgeLimit(d); d.limitCheck=j.result;
+  if(j.over){
+    const reason=prompt(`⚠ 한도 초과 (${j.detail}). 초과 사유 입력:`, c.limitReason||"");
+    if(!reason){ toast("초과 사유 미입력 — 갱신 취소"); return; }
+    d.limitReason=reason;
+  }
+  const nc=renewContract(id, d, val("c_reason")||"계약 갱신");
+  if(nc) ui.sel=nc.propertyId;
+  closeModal(); render(); toast(`갱신 완료 — ${nc.round}회차 계약 생성`);
 }
 function doTerminate(id){
   if(!confirm("이 계약을 해지 처리합니다.\n(status→해지예정, 퇴실정산 레코드 자동 생성)")) return;
