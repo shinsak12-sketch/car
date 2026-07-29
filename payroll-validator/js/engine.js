@@ -204,6 +204,17 @@ window.PV = window.PV || {};
     return { start: unpaidDates[0], end: unpaidDates[unpaidDates.length - 1], matEnd };
   }
 
+  // 다태아 출산전후휴가 시작일(있으면). 다태아=유급 75일(단태아 60일)이라
+  //  대장이 단태아 60일 기준으로 지급되면 경계월(60~75일차)에서 과소지급 발생 → 알림용.
+  function matTwinStart(ctx, sabun) {
+    const mo = ctx.overrides.maternity.get(sabun);
+    if (mo && mo.유형 === '다태아') return mo.전시작 || mo.후시작 || null;
+    const rows = (ctx.vacBy.get(sabun) || []).filter(v => isMatVac(v.휴가종류) && /다태아/.test(v.휴가종류) && !/유사산/.test(v.휴가종류));
+    if (!rows.length) return null;
+    let s = null; rows.forEach(v => { if (v.시작일 && (!s || v.시작일 < s)) s = v.시작일; });
+    return s;
+  }
+
   // ---------- 월 세그먼트(일할) ----------
   // absorb: 나머지(월 30일 압축분)를 어느 구간이 흡수하나.
   //  'front'(기본) = 마지막 구간이 흡수(30−앞단, 뒷구간 일수↓) / 'rear' = 첫 구간이 흡수(30−뒷단, 앞구간 일수↓)
@@ -442,6 +453,8 @@ window.PV = window.PV || {};
       trace.휴가 = (ctx.vacBy.get(sabun) || []).map(v => ({ 종류: v.휴가종류, 시작일: v.시작일, 종료일: v.종료일, 일수: v.휴가일수 }));
       const _mu = maternityUnpaid(ctx, sabun);
       trace.matUnpaid = _mu ? { start: _mu.start, end: _mu.end } : null; // 출산/유사산 무급 구간
+      const _tw = matTwinStart(ctx, sabun); // 다태아 유급 75일 경계(단태아 60일과 차이나는 구간)
+      trace.matTwin = _tw ? { start: _tw, d61: addDays(_tw, 60), d75: addDays(_tw, 74) } : null;
     }
     return { retired: false, pay, real, paidUnits, is14: applied14, segments: seg.segments, uvac, peakApplied, minTopup, minStd, minAnnualCmp, minShortHrs, minShortWorker: isShortWorker, minShortUnknown };
   }
@@ -723,10 +736,24 @@ window.PV = window.PV || {};
         const iDiffs = []; iCols.forEach(col => { const ours = Math.round(r.ignorePay[col] || 0), led = Math.round((L.pay && L.pay[col]) || 0); if (ours !== led) iDiffs.push({ col, ours, led, diff: ours - led }); });
         ignore = { pay: r.ignorePay, total: r.ignoreTotal, diffs: iDiffs, notes: r.ignoreNotes || [], status: iDiffs.length ? 'bad' : 'ok' };
       }
-      rows.push({ 사번: L.사번, 성명: L.성명 || r.성명, 소속: L.소속 || r.소속, status, diffs, ours: r.pay, led: L.pay || {}, notes, warn: r.warn, trace: r.trace, ourTotal: r.total, ledTotal: Math.round(L.총지급액 || 0), alt, alt2, ignore, dayShift: !!r.dayShift, currentPostPay: !!r.currentPostPay, hasSogeup: !!r.hasSogeup, sogeup: r.sogeup || null, prevChangeOrders: r.prevChangeOrders || null });
+      // 다태아 출산휴가 유급 75일 경계월(60~75일차)인데 계산>대장 불일치
+      //  → 대장이 단태아(60일) 기준으로 유급을 끊어 과소지급했을 가능성 → 담당자 확인 알림.
+      const tw = r.trace && r.trace.matTwin;
+      let matTwin = false;
+      if (tw && status === 'bad' && r.total > Math.round(L.총지급액 || 0)) {
+        const yy = payroll.target.y, mm = payroll.target.m;
+        const ms = iso(yy, mm, 1), me = iso(yy, mm, dim(yy, mm));
+        if (cmp(ms, tw.d75) <= 0 && cmp(me, tw.d61) >= 0) {
+          matTwin = true;
+          notes.push('⚠다태아 출산휴가 — 법정 유급 75일(단태아 60일). 대장이 60일 기준으로 지급됐는지 확인 (계산 > 대장)');
+        }
+      }
+      rows.push({ 사번: L.사번, 성명: L.성명 || r.성명, 소속: L.소속 || r.소속, status, diffs, ours: r.pay, led: L.pay || {}, notes, warn: r.warn, trace: r.trace, ourTotal: r.total, ledTotal: Math.round(L.총지급액 || 0), alt, alt2, ignore, dayShift: !!r.dayShift, currentPostPay: !!r.currentPostPay, hasSogeup: !!r.hasSogeup, sogeup: r.sogeup || null, prevChangeOrders: r.prevChangeOrders || null, matTwin });
     });
 
     rows.sort((a, b) => (a.status === b.status ? 0 : a.status === 'bad' ? -1 : 1));
+    const twinRows = rows.filter(r => r.matTwin);
+    if (twinRows.length) alerts.push({ level: 'warn', title: `다태아 출산휴가 유급기간 확인 ${twinRows.length}명`, desc: '다태아는 법정 유급 75일(단태아 60일). 대장이 60일 기준으로 지급돼 과소지급됐는지 확인: ' + twinRows.map(r => r.성명 || r.사번).join(', ') });
     if (badCnt) alerts.push({ level: 'bad', title: `불일치 ${badCnt}명`, desc: '계산값과 급여대장이 다른 인원입니다.' });
     if (!badCnt && rows.length) alerts.push({ level: 'ok', title: '전원 완전일치', desc: `${rows.length}명 전원 일치` });
 

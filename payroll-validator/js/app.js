@@ -945,16 +945,16 @@
       const diff = r.ourTotal - r.ledTotal;
       const diffTags = (r.diffs || []).filter(d => d.col !== '—').map(d => `<span class="tag diff"><b>${esc(d.col)}</b>${d.diff > 0 ? '+' : ''}${won(d.diff)}</span>`).join('');
       const minwage = (r.notes || []).some(n => n.includes('최저임금'));
-      const noteTags = (r.notes || []).filter(n => !n.startsWith('불일치')).map(n => `<span class="tag ${n.includes('최저임금') || n.includes('일수 차이') || n.includes('소급') || n.includes('전월') || n.includes('지급일') ? 'warn' : n.startsWith('일할') ? 'ilhal' : 'sp'}">${esc(n)}</span>`).join('');
+      const noteTags = (r.notes || []).filter(n => !n.startsWith('불일치')).map(n => `<span class="tag ${n.includes('최저임금') || n.includes('일수 차이') || n.includes('소급') || n.includes('전월') || n.includes('지급일') || n.includes('다태아') ? 'warn' : n.startsWith('일할') ? 'ilhal' : 'sp'}">${esc(n)}</span>`).join('');
       const cls0 = r.status === 'bad' ? 'rbad' : '';
       const tags0 = (diffTags || noteTags)
         ? `<div class="vgrp">${diffTags ? '<div class="vg vg-d">' + diffTags + '</div>' : ''}${noteTags ? '<div class="vg vg-n">' + noteTags + '</div>' : ''}</div>`
         : (r.status === 'ok' ? '<span class="pill ok">일치</span>' : '');
       return { cls: cls0, _cls0: cls0, _tags0: tags0, vals: { no: i + 1, 사번: r.사번, 성명: r.성명, 소속: r.소속, ourTotal: r.ourTotal, ledTotal: r.ledTotal, diff, 상태: r.status === 'ok' ? '일치' : '불일치', 비고: ((r.diffs || []).map(d => d.col).join(' ') + ' ' + (r.notes || []).join(' ')) },
-        tagsHtml: tags0, flags: { bad: r.status === 'bad', ok: r.status === 'ok', warn: !!r.warn, minwage, dayshift: !!r.dayShift, error: false, sogeup: !!r.hasSogeup, postpay: !!r.currentPostPay },
+        tagsHtml: tags0, flags: { bad: r.status === 'bad', ok: r.status === 'ok', warn: !!r.warn, minwage, dayshift: !!r.dayShift, error: false, sogeup: !!r.hasSogeup, postpay: !!r.currentPostPay, mattwin: !!r.matTwin },
         detail: buildDetail(r) };
     });
-    const chips = [{ k: 'all', label: '전체' }, { k: 'bad', label: '불일치', flag: 'bad' }, { k: 'ok', label: '일치', flag: 'ok' }, { k: 'error', label: '⚑오류', flag: 'error' }, { k: 'postpay', label: '⚠당월변동', flag: 'postpay' }, { k: 'sogeup', label: '⚠전월변동/소급', flag: 'sogeup' }, { k: 'warn', label: '점검', flag: 'warn' }, { k: 'minwage', label: '⚠최저보전', flag: 'minwage' }, { k: 'dayshift', label: '⚠익월권장', flag: 'dayshift' }];
+    const chips = [{ k: 'all', label: '전체' }, { k: 'bad', label: '불일치', flag: 'bad' }, { k: 'ok', label: '일치', flag: 'ok' }, { k: 'error', label: '⚑오류', flag: 'error' }, { k: 'postpay', label: '⚠당월변동', flag: 'postpay' }, { k: 'sogeup', label: '⚠전월변동/소급', flag: 'sogeup' }, { k: 'warn', label: '점검', flag: 'warn' }, { k: 'minwage', label: '⚠최저보전', flag: 'minwage' }, { k: 'dayshift', label: '⚠익월권장', flag: 'dayshift' }, { k: 'mattwin', label: '⚠다태아유급', flag: 'mattwin' }];
     const sumHTML = `<div class="sum"><div class="sc"><div class="k">대상</div><div class="v">${res.summary.total}</div></div><div class="sc"><div class="k" style="color:var(--ok)">일치</div><div class="v" style="color:var(--ok)">${res.summary.ok}</div></div><div class="sc"><div class="k" style="color:var(--bad)">불일치</div><div class="v" style="color:var(--bad)">${res.summary.bad}</div></div></div>`;
     openSearchWin(`검증결과 ${ym}`, `${ym} · 계산 vs 급여대장(세전)`, columns, rows, chips, sumHTML, ym, { saveVerify: true });
   }
