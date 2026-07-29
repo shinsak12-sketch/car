@@ -27,17 +27,18 @@ window.PV = window.PV || {};
   const ceilU = x => (Math.ceil((x - 1e-6) / 10) * 10) || 0;  // 십원 절상(급여)
   const floorU = x => (Math.floor((x + 1e-6) / 10) * 10) || 0; // 십원 절하(감액)
 
-  // 최저임금: 연도별 최저시급 → 최저연봉 = 시급×12×(209+10*365/12/7*1.5), 천원 절상.
+  // 기준값 접근 (config.js의 PV.CONFIG. 값이 없으면 안전 기본값으로 대체)
+  const C = () => PV.CONFIG || PV.CONFIG_DEFAULT || {};
+
+  // 최저임금: 연도별 최저시급 → 최저연봉 = 시급×12×환산계수(≈274.18), 천원 절상.
   // (최저임금은 1.1자 인상, 연봉계약은 4월이라 1~3월 등에서 최저 미달 가능 → 부족분을 성과급에 강제보전)
-  const MIN_HOURLY = { 2023: 9620, 2024: 9860, 2025: 10030, 2026: 10320 };
-  const MIN_ANNUAL_FACTOR = 209 + 10 * 365 / 12 / 7 * 1.5; // = 274.17857...
-  function minAnnual(year) { const h = MIN_HOURLY[year]; return h ? Math.ceil(h * 12 * MIN_ANNUAL_FACTOR / 1000) * 1000 : 0; }
+  function minAnnual(year) { const hr = C().최저시급 || {}; const h = hr[year] || hr[String(year)]; return h ? Math.ceil(h * 12 * (C().최저연봉_월환산계수 || 274.17857142857144) / 1000) * 1000 : 0; }
   PV.minAnnual = minAnnual;
 
-  // 성과가급 = 분기 지급(1·4·7·10월). 월 성과가급(연액÷12 십원절상)의 3개월분(×3)을 지급.
+  // 성과가급 = 분기 지급(기본 1·4·7·10월). 월 성과가급(연액÷12 십원절상)의 3개월분(×3)을 지급.
   // (연액÷4를 한 번에 절상하는 게 아니라 월단위 절상 후 3배 → 대장 방식)
-  const QUARTER_MONTHS = new Set([1, 4, 7, 10]);
-  const monthlyBase = (srcK, annual, m) => srcK === '성과가급' ? (QUARTER_MONTHS.has(m) ? 3 * ceilU(annual / 12) : 0) : annual / 12;
+  const isQuarterMonth = m => (C().성과가급_분기지급월 || [1, 4, 7, 10]).includes(m);
+  const monthlyBase = (srcK, annual, m) => srcK === '성과가급' ? (isQuarterMonth(m) ? 3 * ceilU(annual / 12) : 0) : annual / 12;
   const P = s => { if (!s) return null; const [y, m, d] = s.split('-').map(Number); return { y, m, d }; };
   const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   const dim = (y, m) => new Date(y, m, 0).getDate();
@@ -60,7 +61,7 @@ window.PV = window.PV || {};
   PV.dim = dim;
 
   function payday(y, m, holidays) {
-    let d = 20;
+    let d = C().급여지급일 || 20;
     while (d >= 1) { const wd = dow(y, m, d), s = iso(y, m, d); if (wd !== 0 && wd !== 6 && !holidays.has(s)) return s; d--; }
     return iso(y, m, 20);
   }
@@ -110,9 +111,13 @@ window.PV = window.PV || {};
   function dutyAllowance(roster) {
     if (!roster) return 0;
     const 직책 = roster.직책 || '', 직급 = roster.직급 || '';
-    if (직책.includes('센터장')) return 100000;
-    if (직책.includes('본부장')) { if (직급 === 'L') return 2000000; return 0; }
-    if (직책.includes('보상부장') || 직책.includes('부서장') || 직책.includes('파트장') || 직책.includes('TFT장')) return 1500000;
+    const rules = C().직책수당 || [];
+    for (const r of rules) {
+      const kws = String(r.키워드 || '').split(',').map(s => s.trim()).filter(Boolean);
+      if (!kws.some(k => 직책.includes(k))) continue;
+      if (r.직급조건 && 직급 !== r.직급조건) return 0; // 키워드는 맞으나 직급조건 불일치 → 미지급
+      return +r.금액 || 0;
+    }
     return 0;
   }
   const isUnpaidVac = t => /무급휴가|가족돌봄|보건|생리/.test(t || '');
@@ -124,10 +129,10 @@ window.PV = window.PV || {};
     const jobChanges = orders.filter(o => (o.발령구분 || '').includes('직무변경'));
     if (!jobChanges.length) return false;
     const last = jobChanges[jobChanges.length - 1];
-    const jaOK = (last.후직급 || last.현재직급 || '').toUpperCase().startsWith('JA');
-    const target = last.발령시작일 === '2026-07-01' && last.전직무.includes('소액전담') && last.후직무.includes('대물보상');
+    const jaOK = (last.후직급 || last.현재직급 || '').toUpperCase().startsWith((C().특례_14명_직급접두 || 'JA').toUpperCase());
+    const target = last.발령시작일 === (C().특례_14명_적용일 || '2026-07-01') && last.전직무.includes(C().특례_14명_전직무 || '소액전담') && last.후직무.includes(C().특례_14명_후직무 || '대물보상');
     if (!(target && jaOK)) return false;
-    return last.후직무.includes('대물보상');
+    return last.후직무.includes(C().특례_14명_후직무 || '대물보상');
   }
 
   const PT_LABEL = { normal: '정상근무', unpaid: '무급휴직', sick: '의병휴직(80%)', short: '육아기단축' };
@@ -176,7 +181,7 @@ window.PV = window.PV || {};
     const unpaidDates = []; let matEnd = null;
     for (const evt of events) {
       const da = evt.some(x => x.da);
-      const limit = da ? 75 : 60;
+      const limit = da ? (C().출산_다태아_유급일 || 75) : (C().출산_단태아_유급일 || 60);
       let dts = evt.map(x => x.d);                  // 정렬됨
       // 출산전후휴가(birth)는 법정기간(단태아 90 / 다태아 120일) 연속. 휴가 기록이 짧게 끊겨도
       //  법정일수까지 연장해 유급(60/75) 초과분을 무급으로 반영(예: 오다혜 — 12월까지만 기록, 1월분 무급 누락).
@@ -186,7 +191,7 @@ window.PV = window.PV || {};
         let contiguous = true;
         for (let i = 1; i < dts.length; i++) { if (daysBetween(dts[i - 1], dts[i]) > 1) { contiguous = false; break; } }
         if (contiguous) {
-          let legalEnd = addDays(dts[0], (da ? 120 : 90) - 1);
+          let legalEnd = addDays(dts[0], (da ? (C().출산_다태아_법정일 || 120) : (C().출산_단태아_법정일 || 90)) - 1);
           // 출산휴가 종료 후 다른 휴직/복직/단축 발령이 있으면 = 휴가가 실제 거기서 끝난 것(예: 석세라 32일 후 육아휴직)
           //  → 그 발령 전날까지만 연장. (연장 대상은 오다혜처럼 이후 상태발령 없이 휴가가 이어지는 경우)
           const recEnd = dts[dts.length - 1];
@@ -375,7 +380,7 @@ window.PV = window.PV || {};
         const mbase = monthlyBase(srcK, c.items[srcK] || 0, m);
         let rate = 0;
         if (s.payType === 'normal' || s.payType === 'short') rate = 1;
-        else if (s.payType === 'sick') rate = SICK_EXCL.has(colK) ? 0 : 0.8;
+        else if (s.payType === 'sick') rate = SICK_EXCL.has(colK) ? 0 : (C().의병휴직_지급률 != null ? C().의병휴직_지급률 : 0.8);
         real[colK] += (mbase / 30) * days * rate;
       }
       if (s.payType === 'normal' || s.payType === 'short') paidUnits += days;
@@ -387,7 +392,7 @@ window.PV = window.PV || {};
     if (flat > 0) real['고정역량가급'] += flat / 30 * paidUnits;
 
     const applied14 = is14(ctx, sabun, monthEnd);
-    if (applied14) real['변동역량가급1'] += 500000 / 30 * paidUnits;
+    if (applied14) real['변동역량가급1'] += (C().특례_14명_금액 || 500000) / 30 * paidUnits;
 
     // 최저임금 보전: 연봉(고정역량가급 제외)이 최저연봉 미만이면 부족분/12를 성과급에 강제 추가.
     //  육아기단축근무자는 연봉 자체가 시간비례로 낮으므로, 최저기준도 최저연봉 × (주간근로시간/40)로 비례 하향해야 함.
@@ -430,7 +435,7 @@ window.PV = window.PV || {};
       // 감액/추가지급 지급은 이번달이지만 금액계산은 '발생한 달(전월)'의 연봉으로. (4.1자 연봉인상 반영)
       const pm = prevMonth(y, m);
       const ec = effContract(ctx, sabun, iso(pm.y, pm.m, dim(pm.y, pm.m)));
-      let fullGross = flat + (applied14 ? 500000 : 0);
+      let fullGross = flat + (applied14 ? (C().특례_14명_금액 || 500000) : 0);
       if (ec) for (const srcK of Object.keys(ITEMMAP)) fullGross += (ec.items[srcK] || 0) / 12;
       // 1일 급여를 십원 절하한 뒤 일수를 곱한다(대장 방식). (일당절하 × 일수)
       uvacDeduct = floorU(fullGross / 30) * uvac;
@@ -442,7 +447,7 @@ window.PV = window.PV || {};
     if (trace) {
       const ec = effContract(ctx, sabun, monthEnd) || { items: {} };
       trace.연봉일자 = ec.연봉일자; trace.연봉 = Object.assign({}, ec.items);
-      trace.month = m; trace.year = y; trace.quarterMonth = QUARTER_MONTHS.has(m);
+      trace.month = m; trace.year = y; trace.quarterMonth = isQuarterMonth(m);
       trace.segments = seg.segments.map(s => ({ label: s.gubun || PT_LABEL[s.payType], days: s.days, payType: s.payType }));
       trace.ilhal = seg.segments.length > 1 || (seg.segments[0] && seg.segments[0].payType !== 'normal');
       trace.dutyLabel = dutyBase ? (roster && roster.직책 || '') : (dutyExt ? '본점 예외' : '');
@@ -453,8 +458,8 @@ window.PV = window.PV || {};
       trace.휴가 = (ctx.vacBy.get(sabun) || []).map(v => ({ 종류: v.휴가종류, 시작일: v.시작일, 종료일: v.종료일, 일수: v.휴가일수 }));
       const _mu = maternityUnpaid(ctx, sabun);
       trace.matUnpaid = _mu ? { start: _mu.start, end: _mu.end } : null; // 출산/유사산 무급 구간
-      const _tw = matTwinStart(ctx, sabun); // 다태아 유급 75일 경계(단태아 60일과 차이나는 구간)
-      trace.matTwin = _tw ? { start: _tw, d61: addDays(_tw, 60), d75: addDays(_tw, 74) } : null;
+      const _tw = matTwinStart(ctx, sabun); // 다태아 유급 경계 — 단태아 유급일과 차이나는 구간
+      trace.matTwin = _tw ? { start: _tw, d61: addDays(_tw, C().출산_단태아_유급일 || 60), d75: addDays(_tw, (C().출산_다태아_유급일 || 75) - 1) } : null;
     }
     return { retired: false, pay, real, paidUnits, is14: applied14, segments: seg.segments, uvac, peakApplied, minTopup, minStd, minAnnualCmp, minShortHrs, minShortWorker: isShortWorker, minShortUnknown };
   }

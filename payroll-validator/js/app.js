@@ -25,6 +25,7 @@
   (function () { let t = 'light'; try { t = localStorage.getItem(THEME_KEY) || 'light'; } catch (e) {} setTheme(t); })();
   $('#themeBtn').onclick = () => setTheme(curTheme() === 'dark' ? 'light' : 'dark');
   $('#resetBtn').onclick = () => { if (confirm('모든 입력·계산·검증 결과를 초기화할까요?')) location.reload(); };
+  { const cb = $('#cfgBtn'); if (cb) cb.onclick = openConfigModal; }
 
   /* ---------- toast ---------- */
   function toast(msg, kind) {
@@ -300,6 +301,135 @@
     ov.querySelector('[data-x]').onclick = close;
     ov.querySelector('[data-ok]').onclick = () => { const v = {}; ov.querySelectorAll('[data-k]').forEach(i => v[i.dataset.k] = i.value); cfg.onSubmit(v); close(); };
     root.appendChild(ov);
+  }
+
+  /* ---------- ⚙ 기준값(조건값) 설정 ---------- */
+  const CFG_DEF = () => PV.CONFIG_DEFAULT || {};
+  function openConfigModal() {
+    const root = $('#modalRoot');
+    let cfg = JSON.parse(JSON.stringify(PV.CONFIG || CFG_DEF()));
+    const ov = el('div', 'modal-ov');
+    root.appendChild(ov);
+    const numI = (k, v, extra) => `<input type="number" data-k="${k}" value="${esc(v)}" ${extra || ''} style="width:130px">`;
+    const txtI = (k, v, w) => `<input type="text" data-k="${k}" value="${esc(v)}" style="width:${w || 130}px">`;
+    function render() {
+      const wageRows = Object.keys(cfg.최저시급 || {}).sort().map(y =>
+        `<div class="cfg-r" data-wage-row><input type="text" data-wage-year value="${esc(y)}" style="width:70px" placeholder="연도"><input type="number" data-wage-val value="${esc(cfg.최저시급[y])}" style="width:110px" placeholder="시급"><button class="cfg-del" data-del-wage title="삭제">✕</button></div>`).join('');
+      const dutyRows = (cfg.직책수당 || []).map((d, i) =>
+        `<div class="cfg-r" data-duty-row><input type="text" data-duty-kw value="${esc(d.키워드)}" style="width:200px" placeholder="키워드(쉼표로 여러개)"><input type="text" data-duty-grade value="${esc(d.직급조건 || '')}" style="width:70px" placeholder="직급"><input type="number" data-duty-amt value="${esc(d.금액)}" style="width:110px" placeholder="금액"><button class="cfg-del" data-del-duty="${i}" title="삭제">✕</button></div>`).join('');
+      ov.innerHTML = `<div class="modal cfg-modal"><div class="m-head"><div class="m-ic">⚙</div>
+        <div><h3>급여 기준값(조건값) 설정</h3><div class="m-sub">규칙이 바뀌면 여기서 수정하세요. 저장하면 이 브라우저에 기억되고, 급여계산을 다시 실행하면 반영됩니다.</div></div></div>
+        <div class="m-body cfg-body">
+          <div class="cfg-sec"><div class="cfg-h">지급·기본</div>
+            <div class="cfg-f"><label>급여지급일 (매월)</label>${numI('급여지급일', cfg.급여지급일)}</div>
+            <div class="cfg-f"><label>성과가급 분기지급월 <span class="cfg-hint">쉼표 구분</span></label>${txtI('_분기월', (cfg.성과가급_분기지급월 || []).join(','), 160)}</div>
+          </div>
+          <div class="cfg-sec"><div class="cfg-h">최저임금 <span class="cfg-hint">★매년 갱신 — 새 해는 '연도 추가'</span></div>
+            <div data-wage-wrap>${wageRows}</div>
+            <button class="cfg-add" data-add-wage>+ 연도 추가</button>
+            <div class="cfg-f" style="margin-top:8px"><label>최저연봉 월환산계수 <span class="cfg-hint">거의 안 바꿈</span></label>${numI('최저연봉_월환산계수', cfg.최저연봉_월환산계수, 'step="0.0001"')}</div>
+          </div>
+          <div class="cfg-sec"><div class="cfg-h">출산전후휴가 (법 개정 시)</div>
+            <div class="cfg-f"><label>단태아 유급일</label>${numI('출산_단태아_유급일', cfg.출산_단태아_유급일)}</div>
+            <div class="cfg-f"><label>다태아 유급일</label>${numI('출산_다태아_유급일', cfg.출산_다태아_유급일)}</div>
+            <div class="cfg-f"><label>단태아 법정일</label>${numI('출산_단태아_법정일', cfg.출산_단태아_법정일)}</div>
+            <div class="cfg-f"><label>다태아 법정일</label>${numI('출산_다태아_법정일', cfg.출산_다태아_법정일)}</div>
+          </div>
+          <div class="cfg-sec"><div class="cfg-h">휴직</div>
+            <div class="cfg-f"><label>의병휴직 지급률 <span class="cfg-hint">0.8 = 80%</span></label>${numI('의병휴직_지급률', cfg.의병휴직_지급률, 'step="0.01"')}</div>
+          </div>
+          <div class="cfg-sec"><div class="cfg-h">직책수당 (고정역량가급) <span class="cfg-hint">직책에 키워드 포함 시 금액 지급 · 직급조건 비우면 무관</span></div>
+            <div class="cfg-r cfg-r-hd"><span style="width:200px">키워드</span><span style="width:70px">직급</span><span style="width:110px">금액</span></div>
+            <div data-duty-wrap>${dutyRows}</div>
+            <button class="cfg-add" data-add-duty>+ 규칙 추가</button>
+          </div>
+          <div class="cfg-sec"><div class="cfg-h">14명 직무변경 특례</div>
+            <div class="cfg-f"><label>추가금액(월)</label>${numI('특례_14명_금액', cfg.특례_14명_금액)}</div>
+            <div class="cfg-f"><label>적용 발령일</label>${txtI('특례_14명_적용일', cfg.특례_14명_적용일, 130)}</div>
+            <div class="cfg-f"><label>전직무 포함어</label>${txtI('특례_14명_전직무', cfg.특례_14명_전직무, 130)}</div>
+            <div class="cfg-f"><label>후직무 포함어</label>${txtI('특례_14명_후직무', cfg.특례_14명_후직무, 130)}</div>
+            <div class="cfg-f"><label>직급 접두</label>${txtI('특례_14명_직급접두', cfg.특례_14명_직급접두, 80)}</div>
+          </div>
+        </div>
+        <div class="m-foot cfg-foot">
+          <button class="btn btn-ghost btn-sm" data-export>⬇ 설정파일(config.js) 내보내기</button>
+          <button class="btn btn-ghost btn-sm" data-reset>기본값 복원</button>
+          <span style="flex:1"></span>
+          <button class="btn btn-ghost btn-sm" data-x>닫기</button>
+          <button class="btn btn-primary btn-sm" data-save>저장</button>
+        </div></div>`;
+      wire();
+    }
+    function collect() {
+      const g = k => ov.querySelector(`[data-k="${k}"]`);
+      const gn = k => +g(k).value;
+      cfg.급여지급일 = gn('급여지급일') || 20;
+      cfg.최저연봉_월환산계수 = gn('최저연봉_월환산계수') || cfg.최저연봉_월환산계수;
+      cfg.의병휴직_지급률 = gn('의병휴직_지급률');
+      ['출산_단태아_유급일', '출산_다태아_유급일', '출산_단태아_법정일', '출산_다태아_법정일'].forEach(k => cfg[k] = gn(k));
+      cfg.성과가급_분기지급월 = (ov.querySelector('[data-k="_분기월"]').value || '').split(',').map(s => +s.trim()).filter(n => n >= 1 && n <= 12);
+      const wage = {}; ov.querySelectorAll('[data-wage-row]').forEach(r => { const y = r.querySelector('[data-wage-year]').value.trim(); const v = +r.querySelector('[data-wage-val]').value || 0; if (y) wage[y] = v; }); cfg.최저시급 = wage;
+      const duty = []; ov.querySelectorAll('[data-duty-row]').forEach(r => { const kw = r.querySelector('[data-duty-kw]').value.trim(); const gr = r.querySelector('[data-duty-grade]').value.trim(); const amt = +r.querySelector('[data-duty-amt]').value || 0; if (kw) duty.push({ 키워드: kw, 직급조건: gr, 금액: amt }); }); cfg.직책수당 = duty;
+      cfg.특례_14명_금액 = gn('특례_14명_금액') || 0;
+      cfg.특례_14명_적용일 = g('특례_14명_적용일').value.trim();
+      cfg.특례_14명_전직무 = g('특례_14명_전직무').value.trim();
+      cfg.특례_14명_후직무 = g('특례_14명_후직무').value.trim();
+      cfg.특례_14명_직급접두 = g('특례_14명_직급접두').value.trim();
+    }
+    function wire() {
+      const close = () => ov.remove();
+      ov.onclick = e => { if (e.target === ov) close(); };
+      ov.querySelector('[data-x]').onclick = close;
+      ov.querySelector('[data-add-wage]').onclick = () => { collect(); cfg.최저시급[''] = 0; render(); };
+      ov.querySelectorAll('[data-del-wage]').forEach(b => b.onclick = e => { collect(); const y = e.target.closest('[data-wage-row]').querySelector('[data-wage-year]').value.trim(); delete cfg.최저시급[y]; render(); });
+      ov.querySelector('[data-add-duty]').onclick = () => { collect(); (cfg.직책수당 = cfg.직책수당 || []).push({ 키워드: '', 직급조건: '', 금액: 0 }); render(); };
+      ov.querySelectorAll('[data-del-duty]').forEach(b => b.onclick = e => { collect(); cfg.직책수당.splice(+e.target.dataset.delDuty, 1); render(); });
+      ov.querySelector('[data-reset]').onclick = () => { if (confirm('모든 기준값을 기본값으로 되돌릴까요? (저장을 눌러야 최종 적용됩니다)')) { cfg = JSON.parse(JSON.stringify(CFG_DEF())); render(); } };
+      ov.querySelector('[data-export]').onclick = () => { collect(); dlText('config.js', genConfigJs(cfg)); toast('config.js 내보냄 — payroll-validator/js/config.js 를 이 파일로 교체하면 됩니다', 'ok'); };
+      ov.querySelector('[data-save]').onclick = () => { collect(); PV.saveConfig(cfg); updatePayday(); toast('기준값 저장됨 — 급여계산을 다시 실행하면 반영됩니다', 'ok'); close(); };
+    }
+    render();
+  }
+  function dlText(name, text) { const b = new Blob([text], { type: 'text/javascript;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1500); }
+  function genConfigJs(c) {
+    const j = v => JSON.stringify(v);
+    const wage = Object.keys(c.최저시급 || {}).sort().map(y => `'${y}': ${+c.최저시급[y] || 0}`).join(', ');
+    const duty = (c.직책수당 || []).map(d => `      { 키워드: ${j(d.키워드)}, 직급조건: ${j(d.직급조건 || '')}, 금액: ${+d.금액 || 0} },`).join('\n');
+    return `/* ============================================================
+   config.js — 급여 계산 '기준값(조건값)' 모음  (프로그램 '⚙ 기준값 설정'에서 생성)
+   규칙이 바뀌면 이 값을 수정하거나, 프로그램의 '⚙ 기준값' 화면에서 편집하세요.
+   ============================================================ */
+window.PV = window.PV || {};
+(function (PV) {
+  'use strict';
+  const DEFAULT = {
+    급여지급일: ${+c.급여지급일 || 20},
+    최저시급: { ${wage} },
+    최저연봉_월환산계수: ${+c.최저연봉_월환산계수},
+    성과가급_분기지급월: [${(c.성과가급_분기지급월 || []).join(', ')}],
+    출산_단태아_유급일: ${+c.출산_단태아_유급일}, 출산_다태아_유급일: ${+c.출산_다태아_유급일},
+    출산_단태아_법정일: ${+c.출산_단태아_법정일}, 출산_다태아_법정일: ${+c.출산_다태아_법정일},
+    의병휴직_지급률: ${+c.의병휴직_지급률},
+    직책수당: [
+${duty}
+    ],
+    특례_14명_금액: ${+c.특례_14명_금액 || 0},
+    특례_14명_적용일: ${j(c.특례_14명_적용일 || '')},
+    특례_14명_전직무: ${j(c.특례_14명_전직무 || '')},
+    특례_14명_후직무: ${j(c.특례_14명_후직무 || '')},
+    특례_14명_직급접두: ${j(c.특례_14명_직급접두 || '')},
+  };
+  const KEY = 'payroll_config_v1';
+  const clone = o => JSON.parse(JSON.stringify(o));
+  function loadOverride() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+  function resolve() { const c = clone(DEFAULT); const ov = loadOverride(); if (ov) Object.keys(ov).forEach(k => { if (ov[k] !== undefined && ov[k] !== null) c[k] = ov[k]; }); return c; }
+  PV.CONFIG_DEFAULT = DEFAULT;
+  PV.CONFIG = resolve();
+  PV.reloadConfig = () => (PV.CONFIG = resolve());
+  PV.saveConfig = obj => { try { localStorage.setItem(KEY, JSON.stringify(obj)); } catch (e) {} return (PV.CONFIG = resolve()); };
+  PV.resetConfig = () => { try { localStorage.removeItem(KEY); } catch (e) {} return (PV.CONFIG = resolve()); };
+})(window.PV);
+`;
   }
 
   /* ---------- STEP A: 급여계산 ---------- */
