@@ -164,6 +164,46 @@ hr.soft{border:none;border-top:1px solid var(--line);margin:18px 0}
 .checklist .row{display:grid;grid-template-columns:150px 1fr 130px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
 .checklist .row .nm{font-weight:700}
 .dot-ok{color:var(--green)} .dot-no{color:var(--red)}
+
+/* ===== 좌우 2분할 워크스페이스 ===== */
+.strip{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:9px 14px}
+.pill{background:#fff;border:1px solid var(--line);border-radius:20px;padding:6px 12px;font-size:12.5px;font-weight:700;color:var(--gray);cursor:pointer;display:flex;gap:6px;align-items:center;white-space:nowrap}
+.pill.active{border-color:var(--green);color:var(--green-d);background:var(--green-l)}
+.pill b{font-size:14px;color:var(--ink)}
+.pill.warn b{color:var(--red)}
+.pill .g{color:var(--green)}
+.spacer{flex:1}
+main.ws{max-width:1300px}
+.workspace{display:flex;gap:14px;align-items:flex-start}
+.left{width:340px;flex:none;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.right{flex:1;min-width:0}
+.left .lhead{padding:10px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.left .lhead input{padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:13px}
+.left .chips{display:flex;gap:5px;flex-wrap:wrap}
+.left .chips button{border:1px solid var(--line);background:#fff;border-radius:14px;padding:3px 9px;font-size:11.5px;font-weight:700;color:var(--gray);cursor:pointer}
+.left .chips button.on{background:var(--green);color:#fff;border-color:var(--green)}
+.llist{max-height:calc(100vh - 240px);overflow:auto}
+.litem{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.litem:hover{background:#fbfdfc}
+.litem.sel{background:var(--green-l);box-shadow:inset 3px 0 0 var(--green)}
+.litem .a1{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.litem .addr{font-weight:700;font-size:13px;line-height:1.35}
+.litem .sub{font-size:11.5px;color:var(--gray);margin-top:3px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+.panel .phd{padding:10px 14px;border-bottom:1px solid var(--line);font-weight:800;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fafbfa}
+.panel .phd span{display:flex;gap:6px;align-items:center}
+.panel .pbd{padding:14px}
+.steps{display:flex;gap:4px;flex-wrap:wrap}
+.step{flex:1;min-width:66px;text-align:center;font-size:11.5px;font-weight:700;color:var(--gray);padding:7px 4px;border-radius:7px;background:#f1f3f2}
+.step.done{background:var(--green-l);color:var(--green-d)}
+.step.cur{background:var(--green);color:#fff}
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px 14px}
+.kv .k{font-size:11.5px;color:var(--gray);font-weight:700}
+.kv .v{font-size:13.5px;font-weight:600;margin-top:2px;word-break:break-all}
+.empty{padding:48px 20px;text-align:center;color:var(--gray);line-height:1.7}
+.rowln{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.rowln:last-child{border-bottom:none}
+@media(max-width:860px){ .workspace{flex-direction:column} .left{width:100%} .llist{max-height:360px} }
 </style>
 
 <header class="app">
@@ -612,255 +652,258 @@ function seedSample(){
 }
 
 /* ============================ [RENDER] 렌더링 ============================ */
-const TABS=[
-  ["dash","대시보드"],["props","사택 대장"],["contracts","계약 관리"],
-  ["settle","퇴실 정산"],["issues","이슈 관리"],["reassign","재배정"],
-  ["limits","한도 기준"],["data","데이터"]
-];
-function renderTabs(){
-  $("#tabs").innerHTML = TABS.map(([k,n])=>`<button class="${k===curTab?'active':''}" onclick="go('${k}')">${n}</button>`).join("");
+// 화면 상태
+let ui = { sel:null, filter:"all", q:"", settings:false };
+
+// 공용 헬퍼
+function prop(id){ return db.properties.find(p=>p.propertyId===id); }
+function contract(id){ return db.contracts.find(c=>c.contractId===id); }
+function statusBadge(s){ const m={"입주중":"b-green","공실":"b-gray","계약중":"b-green","해지예정":"b-amber","해지완료":"b-gray","신청":"b-blue"}; return `<span class="badge ${m[s]||'b-gray'}">${s}</span>`; }
+function limitBadge(v){ if(v==="초과") return `<span class="badge b-red">초과</span>`; if(v==="적정") return `<span class="badge b-green">적정</span>`; return `<span class="badge b-gray">${v||"-"}</span>`; }
+function tbl(cols,body){ return `<div class="tblwrap"><table><thead><tr>${cols.map(c=>`<th class="${/주소|내용|사유/.test(c)?'wrap':''}">${c}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`; }
+function kv(k,v){ return `<div><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`; }
+
+// 사택의 "현재 계약"(신청/계약중/해지예정 우선, 없으면 최신)
+function currentContract(pid){
+  const cs=db.contracts.filter(c=>c.propertyId===pid);
+  const active=cs.filter(c=>["신청","계약중","해지예정"].includes(c.status)).sort((a,b)=>(a.startDate||"")<(b.startDate||"")?1:-1);
+  if(active.length) return active[0];
+  return cs.sort((a,b)=>(a.startDate||"")<(b.startDate||"")?1:-1)[0]||null;
 }
-function go(k){ curTab=k; state.selProp=null; render(); }
+function settlementProgress(s){ return SETTLE_ITEMS.filter(it=>{const v=s[it.key]||{};return v.amount!==""&&v.amount!=null;}).length; }
+
+// 상단 요약 통계
+function stats(){
+  const P=db.properties, C=db.contracts;
+  const active=C.filter(c=>c.status==="계약중"||c.status==="해지예정");
+  return {
+    total:P.length,
+    occ:P.filter(p=>p.status==="입주중").length,
+    vac:P.filter(p=>p.status==="공실").length,
+    rent:active.reduce((s,c)=>s+Number(c.monthlyRent||0),0),
+    expiring:active.filter(c=>c.endDate&&daysBetween(today(),c.endDate)>=0&&daysBetween(today(),c.endDate)<=60).length,
+    settle:db.settlements.filter(s=>s.status!=="완료").length,
+    issue:db.issues.filter(i=>i.status!=="종결").length
+  };
+}
+
+// ── 최상단 요약 스트립(#tabs 자리에 배치, 클릭 시 좌측 목록 필터) ──
+function renderStrip(){
+  const s=stats();
+  const pill=(key,label,val,cls="")=>`<button class="pill ${ui.filter===key?'active':''} ${cls}" onclick="setFilter('${key}')">${label} <b>${val}</b></button>`;
+  $("#tabs").innerHTML = `<div class="strip">
+    ${pill('all','전체',s.total)}
+    ${pill('입주중','입주중',s.occ)}
+    ${pill('공실','공실',s.vac)}
+    <span class="pill" style="cursor:default">이번달 월세 <b class="g">${won(s.rent)}</b></span>
+    ${pill('만료임박','만료임박',s.expiring, s.expiring?'warn':'')}
+    ${pill('정산중','정산중',s.settle, s.settle?'warn':'')}
+    ${pill('이슈','미종결이슈',s.issue, s.issue?'warn':'')}
+    <span class="spacer"></span>
+    <button class="pill" onclick="openSettings()">⚙ 한도·데이터</button>
+  </div>`;
+}
+
+// 저장소 안내 배너
+function storeBanner(){
+  if(FSA && !dirHandle) return `<div class="notice warn">⚠ 데이터 폴더 미연결 — 지금 입력은 <b>브라우저에 임시 저장</b>됩니다. 파일 보관하려면 <a href="#" onclick="pickFolder();return false"><b>데이터 폴더 선택</b></a> (연결 시 기존 입력분 이관). <a href="#" onclick="openSettings();return false">설정</a></div>`;
+  if(storeMode==="local") return `<div class="notice gray">💾 폴더 저장 미지원 브라우저 — 로컬 저장으로 동작. <b>⚙ 한도·데이터 → JSON 내보내기</b>로 정기 백업하세요.</div>`;
+  return "";
+}
+
+// ── 메인 렌더 ──
 function render(){
-  renderTabs();
+  renderStrip();
   const v=$("#view");
-  const noStore = FSA && !dirHandle;
-  let banner="";
-  if(noStore) banner=`<div class="notice warn">⚠ 데이터 폴더가 아직 연결되지 않았습니다. 지금 입력하는 내용은 <b>브라우저에 임시 저장</b>되어 재실행해도 유지되지만, 파일(sasys_data.json)로 안전하게 보관하려면 <a href="#" onclick="pickFolder();return false"><b>데이터 폴더 선택</b></a>을 진행하세요. (연결 시 지금까지 입력분이 파일로 이관됩니다)</div>`;
-  if(storeMode==="local") banner=`<div class="notice gray">💾 이 브라우저는 폴더 저장(File System Access API)을 지원하지 않아 <b>브라우저 로컬 저장</b>으로 동작합니다. 정기적으로 <b>데이터 탭 → JSON 내보내기</b>로 백업하세요.</div>`;
-  const fn={dash:viewDash,props:viewProps,contracts:viewContracts,settle:viewSettle,issues:viewIssues,reassign:viewReassign,limits:viewLimits,data:viewData}[curTab];
-  v.innerHTML = banner + fn();
+  v.className="ws";
+  if(ui.settings){ v.innerHTML=viewSettings(); return; }
+  v.innerHTML = storeBanner() + `<div class="workspace">
+    <aside class="left">${leftList()}</aside>
+    <section class="right">${rightPanel()}</section>
+  </div>`;
 }
+function setFilter(k){ ui.filter=k; render(); }
+function selectProp(pid){ ui.sel=pid; render(); }
 
-/* ---- 1) 대시보드 ---- */
-function viewDash(){
-  const props=db.properties, contracts=db.contracts;
-  const total=props.length;
-  const occupied=props.filter(p=>p.status==="입주중").length;
-  const vacant=props.filter(p=>p.status==="공실").length;
-  const active=contracts.filter(c=>c.status==="계약중"||c.status==="해지예정");
-  const monthlyTotal=active.reduce((s,c)=>s+Number(c.monthlyRent||0),0);
-  const expiring=active.filter(c=>c.endDate && daysBetween(today(),c.endDate)>=0 && daysBetween(today(),c.endDate)<=60);
-  const settleOpen=db.settlements.filter(s=>s.status!=="완료").length;
-  const issueOpen=db.issues.filter(i=>i.status!=="종결").length;
-  return `
-  <span class="chip">대시보드 · 2026년</span>
-  <div class="cards">
-    <div class="card"><div class="lbl">전체 사택</div><div class="num">${total}</div><div class="sub">입주중 ${occupied} · 공실 ${vacant}</div></div>
-    <div class="card"><div class="lbl">입주중</div><div class="num g">${occupied}</div></div>
-    <div class="card"><div class="lbl">공실</div><div class="num">${vacant}</div></div>
-    <div class="card"><div class="lbl">이번달 총 월세</div><div class="num g" style="font-size:26px">${won(monthlyTotal)}</div><div class="sub">계약중/해지예정 합계</div></div>
-    <div class="card ${expiring.length?'warn':''}"><div class="lbl">만료 임박(60일)</div><div class="num">${expiring.length}</div></div>
-    <div class="card ${settleOpen?'warn':''}"><div class="lbl">정산 미완료</div><div class="num">${settleOpen}</div></div>
-    <div class="card ${issueOpen?'warn':''}"><div class="lbl">미종결 이슈</div><div class="num">${issueOpen}</div></div>
-  </div>
-
-  <h2 class="sec">만료 임박 계약 (60일 이내)</h2>
-  ${expiring.length? tbl(["계약ID","입주자","센터","사택 주소","종료일","D-day"],
-    expiring.sort((a,b)=>a.endDate<b.endDate?-1:1).map(c=>{
-      const p=prop(c.propertyId); const d=daysBetween(today(),c.endDate);
-      return `<tr><td>${c.contractId}</td><td>${esc(c.tenantName)}</td><td>${esc(c.centerName)}</td><td class="wrap">${esc(p?.address||"")}</td><td>${c.endDate}</td><td><span class="badge b-amber">D-${d}</span></td></tr>`;
-    }).join("")) : `<div class="notice info">임박한 만료 계약이 없습니다.</div>`}
-
-  <h2 class="sec">미종결 이슈</h2>
-  ${issueOpen? tbl(["이슈ID","발생일","유형","대상","내용","상태"],
-    db.issues.filter(i=>i.status!=="종결").map(i=>issueRow(i)).join("")) : `<div class="notice info">미종결 이슈가 없습니다.</div>`}
-  `;
+// ── 좌측: 사택 목록(마스터) ──
+function propInFilter(p,f){
+  const c=currentContract(p.propertyId);
+  switch(f){
+    case "입주중": return p.status==="입주중";
+    case "공실": return p.status==="공실";
+    case "해지예정": return !!c&&c.status==="해지예정";
+    case "정산중": return !!c&&db.settlements.some(x=>x.contractId===c.contractId&&x.status!=="완료");
+    case "만료임박": return !!c&&(c.status==="계약중"||c.status==="해지예정")&&c.endDate&&daysBetween(today(),c.endDate)>=0&&daysBetween(today(),c.endDate)<=60;
+    case "이슈": return db.issues.some(i=>i.status!=="종결"&&((i.targetType==="property"&&i.targetId===p.propertyId)||(i.targetType==="contract"&&db.contracts.some(cc=>cc.propertyId===p.propertyId&&cc.contractId===i.targetId))));
+    default: return true;
+  }
 }
-
-/* ---- 2) 사택 대장 ---- */
-function viewProps(){
-  if(state.selProp) return viewPropDetail(state.selProp);
-  const q=(state.propFilter||"").trim();
-  const rows=db.properties.filter(p=>!q || (p.address+p.owner+p.region).includes(q));
-  return `
-  <span class="chip">사택 대장</span>
-  <div class="btnrow">
-    <input class="fld" style="max-width:280px;padding:8px 10px;border:1px solid #e5e7eb;border-radius:7px" placeholder="주소·소유주·지역 검색" value="${esc(q)}" oninput="state.propFilter=this.value;render()">
-  </div>
-  ${tbl(["물건ID","주소","지역","소유주","구분","면적","층","상태","계약수"],
-    rows.map(p=>{
-      const cnt=db.contracts.filter(c=>c.propertyId===p.propertyId).length;
-      return `<tr class="click" onclick="state.selProp='${p.propertyId}';render()">
-        <td>${p.propertyId}</td><td class="wrap">${esc(p.address)}</td><td>${esc(p.region)}</td><td>${esc(p.owner)}</td>
-        <td>${esc(p.contractType)}</td><td>${esc(p.area)}</td><td>${esc(p.floor)}</td>
-        <td>${statusBadge(p.status)}</td><td>${cnt}</td></tr>`;
-    }).join(""))}
-  `;
+function leftRows(){
+  const q=ui.q.trim();
+  let rows=db.properties.filter(p=>propInFilter(p,ui.filter));
+  if(q) rows=rows.filter(p=>{ const c=currentContract(p.propertyId); return (p.address+p.owner+p.region+(c?c.tenantName+c.centerName:"")).includes(q); });
+  return rows;
 }
-function viewPropDetail(pid){
-  const p=prop(pid); if(!p) return "물건 없음";
-  const cs=db.contracts.filter(c=>c.propertyId===pid).sort((a,b)=>(a.startDate||"")<(b.startDate||"")?1:-1);
-  const iss=db.issues.filter(i=>(i.targetType==="property"&&i.targetId===pid) || (i.targetType==="contract"&&cs.some(c=>c.contractId===i.targetId)));
-  // 타임라인(계약+이슈 시간순)
-  const events=[
-    ...cs.map(c=>({dt:c.startDate||c.approvalDate||"",t:`계약 ${statusBadgeText(c.status)} — ${esc(c.tenantName)} (${esc(c.centerName)}) · ${c.contractType} ${won(c.deposit)}${c.monthlyRent?" / 월 "+won(c.monthlyRent):""}`})),
-    ...iss.map(i=>({dt:i.occurredDate,t:`이슈 <span class="badge b-amber">${esc(i.type)}</span> ${esc(i.content)} <span class="muted">(${esc(i.status)})</span>`}))
-  ].filter(e=>e.dt).sort((a,b)=>a.dt<b.dt?1:-1);
-  return `
-  <div class="btnrow"><button class="btn ghost sm" onclick="state.selProp=null;render()">← 대장으로</button></div>
-  <span class="chip">사택 상세 · ${p.propertyId}</span>
-  <div class="form">
-    <div class="grid">
-      ${info("주소",p.address)}${info("지역",p.region)}${info("소유주",p.owner)}
-      ${info("계약구분",p.contractType)}${info("전용면적",p.area)}${info("사용층",p.floor)}
-      ${info("상태",statusBadgeText(p.status))}
-    </div>
-  </div>
-  <h2 class="sec">계약 이력</h2>
-  ${cs.length? tbl(["계약ID","입주자","센터","구분","보증금","월세","기간","한도","상태"],
-    cs.map(c=>`<tr class="click" onclick="openContract('${c.contractId}')">
-      <td>${c.contractId}</td><td>${esc(c.tenantName)}</td><td>${esc(c.centerName)}</td><td>${c.contractType}</td>
-      <td>${won(c.deposit)}</td><td>${c.monthlyRent?won(c.monthlyRent):"-"}</td>
-      <td class="small">${c.startDate||"?"}~${c.endDate||"?"}</td><td>${limitBadge(c.limitCheck)}</td><td>${statusBadge(c.status)}</td></tr>`).join("")):"<div class='notice gray'>계약 없음</div>"}
-  <h2 class="sec">타임라인</h2>
-  <div class="tl">${events.map(e=>`<div class="item"><div class="dt">${e.dt}</div><div>${e.t}</div></div>`).join("")||"<div class='muted'>기록 없음</div>"}</div>
-  `;
-}
-
-/* ---- 3) 계약 관리 ---- */
-function viewContracts(){
-  const rows=db.contracts.slice().sort((a,b)=>(a.contractId<b.contractId?1:-1));
-  return `
-  <span class="chip">계약 관리</span>
-  <div class="btnrow">
+function leftList(){
+  const chips=[["all","전체"],["입주중","입주중"],["공실","공실"],["해지예정","해지예정"],["정산중","정산중"],["만료임박","만료임박"],["이슈","이슈"]];
+  return `<div class="lhead">
     <button class="btn" onclick="openNewContract()">＋ 신규 계약 (PDF 업로드)</button>
+    <input placeholder="주소·임대인·입주자 검색" value="${esc(ui.q)}" oninput="ui.q=this.value;refreshLeft()">
+    <div class="chips">${chips.map(([k,l])=>`<button class="${ui.filter===k?'on':''}" onclick="setFilter('${k}')">${l}</button>`).join("")}</div>
   </div>
-  ${tbl(["계약ID","문서번호","입주자","센터","사택 주소","구분","보증금","월세","한도","상태","관리"],
-    rows.map(c=>{const p=prop(c.propertyId);
-      return `<tr>
-        <td>${c.contractId}</td><td class="small">${esc(c.docNumber)}</td><td>${esc(c.tenantName)}</td><td>${esc(c.centerName)}</td>
-        <td class="wrap">${esc(p?.address||"")}</td><td>${c.contractType}</td><td>${won(c.deposit)}</td><td>${c.monthlyRent?won(c.monthlyRent):"-"}</td>
-        <td>${limitBadge(c.limitCheck)}</td><td>${statusBadge(c.status)}</td>
-        <td>
-          <button class="btn sm ghost" onclick="openContract('${c.contractId}')">수정</button>
-          ${(c.status==="계약중")?`<button class="btn sm gray" onclick="doTerminate('${c.contractId}')">해지</button>`:""}
-        </td></tr>`;
-    }).join(""))}
-  `;
+  <div class="llist">${leftRows().map(litem).join("")||"<div class='empty'>해당 조건의 사택이 없습니다</div>"}</div>`;
+}
+function litem(p){
+  const c=currentContract(p.propertyId);
+  return `<div class="litem ${ui.sel===p.propertyId?'sel':''}" onclick="selectProp('${p.propertyId}')">
+    <div class="a1"><div class="addr">${esc(p.address)}</div>${statusBadge(p.status)}</div>
+    <div class="sub">${esc(p.region||"-")} · ${c?esc(c.tenantName)+" / "+esc(c.centerName):"입주자 없음"}${c&&c.monthlyRent?" · 월 "+won(c.monthlyRent):""}</div>
+  </div>`;
+}
+// 검색 입력 시 목록만 갱신(입력 포커스 유지)
+function refreshLeft(){ const el=document.querySelector(".llist"); if(el) el.innerHTML = leftRows().map(litem).join("")||"<div class='empty'>해당 조건의 사택이 없습니다</div>"; }
+
+// ── 우측: 선택 사택의 모든 것 ──
+function rightPanel(){
+  if(!ui.sel) return `<div class="panel"><div class="empty">← 왼쪽에서 사택을 선택하면<br><b>계약 · 정산 · 이슈 · 이력</b>이 이 화면에 모두 표시됩니다.<br><br><button class="btn" onclick="openNewContract()">＋ 신규 계약 등록</button></div></div>` + rightOverview();
+  const p=prop(ui.sel); if(!p) return "";
+  const c=currentContract(p.propertyId);
+  return propHeaderPanel(p) + (c? lifecyclePanel(p,c)+contractPanel(p,c)+settlePanel(p,c) : noContractPanel(p)) + issuePanel(p) + historyPanel(p) + changelogPanel(p);
+}
+function propHeaderPanel(p){
+  return `<div class="panel"><div class="pbd" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+    <div><div style="font-size:17px;font-weight:800">${esc(p.address)}</div>
+      <div class="muted small" style="margin-top:3px">${p.propertyId} · ${esc(p.region||"-")} · ${esc(p.contractType||"")} · 전용 ${esc(p.area||"-")} · ${esc(p.floor||"-")}</div></div>
+    ${statusBadge(p.status)}
+  </div></div>`;
+}
+function noContractPanel(p){
+  return `<div class="panel"><div class="pbd empty">이 사택에 등록된 계약이 없습니다.<br><br><button class="btn" onclick="openNewContract('${p.propertyId}')">＋ 이 사택에 계약 등록</button></div></div>`;
+}
+function lifecyclePanel(p,c){
+  const set=db.settlements.find(s=>s.contractId===c.contractId);
+  const steps=["신청","계약중","해지예정","정산","반납완료"];
+  let cur=1;
+  if(c.status==="신청") cur=0;
+  else if(c.status==="계약중") cur=1;
+  else if(c.status==="해지예정") cur=(set&&settlementProgress(set)>0)?3:2;
+  else if(c.status==="해지완료") cur=4;
+  const bar=steps.map((s,i)=>`<div class="step ${i<cur?'done':(i===cur?'cur':'')}">${s}</div>`).join("");
+  let acts="";
+  if(c.status==="계약중") acts=`<button class="btn sm" onclick="openContract('${c.contractId}')">계약 수정</button><button class="btn sm gray" onclick="doTerminate('${c.contractId}')">해지</button>`;
+  else if(c.status==="해지예정") acts=`<button class="btn sm" onclick="openSettleFor('${c.contractId}')">정산 입력</button><button class="btn sm ghost" onclick="openContract('${c.contractId}')">수정</button>`;
+  else if(c.status==="해지완료") acts=`<button class="btn sm" onclick="openNewContract('${p.propertyId}')">＋ 재계약(재배정)</button>`;
+  else if(c.status==="신청") acts=`<button class="btn sm" onclick="openContract('${c.contractId}')">검토·확정</button>`;
+  return `<div class="panel"><div class="phd">진행 상태 <span>${acts}</span></div><div class="pbd"><div class="steps">${bar}</div></div></div>`;
+}
+function contractPanel(p,c){
+  const lim=judgeLimit(c);
+  return `<div class="panel"><div class="phd">현재 계약 · ${c.contractId} <span>${statusBadge(c.status)}${limitBadge(c.limitCheck)}</span></div>
+  <div class="pbd"><div class="kv">
+    ${kv("입주자",c.tenantName)}${kv("사번",c.employeeId)}${kv("센터",c.centerName)}
+    ${kv("계약구분",c.contractType)}${kv("보증금",won(c.deposit))}${kv("월세",c.monthlyRent?won(c.monthlyRent):"-")}
+    ${kv("월세 지급일",(c.rentPayDay||"-")+(c.rentPayType?" ("+c.rentPayType+")":""))}
+    ${kv("계약기간",(c.startDate||"?")+" ~ "+(c.endDate||"?"))}
+    ${kv("결재완료일",c.approvalDate||"-")}${kv("문서번호",c.docNumber||"-")}
+    ${kv("연고지",c.homeAddress||"-")}
+    ${kv("임대인",p.owner||"-")}${kv("임대인 연락처",p.ownerContact||"-")}${kv("임대인 계좌",p.ownerAccount||"-")}
+  </div>
+  ${c.limitCheck==="초과"?`<div class="notice warn" style="margin-top:12px">⚠ 한도 초과 — 사유: ${esc(c.limitReason||"(미입력)")} <span class="muted">· ${esc(lim.detail)}</span></div>`:""}
+  </div></div>`;
+}
+function settlePanel(p,c){
+  const s=db.settlements.find(x=>x.contractId===c.contractId);
+  if(!s) return "";
+  const done=SETTLE_ITEMS.filter(it=>{const v=s[it.key]||{};return v.amount!==""&&v.amount!=null&&(!it.payer||v.payer);}).length;
+  const rows=SETTLE_ITEMS.map(it=>{const v=s[it.key]||{};const ok=v.amount!==""&&v.amount!=null&&(!it.payer||v.payer);
+    return `<div class="rowln"><span>${ok?'<span class="dot-ok">●</span>':'<span class="dot-no">○</span>'} ${it.nm}</span>
+      <span>${(v.amount!==""&&v.amount!=null)?won(v.amount):'<span class="muted">미입력</span>'}${it.payer&&v.payer?' · '+v.payer:''}${it.received?(v.received?' · 수령':' · 미수령'):''}</span></div>`;}).join("");
+  const btn = s.status==="완료" ? '<span class="badge b-green">완료</span>' : `<button class="btn sm" onclick="openSettleFor('${c.contractId}')">정산 입력</button>`;
+  return `<div class="panel"><div class="phd">퇴실 정산 (${done}/${SETTLE_ITEMS.length}) <span>${btn}</span></div>
+  <div class="pbd">${rows}${s.notes?`<div class="muted small" style="margin-top:8px">비고: ${esc(s.notes)}</div>`:""}${s.moveOutDate?`<div class="muted small" style="margin-top:6px">퇴실일: ${s.moveOutDate}${s.completedDate?" · 완료일: "+s.completedDate:""}</div>`:""}</div></div>`;
+}
+function issuePanel(p){
+  const cs=db.contracts.filter(c=>c.propertyId===p.propertyId);
+  const iss=db.issues.filter(i=>(i.targetType==="property"&&i.targetId===p.propertyId)||(i.targetType==="contract"&&cs.some(c=>c.contractId===i.targetId)))
+    .sort((a,b)=>a.occurredDate<b.occurredDate?1:-1);
+  return `<div class="panel"><div class="phd">이슈 (${iss.length}) <span><button class="btn sm ghost" onclick="openIssueFor('${p.propertyId}')">＋ 이슈</button></span></div>
+  <div class="pbd">${iss.length?iss.map(i=>`<div class="rowln">
+    <span><span class="badge ${i.status==='종결'?'b-gray':(i.status==='진행'?'b-amber':'b-blue')}">${i.status}</span> <b>${esc(i.type)}</b> ${esc(i.content)}<div class="muted small">${i.occurredDate}${i.resolution?" · 조치: "+esc(i.resolution):""}</div></span>
+    <button class="btn sm ghost" onclick="openIssue('${i.issueId}')">수정</button></div>`).join(""):"<div class='muted small'>등록된 이슈 없음</div>"}</div></div>`;
+}
+function historyPanel(p){
+  const cs=db.contracts.filter(c=>c.propertyId===p.propertyId).sort((a,b)=>(a.startDate||"")<(b.startDate||"")?1:-1);
+  if(cs.length<=1) return "";
+  return `<div class="panel"><div class="phd">계약 이력 (${cs.length})</div><div class="pbd">${cs.map(c=>`<div class="rowln click" onclick="openContract('${c.contractId}')" style="cursor:pointer">
+    <span>${esc(c.tenantName)} · ${esc(c.centerName)} <span class="muted small">${c.startDate||"?"}~${c.endDate||"?"}</span></span>
+    <span class="small">${c.contractType} ${won(c.deposit)}${c.monthlyRent?" / 월 "+won(c.monthlyRent):""} ${statusBadge(c.status)}</span></div>`).join("")}</div></div>`;
+}
+function changelogPanel(p){
+  const cids=db.contracts.filter(c=>c.propertyId===p.propertyId).map(c=>c.contractId);
+  const logs=db.changelog.filter(l=>cids.includes(l.targetId)).slice(-12).reverse();
+  if(!logs.length) return "";
+  return `<div class="panel"><div class="phd">변경 이력</div><div class="pbd">${logs.map(l=>`<div class="small" style="padding:4px 0;border-bottom:1px solid var(--line)"><span class="muted">${l.timestamp.slice(0,16).replace("T"," ")}</span> · ${esc(l.field)}: <span class="muted">${esc(l.oldValue)||"-"}</span> → <b>${esc(l.newValue)||"-"}</b>${l.reason?` <span class="muted">(${esc(l.reason)})</span>`:""}</div>`).join("")}</div></div>`;
+}
+// 선택 전 우측 개요(만료임박·미종결이슈)
+function rightOverview(){
+  const exp=db.contracts.filter(c=>(c.status==="계약중"||c.status==="해지예정")&&c.endDate&&daysBetween(today(),c.endDate)>=0&&daysBetween(today(),c.endDate)<=60).sort((a,b)=>a.endDate<b.endDate?-1:1);
+  const iss=db.issues.filter(i=>i.status!=="종결");
+  const expH=exp.length?exp.map(c=>{const p=prop(c.propertyId);const d=daysBetween(today(),c.endDate);return `<div class="rowln click" style="cursor:pointer" onclick="selectProp('${c.propertyId}')"><span>${esc(c.tenantName)} · ${esc(p?p.address:"")}</span><span><span class="badge b-amber">D-${d}</span> ${c.endDate}</span></div>`;}).join(""):"<div class='muted small'>없음</div>";
+  const issH=iss.length?iss.map(i=>{const tp=i.targetType==="property"?prop(i.targetId):prop((contract(i.targetId)||{}).propertyId);return `<div class="rowln click" style="cursor:pointer" onclick="${tp?`selectProp('${tp.propertyId}')`:''}"><span><b>${esc(i.type)}</b> ${esc(i.content)}</span><span class="badge ${i.status==='진행'?'b-amber':'b-blue'}">${i.status}</span></div>`;}).join(""):"<div class='muted small'>없음</div>";
+  return `<div class="panel"><div class="phd">만료 임박 계약 (60일 이내)</div><div class="pbd">${expH}</div></div>
+  <div class="panel"><div class="phd">미종결 이슈 (${iss.length})</div><div class="pbd">${issH}</div></div>`;
 }
 
-/* ---- 4) 퇴실 정산 ---- */
-function viewSettle(){
-  const rows=db.settlements.slice().sort((a,b)=>a.status===b.status?0:(a.status==="완료"?1:-1));
-  return `
-  <span class="chip">퇴실 정산</span>
-  <div class="notice gray">해지 처리 시 정산 레코드가 자동 생성됩니다. 6개 항목(보증금반환·청소비·미납관리비·원상복구비·공과금정산·장기수선충당금)을 모두 입력해야 <b>정산완료</b>가 가능합니다.</div>
-  ${tbl(["정산ID","계약","입주자","퇴실일","완료항목","상태","관리"],
-    rows.map(s=>{ const c=contract(s.contractId); const done=SETTLE_ITEMS.filter(it=>{const v=s[it.key]||{};return v.amount!==""&&v.amount!=null&&(!it.payer||v.payer);}).length;
-      return `<tr>
-        <td>${s.settlementId}</td><td class="small">${s.contractId}</td><td>${esc(c?.tenantName||"")}</td>
-        <td>${s.moveOutDate||"-"}</td><td>${done}/${SETTLE_ITEMS.length}</td><td>${s.status==="완료"?'<span class="badge b-green">완료</span>':'<span class="badge b-amber">진행중</span>'}</td>
-        <td><button class="btn sm ghost" onclick="openSettle('${s.settlementId}')">${s.status==="완료"?"보기":"정산 입력"}</button></td></tr>`;
-    }).join("")||"")}
-  ${db.settlements.length?"":"<div class='notice info'>정산 대상이 없습니다.</div>"}
-  `;
-}
-
-/* ---- 5) 이슈 관리 ---- */
-function viewIssues(){
-  const rows=db.issues.slice().sort((a,b)=>a.occurredDate<b.occurredDate?1:-1);
-  return `
-  <span class="chip">이슈 관리</span>
-  <div class="btnrow"><button class="btn" onclick="openIssue()">＋ 이슈 등록</button></div>
-  ${tbl(["이슈ID","발생일","유형","대상","내용","상태","관리"],
-    rows.map(i=>issueRow(i,true)).join(""))}
-  ${db.issues.length?"":"<div class='notice info'>등록된 이슈가 없습니다.</div>"}
-  `;
-}
-function issueRow(i,withBtn){
-  const tgt = i.targetType==="property"? (prop(i.targetId)?.address||i.targetId) : (contract(i.targetId)?.tenantName+" 계약"||i.targetId);
-  const b=i.status==="종결"?"b-gray":(i.status==="진행"?"b-amber":"b-blue");
-  return `<tr><td>${i.issueId}</td><td>${i.occurredDate}</td><td>${esc(i.type)}</td><td class="wrap small">${esc(tgt)}</td>
-    <td class="wrap">${esc(i.content)}</td><td><span class="badge ${b}">${i.status}</span></td>
-    ${withBtn?`<td><button class="btn sm ghost" onclick="openIssue('${i.issueId}')">수정</button></td>`:""}</tr>`;
-}
-
-/* ---- 6) 재배정 ---- */
-function viewReassign(){
-  const vacants=db.properties.filter(p=>p.status==="공실");
-  return `
-  <span class="chip">재배정</span>
-  <div class="notice gray">공실 사택에 새 계약을 신규 생성하여 재배정합니다. 물건 이력은 누적 보존됩니다.</div>
-  <h2 class="sec">공실 사택 (${vacants.length})</h2>
-  ${vacants.length? tbl(["물건ID","주소","지역","소유주","구분","면적","관리"],
-    vacants.map(p=>`<tr><td>${p.propertyId}</td><td class="wrap">${esc(p.address)}</td><td>${esc(p.region)}</td><td>${esc(p.owner)}</td><td>${p.contractType}</td><td>${esc(p.area)}</td>
-      <td><button class="btn sm" onclick="openNewContract('${p.propertyId}')">이 사택에 배정</button></td></tr>`).join(""))
-    : "<div class='notice info'>공실 사택이 없습니다.</div>"}
-  `;
-}
-
-/* ---- 7) 한도 기준 관리 ---- */
-function viewLimits(){
-  return `
+// ── 설정: 한도 기준 + 데이터(폴더/백업) ──
+function openSettings(){ ui.settings=true; render(); }
+function closeSettings(){ ui.settings=false; render(); }
+function viewSettings(){
+  return `<div class="btnrow"><button class="btn ghost sm" onclick="closeSettings()">← 사택 관리로</button></div>
   <span class="chip">한도 기준 관리</span>
-  <div class="notice gray">지역별 한도표입니다. 계약 저장/월세 변경 시 자동 판정에 사용됩니다. (직급별 세분화는 <b>직급</b> 열을 추가해 확장 가능)</div>
+  <div class="notice gray">지역별 한도표입니다. 계약 저장/월세 변경 시 자동 판정에 사용됩니다.</div>
   <div class="tblwrap"><table>
     <thead><tr><th>지역</th><th>직급</th><th>전세 보증금 한도</th><th>월세 보증금 한도</th><th>월세 한도(월)</th><th></th></tr></thead>
-    <tbody id="limBody">
-    ${db.limits.map((l,idx)=>`<tr>
+    <tbody>${db.limits.map((l,idx)=>`<tr>
       <td><input value="${esc(l.region)}" onchange="editLimit(${idx},'region',this.value)" style="width:90px"></td>
       <td><input value="${esc(l.grade||'')}" onchange="editLimit(${idx},'grade',this.value)" style="width:80px"></td>
       <td><input type="number" value="${l.jeonseLimit||0}" onchange="editLimit(${idx},'jeonseLimit',this.value)" style="width:150px"></td>
       <td><input type="number" value="${l.wolseDepositLimit||0}" onchange="editLimit(${idx},'wolseDepositLimit',this.value)" style="width:150px"></td>
       <td><input type="number" value="${l.wolseRentLimit||0}" onchange="editLimit(${idx},'wolseRentLimit',this.value)" style="width:130px"></td>
       <td><button class="btn sm danger" onclick="delLimit(${idx})">삭제</button></td></tr>`).join("")}
-    </tbody>
-  </table></div>
+    </tbody></table></div>
   <div class="btnrow"><button class="btn ghost" onclick="addLimit()">＋ 지역 추가</button></div>
-  `;
+
+  <span class="chip" style="margin-top:20px">데이터 관리</span>
+  <div class="form">
+    <p class="small muted" style="margin-top:0">모든 변경은 지정 폴더의 <b>${DB_FILE}</b> 에 즉시 저장됩니다.${FSA?"":"<br><span class='flag'>이 브라우저는 폴더 저장 미지원 — 브라우저 로컬 저장으로 동작합니다.</span>"}</p>
+    <div class="btnrow">
+      ${FSA?`<button class="btn" onclick="pickFolder()">📁 데이터 폴더 선택/변경</button>`:""}
+      <span class="small" style="align-self:center">${dirHandle?("연결됨 · "+DB_FILE):(FSA?"미연결":"로컬 저장")}</span>
+    </div>
+    <hr class="soft">
+    <div class="btnrow">
+      <button class="btn ghost" onclick="exportJSON()">⬇ JSON 내보내기(백업)</button>
+      <label class="btn gray" style="display:inline-flex;align-items:center">⬆ JSON 가져오기(복구)
+        <input type="file" accept="application/json" style="display:none" onchange="if(this.files[0])importJSON(this.files[0])"></label>
+      <button class="btn gray" onclick="if(confirm('샘플 데이터로 초기화합니다. 현재 데이터가 삭제됩니다.')){seedSample();save();closeSettings();toast('샘플로 초기화됨')}">샘플로 초기화</button>
+    </div>
+    <p class="small muted">가져오기·초기화는 현재 데이터를 덮어씁니다. 사전 백업 권장.</p>
+  </div>
+  <div class="cards" style="margin-top:14px">
+    <div class="card"><div class="lbl">사택</div><div class="num">${db.properties.length}</div></div>
+    <div class="card"><div class="lbl">계약</div><div class="num">${db.contracts.length}</div></div>
+    <div class="card"><div class="lbl">정산</div><div class="num">${db.settlements.length}</div></div>
+    <div class="card"><div class="lbl">이슈</div><div class="num">${db.issues.length}</div></div>
+    <div class="card"><div class="lbl">변경이력</div><div class="num">${db.changelog.length}</div></div>
+  </div>`;
 }
 function editLimit(i,f,v){ db.limits[i][f]= (f==="region"||f==="grade")? v : Number(v||0); save(); }
 function addLimit(){ db.limits.push({region:"신규지역",grade:"공통",jeonseLimit:0,wolseDepositLimit:0,wolseRentLimit:0}); save(); render(); }
 function delLimit(i){ if(confirm("삭제하시겠습니까?")){ db.limits.splice(i,1); save(); render(); } }
 
-/* ---- 8) 데이터 ---- */
-function viewData(){
-  return `
-  <span class="chip">데이터 관리</span>
-  <h2 class="sec">저장 폴더</h2>
-  <div class="form">
-    <p class="small muted" style="margin-top:0">모든 변경은 지정한 폴더의 <b>${DB_FILE}</b> 파일에 즉시 저장됩니다.
-    ${FSA?"":"<br><span class='flag'>이 브라우저는 폴더 저장을 지원하지 않아 브라우저 로컬 저장으로 동작합니다.</span>"}</p>
-    <div class="btnrow">
-      ${FSA?`<button class="btn" onclick="pickFolder()">📁 데이터 폴더 선택/변경</button>`:""}
-      <span class="small" id="dataStoreState" style="align-self:center">${dirHandle?("연결됨 · "+DB_FILE):(FSA?"미연결":"로컬 저장")}</span>
-    </div>
-  </div>
-  <h2 class="sec">백업 / 복구</h2>
-  <div class="form">
-    <div class="btnrow">
-      <button class="btn ghost" onclick="exportJSON()">⬇ JSON 내보내기(백업)</button>
-      <label class="btn gray" style="display:inline-flex;align-items:center">⬆ JSON 가져오기(복구)
-        <input type="file" accept="application/json" style="display:none" onchange="if(this.files[0])importJSON(this.files[0])"></label>
-    </div>
-    <p class="small muted">가져오기는 현재 데이터를 덮어씁니다. 사전에 백업을 권장합니다.</p>
-  </div>
-  <h2 class="sec">데이터 현황</h2>
-  <div class="cards">
-    <div class="card"><div class="lbl">사택(property)</div><div class="num">${db.properties.length}</div></div>
-    <div class="card"><div class="lbl">계약(contract)</div><div class="num">${db.contracts.length}</div></div>
-    <div class="card"><div class="lbl">정산(settlement)</div><div class="num">${db.settlements.length}</div></div>
-    <div class="card"><div class="lbl">이슈(issue)</div><div class="num">${db.issues.length}</div></div>
-    <div class="card"><div class="lbl">변경이력(changelog)</div><div class="num">${db.changelog.length}</div></div>
-  </div>
-  <h2 class="sec">최근 변경이력</h2>
-  ${db.changelog.length? tbl(["시각","테이블","대상","필드","이전","이후","사유"],
-    db.changelog.slice(-30).reverse().map(l=>`<tr><td class="small">${l.timestamp.slice(0,16).replace("T"," ")}</td><td>${l.targetTable}</td><td class="small">${l.targetId}</td><td>${esc(l.field)}</td><td class="small">${esc(l.oldValue)}</td><td class="small">${esc(l.newValue)}</td><td class="wrap small">${esc(l.reason)}</td></tr>`).join("")) : "<div class='notice gray'>변경이력 없음</div>"}
-  <div style="margin-top:22px">
-    <button class="btn gray sm" onclick="if(confirm('샘플 데이터로 초기화합니다. 현재 데이터가 삭제됩니다.')){seedSample();save();render();toast('샘플로 초기화됨')}">샘플 데이터로 초기화</button>
-  </div>
-  `;
-}
-
-/* ---- 공용 렌더 헬퍼 ---- */
-function tbl(cols,body){ return `<div class="tblwrap"><table><thead><tr>${cols.map(c=>`<th class="${/주소|내용|사유/.test(c)?'wrap':''}">${c}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`; }
-function info(l,v){ return `<div class="fld"><label>${l}</label><div>${esc(v)||"-"}</div></div>`; }
-function prop(id){ return db.properties.find(p=>p.propertyId===id); }
-function contract(id){ return db.contracts.find(c=>c.contractId===id); }
-function statusBadge(s){ const m={"입주중":"b-green","공실":"b-gray","계약중":"b-green","해지예정":"b-amber","해지완료":"b-gray","신청":"b-blue"}; return `<span class="badge ${m[s]||'b-gray'}">${s}</span>`; }
-function statusBadgeText(s){ return statusBadge(s); }
-function limitBadge(v){ if(v==="초과") return `<span class="badge b-red">초과</span>`; if(v==="적정") return `<span class="badge b-green">적정</span>`; return `<span class="badge b-gray">${v||"-"}</span>`; }
+// 선택 사택 기준 정산/이슈 바로 열기
+function openSettleFor(cid){ const s=db.settlements.find(x=>x.contractId===cid); if(s) openSettle(s.settlementId); else toast("정산 레코드가 없습니다"); }
+function openIssueFor(pid){ openIssue(null, pid); }
 
 /* ============================ 모달 & 폼 ============================ */
 function modal(title, bodyHTML, footHTML){
@@ -992,7 +1035,9 @@ function submitEditContract(id){
 }
 function doTerminate(id){
   if(!confirm("이 계약을 해지 처리합니다.\n(status→해지예정, 퇴실정산 레코드 자동 생성)")) return;
-  terminateContract(id); render(); toast("해지 처리 — 퇴실 정산 탭에서 정산을 입력하세요"); go("settle");
+  terminateContract(id);
+  const c=contract(id); if(c) ui.sel=c.propertyId;   // 해당 사택 선택 유지 → 우측 정산 패널 노출
+  render(); toast("해지 처리 — 아래 '퇴실 정산'에서 항목을 입력하세요");
 }
 
 /* ---- 정산 입력 ---- */
@@ -1048,8 +1093,8 @@ function saveSettle(id,complete){
 }
 
 /* ---- 이슈 등록/수정 ---- */
-function openIssue(id){
-  const i = id? db.issues.find(x=>x.issueId===id) : {targetType:"property",occurredDate:today(),type:"누수",status:"접수"};
+function openIssue(id, presetPid){
+  const i = id? db.issues.find(x=>x.issueId===id) : {targetType:"property",targetId:presetPid||"",occurredDate:today(),type:"누수",status:"접수"};
   // 대상 선택 옵션
   const propOpts=db.properties.map(p=>`<option value="${p.propertyId}" ${i.targetId===p.propertyId?"selected":""}>${esc(p.address)}</option>`).join("");
   const contOpts=db.contracts.map(c=>`<option value="${c.contractId}" ${i.targetId===c.contractId?"selected":""}>${c.contractId} · ${esc(c.tenantName)}</option>`).join("");
