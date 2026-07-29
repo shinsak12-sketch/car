@@ -526,6 +526,13 @@
   .dtot{display:flex;justify-content:space-between;margin-top:12px;padding:11px 13px;background:var(--su2);border-radius:10px;font-weight:800;font-size:13px}
   .dtot .dpos{color:var(--bad)}.dtot .dneg{color:var(--info)}
   .dnote{margin-top:12px;font-size:12px;color:var(--tx2);background:var(--su2);border-radius:9px;padding:10px 12px}
+  .dverdict{margin:14px 0 4px;padding:13px 15px;border-radius:11px;border:2px solid var(--bad);background:color-mix(in srgb,var(--bad) 11%,transparent);display:flex;gap:12px;align-items:flex-start;box-shadow:0 1px 8px color-mix(in srgb,var(--bad) 18%,transparent)}
+  .dverdict .vi{font-size:22px;line-height:1.1}
+  .dverdict .vt{flex:1;min-width:0}
+  .dverdict .vh{font-weight:900;font-size:13.5px;color:var(--bad);margin-bottom:5px;letter-spacing:.01em}
+  .dverdict .vb{font-size:12px;color:var(--tx2);line-height:1.65}
+  .dverdict .vb b{color:var(--bad)}
+  .dverdict .vb .vd{font-size:13.5px}
   .dback{font-size:11.5px;color:var(--tx2);background:var(--su2);border:1px solid var(--bd);border-radius:9px;padding:10px 12px;line-height:1.7}
   .drecalc{margin-top:12px;padding:11px 13px;border:1px dashed var(--br);border-radius:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:color-mix(in srgb,var(--br) 7%,transparent)}
   .drecalc .rc-info{font-size:11.5px;color:var(--tx2);flex:1;min-width:180px}
@@ -724,6 +731,13 @@
         const tot = curTotal(), td = tot - d.ledTotal;
         const totHd = '<div class="dtot"><span>총액 (세전)' + (isAlt() ? ' <b style="color:' + (view === 'alt2' ? 'var(--ok)' : 'var(--br)') + '">· ' + altModeLabel() + ' 재계산</b>' : '') + '</span><span>계산 ' + nf(tot) + ' &nbsp;/&nbsp; 대장 ' + nf(d.ledTotal) + ' &nbsp; <span class="' + (td > 0 ? 'dpos' : td < 0 ? 'dneg' : '') + '">' + (td ? (td > 0 ? '+' : '') + nf(td) : '일치') + '</span></span></div>';
         const nts = curNotes(); const notesHd = (nts && nts.length) ? '<div class="dnote">📌 ' + nts.join(' · ') + '</div>' : '';
+        // 검증 경고 배너 — 항목별 계산 바로 아래에 크게. (다태아 유급 75일 과소지급 의심)
+        const twinDiff = d.ourTotal - d.ledTotal;
+        const verdictH = d.matTwin ? '<div class="dverdict"><div class="vi">🔺</div><div class="vt">'
+          + '<div class="vh">검증 경고 · 다태아 출산휴가 유급기간 과소지급 의심</div>'
+          + '<div class="vb">다태아 출산전후휴가는 법정 유급 <b>75일</b>(단태아 60일)입니다. 대장이 <b>60일 기준</b>으로 유급을 끊어 지급하면 이 달에 과소지급이 발생합니다.<br>'
+          + '계산 <b>' + nf(d.ourTotal) + '</b> vs 대장 <b>' + nf(d.ledTotal) + '</b> → 차이 <b class="vd">' + (twinDiff >= 0 ? '+' : '') + nf(twinDiff) + '</b> · <b>유급 75일 반영 여부를 확인하세요.</b></div>'
+          + '</div></div>' : '';
         // 재계산 박스 = '이번달' 지급일 이후 변동 처리용(당월적용/후단). 전월 소급은 아래 소급 박스가 담당.
         //  판단 기준은 소급 제외 base(=전월이월무시 값). 그래야 '소급만 있는 사람'에게 재계산 버튼이 중복으로 안 뜸.
         const baseNoSog = (d.hasSogeup && d.ignore) ? d.ignore.total : d.ourTotal;
@@ -785,6 +799,7 @@
           + '<div class="dcontract">📄 적용 연봉계약 <b>' + (d.연봉일자 || '-') + '</b><br>' + 연봉H + '</div>'
           + segHd
           + itemsTable
+          + verdictH
           + extraHd + totHd + recalcH + sogeupH + normH + errH + balH + notesHd + '</div></div>';
         ov.querySelector('.dx').onclick = () => ov.remove();
         ov.querySelector('.dexp').onclick = e => { e.stopPropagation(); exportOne(d); };
@@ -916,7 +931,7 @@
     }
     const pm2 = (t.year && t.month) ? (t.month === 1 ? { y: t.year - 1, m: 12 } : { y: t.year, m: t.month - 1 }) : null;
     const prevYMlabel = pm2 ? `${pm2.y}-${String(pm2.m).padStart(2, '0')}` : '';
-    return { 사번: r.사번, 성명: r.성명, 연봉일자: t.연봉일자, 연봉: 연봉, quarterMonth: t.quarterMonth, ilhal: t.ilhal, segments: t.segments || [], items, extras: t.extras || [], dutyLabel: t.dutyLabel, dutyFlat: t.dutyFlat, uvac: t.uvac, uvacDeduct: t.uvacDeduct, 발령: 발령, 휴가: 휴가, matUnpaid: t.matUnpaid || null, ym, ourTotal: r.ourTotal, ledTotal: r.ledTotal, notes: r.notes || [], alt, alt2, ignore, dayShift: !!r.dayShift, hasSogeup: !!r.hasSogeup, sogeup: r.sogeup || null, prevChangeOrders: r.prevChangeOrders || null, dualItems, prevYMlabel };
+    return { 사번: r.사번, 성명: r.성명, 연봉일자: t.연봉일자, 연봉: 연봉, quarterMonth: t.quarterMonth, ilhal: t.ilhal, segments: t.segments || [], items, extras: t.extras || [], dutyLabel: t.dutyLabel, dutyFlat: t.dutyFlat, uvac: t.uvac, uvacDeduct: t.uvacDeduct, 발령: 발령, 휴가: 휴가, matUnpaid: t.matUnpaid || null, ym, ourTotal: r.ourTotal, ledTotal: r.ledTotal, notes: r.notes || [], alt, alt2, ignore, dayShift: !!r.dayShift, hasSogeup: !!r.hasSogeup, sogeup: r.sogeup || null, prevChangeOrders: r.prevChangeOrders || null, dualItems, prevYMlabel, matTwin: !!r.matTwin };
   }
   const tagHTML = notes => (notes || []).map(n => `<span class="tag ${n.startsWith('일할') ? 'ilhal' : n.includes('확인') ? 'warn' : 'sp'}">${esc(n)}</span>`).join('');
   const flagsOf = r => ({ ilhal: (r.notes || []).some(n => n.startsWith('일할')), special: (r.notes || []).some(n => n.includes('특례') || n.includes('소급') || n.includes('임금피크') || n.includes('정직') || n.includes('감봉')), warn: !!r.warn });
