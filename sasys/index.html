@@ -342,6 +342,8 @@ nav.tabs{box-shadow:0 2px 8px rgba(20,40,30,.04)}
 .dz span{font-size:11px;margin-top:2px}
 .dz.hot{border-color:var(--green);background:var(--green-l);color:var(--green-d);transform:scale(1.08);box-shadow:0 6px 16px rgba(0,133,74,.25)}
 .dz.hot.danger{border-color:#d32f2f;background:#fdeaea;color:#d32f2f;box-shadow:0 6px 16px rgba(211,47,47,.25)}
+.dz.dznew{border-style:solid;border-color:var(--green);background:var(--green);color:#fff;cursor:pointer}
+.dz.dznew:hover{background:var(--green-d);transform:scale(1.05);box-shadow:0 6px 16px rgba(0,133,74,.3)}
 /* 확대/축소 컨트롤 */
 .zoomctl{position:absolute;bottom:8px;right:10px;display:flex;gap:4px;z-index:25}
 .zoomctl button{width:30px;height:30px;border:1px solid var(--line);background:#fff;border-radius:8px;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.1)}
@@ -1171,12 +1173,12 @@ function sceneHTML(){
     <input class="mapSearch" id="mapSearch" placeholder="🔍 이름·주소·금액 찾기" value="${esc(ui.mapQ||'')}" oninput="mapSearch(this.value)">
     <span id="mapHit" class="mapHit"></span>
     <div class="dropzones" id="dropzones">
-      <div class="dz" data-act="detail" title="상세 열기">📄<span>상세</span></div>
+      <div class="dz dznew" onclick="openNewContract()" title="신규 계약 등록(PDF 업로드)">＋<span>신규 PDF</span></div>
       <div class="dz" data-act="renew" title="여기에 떨구면 갱신">🔄<span>갱신</span></div>
       <div class="dz" data-act="terminate" title="여기에 떨구면 해지→정산">🗑️<span>해지·정산</span></div>
     </div>
     <div class="zoomctl"><button onclick="sceneZoomBtn(1)">＋</button><button onclick="sceneZoomBtn(-1)">−</button><button onclick="sceneZoomBtn(0)">⟳</button></div>
-    <div class="hint">드래그=이동 · 우측 존에 떨구면 갱신/해지 · 휠=확대 · 이름 클릭=아래 현황 · 빈바닥=비중</div>
+    <div class="hint">신규는 우측 ＋신규 · 갱신/해지는 우측 존에 떨구기 · 드래그=이동 · 휠=확대 · 이름 클릭=아래 현황</div>
   </div>`;
 }
 function sceneLegend(){
@@ -1220,7 +1222,7 @@ function afterDash(){
   if(ui.screen!=="dash"||ui.dashMode!=="map") return;
   const scene=document.getElementById("scene"); if(!scene) return;
   sceneView={z:1,px:0,py:0}; applyStage();
-  const zones=[...scene.querySelectorAll(".dz")];
+  const zones=[...scene.querySelectorAll(".dz[data-act]")];   // 신규 버튼(data-act 없음)은 드롭 대상 제외
   scene.addEventListener("wheel",e=>{ e.preventDefault(); const r=scene.getBoundingClientRect(); zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY<0?1.12:1/1.12); },{passive:false});
   scene.querySelectorAll(".bld").forEach(el=>{
     el.addEventListener("pointerdown",e=>{
@@ -1244,7 +1246,7 @@ function afterDash(){
       document.addEventListener("pointermove",onMove); document.addEventListener("pointerup",onUp);
     });
   });
-  scene.addEventListener("click",e=>{ if(e.target.classList.contains("floor")||e.target.id==="scene"||e.target.id==="stage") setDash("chart"); });
+  // (빈 바닥 클릭으로 비중 전환하던 동작 제거 — 비중은 상단 '📊 비중' 버튼으로만)
   if(ui.mapQ) mapSearch(ui.mapQ);   // 화면 재구성 후 검색 강조 복원
 }
 // 도넛 차트(항목별 비중)
