@@ -348,6 +348,9 @@ nav.tabs{box-shadow:0 2px 8px rgba(20,40,30,.04)}
 .zoomctl{position:absolute;bottom:8px;right:10px;display:flex;gap:4px;z-index:25}
 .zoomctl button{width:30px;height:30px;border:1px solid var(--line);background:#fff;border-radius:8px;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.1)}
 .zoomctl button:hover{border-color:var(--green);color:var(--green)}
+.sortSel{padding:5px 9px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-weight:700;font-family:inherit;color:var(--ink);cursor:pointer;background:#fff}
+.sortSel:hover{border-color:var(--green)}
+.sortSel:focus{outline:none;border-color:var(--green)}
 
 /* 도넛 차트 */
 .charts{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-around;padding:8px 0}
@@ -714,7 +717,7 @@ function findOrCreateProperty(data){
     ownerContact:data.ownerContact||"", ownerAccount:data.ownerAccount||"",
     contractType:data.contractType||"", floor:data.floor||"", area:data.area||"",
     region:data.region||"", grade:data.grade||"C", status:"공실",
-    vizX: 8+Math.random()*82, vizY: 20+Math.random()*70   // 조감도 초기 위치(이후 드래그로 이동)
+    vizX: 6+Math.random()*66, vizY: 16+Math.random()*72   // 좌측 영역에 생성(우측 버튼 회피). 이후 드래그 이동
   };
   db.properties.push(p);
   return p;
@@ -873,12 +876,16 @@ function seedSample(){
   }
   layoutScene();   // 조감도 초기 배치(급지별 밴드 격자)
 }
-// 조감도 초기 좌표: 급지(A→D) 순으로 정렬해 격자로 고르게 펼침(가운데 뭉침 방지)
+// 격자 배치: 주어진 순서(arr)대로 좌측 영역에 고르게 펼침(우측 버튼 영역은 비움)
+function layoutGrid(arr){
+  const n=arr.length, cols=Math.max(1,Math.ceil(Math.sqrt(n*1.5))), rows=Math.ceil(n/cols);
+  arr.forEach((p,i)=>{ const c=i%cols, r=Math.floor(i/cols);
+    p.vizX=3+c*(73/Math.max(1,cols-1)); p.vizY=13+r*(83/Math.max(1,rows-1)); });   // x 최대 76% → 우측 버튼과 안 겹침
+}
+// 초기 배치: 급지(A→D) 밴드로 정렬 후 격자
 function layoutScene(){
   const arr=[...db.properties].sort((a,b)=>{ const ga=a.grade||"Z",gb=b.grade||"Z"; if(ga!==gb) return ga<gb?-1:1; return (a.region||"")<(b.region||"")?-1:1; });
-  const n=arr.length, cols=Math.max(1,Math.ceil(Math.sqrt(n*1.9))), rows=Math.ceil(n/cols);
-  arr.forEach((p,i)=>{ const c=i%cols, r=Math.floor(i/cols);
-    p.vizX=4+c*(82/Math.max(1,cols-1)); p.vizY=14+r*(82/Math.max(1,rows-1)); });
+  layoutGrid(arr);
 }
 
 /* ============================ [RENDER] 렌더링 ============================ */
@@ -1113,7 +1120,13 @@ function viewDash(){
     ${dashCard("미종결 이슈",s.issue,s.issue?"warn":"")}
   </div>
   <div class="panel"><div class="phd">사택 조감도
-    <span><button class="btn sm ${ui.dashMode==='map'?'':'ghost'}" onclick="setDash('map')">🏢 조감도</button>
+    <span>${ui.dashMode==='map'?`<select class="sortSel" onchange="sortLayout(this.value)" title="정렬 기준 선택">
+        <option value="">↕ 정렬</option>
+        <option value="name_asc">이름 오름차순</option><option value="name_desc">이름 내림차순</option>
+        <option value="amt_asc">금액 오름차순</option><option value="amt_desc">금액 내림차순</option>
+        <option value="grade_asc">등급 오름차순(A→D)</option><option value="grade_desc">등급 내림차순(D→A)</option>
+      </select>`:''}
+    <button class="btn sm ${ui.dashMode==='map'?'':'ghost'}" onclick="setDash('map')">🏢 조감도</button>
     <button class="btn sm ${ui.dashMode==='chart'?'':'ghost'}" onclick="setDash('chart')">📊 비중</button></span></div>
     <div class="pbd">${ui.dashMode==='chart'? chartsHTML() : sceneHTML()}</div>
   </div>
@@ -1177,7 +1190,7 @@ function sceneHTML(){
       <div class="dz" data-act="renew" title="여기에 떨구면 갱신">🔄<span>갱신</span></div>
       <div class="dz" data-act="terminate" title="여기에 떨구면 해지→정산">🗑️<span>해지·정산</span></div>
     </div>
-    <div class="zoomctl"><button onclick="sceneZoomBtn(1)">＋</button><button onclick="sceneZoomBtn(-1)">−</button><button onclick="sceneZoomBtn(0)">⟳</button></div>
+    <div class="zoomctl"><button onclick="sceneZoomBtn(1)" title="확대">＋</button><button onclick="sceneZoomBtn(-1)" title="축소">−</button><button onclick="sceneZoomBtn(0)" title="원래 크기">⟳</button></div>
     <div class="hint">신규는 우측 ＋신규 · 갱신/해지는 우측 존에 떨구기 · 드래그=이동 · 휠=확대 · 이름 클릭=아래 현황</div>
   </div>`;
 }
@@ -1189,9 +1202,22 @@ function sceneLegend(){
 // 조감도 확대/이동 상태
 let sceneView={z:1,px:0,py:0};
 function applyStage(){ const st=document.getElementById("stage"); if(st) st.style.transform=`translate(${sceneView.px}px,${sceneView.py}px) scale(${sceneView.z})`; }
-// 최소 배율 1(기본) — 그 아래로 축소 금지(축소 시 글씨 블러 방지). 확대만 가능.
-function zoomAt(cx,cy,factor){ const z1=sceneView.z, z2=Math.max(1,Math.min(3.6,z1*factor)); if(z2===z1) return; sceneView.px=cx-(cx-sceneView.px)*(z2/z1); sceneView.py=cy-(cy-sceneView.py)*(z2/z1); if(z2<=1){sceneView.px=0;sceneView.py=0;} sceneView.z=z2; applyStage(); }
+// 확대/축소 (0.7~3.6배). 원본=1배.
+function zoomAt(cx,cy,factor){ const z1=sceneView.z, z2=Math.max(0.7,Math.min(3.6,z1*factor)); if(z2===z1) return; sceneView.px=cx-(cx-sceneView.px)*(z2/z1); sceneView.py=cy-(cy-sceneView.py)*(z2/z1); if(z2<=1){sceneView.px=0;sceneView.py=0;} sceneView.z=z2; applyStage(); }
 function sceneZoomBtn(dir){ const sc=document.getElementById("scene"); if(!sc) return; if(dir===0){ sceneView={z:1,px:0,py:0}; applyStage(); return; } const r=sc.getBoundingClientRect(); zoomAt(r.width/2,r.height/2, dir>0?1.25:1/1.25); }
+// 정렬: 이름/금액/등급 오름·내림차순으로 건물 재배치
+function sortLayout(mode){
+  if(!mode) return; ui.sortMode=mode;
+  const amtVal=c=> c? (Number(c.monthlyRent)>0? Number(c.monthlyRent) : (Number(c.deposit)||0)/250) : -1; // 전세는 보증금/250로 월 환산 비교
+  const key=p=>{ const c=currentContract(p.propertyId);
+    if(mode.indexOf("name")===0) return c?c.tenantName:"힣힣";   // 공실은 뒤로
+    if(mode.indexOf("amt")===0)  return amtVal(c);
+    return (p.grade||"Z"); };
+  const arr=[...db.properties].sort((a,b)=>{ const va=key(a),vb=key(b);
+    const cmp = (typeof va==="number") ? va-vb : String(va).localeCompare(String(vb),"ko");
+    return mode.slice(-4)==="desc" ? -cmp : cmp; });
+  layoutGrid(arr); save(); render();
+}
 function zoneAt(cx,cy,zones){ for(const z of zones){ const r=z.getBoundingClientRect(); if(cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom) return z; } return null; }
 // 조감도 검색: 매칭 집 강조, 나머지 흐리게(재렌더 없이 클래스만 변경 → 줌/포커스 유지)
 function mapSearch(q){
@@ -1497,8 +1523,9 @@ function submitNewContract(pid){
     if(!reason){ toast("초과 사유 미입력 — 저장 취소"); return; }
     d.limitReason=reason;
   }
-  saveNewContract(d);
-  closeModal(); render(); toast("계약 저장됨"+(j.over?" (초과 플래그)":""));
+  const nc=saveNewContract(d);
+  if(nc){ ui.dashSel=nc.propertyId; ui.mapQ=""; }   // 신규 사택을 하단 현황에 자동 표시
+  closeModal(); render(); toast("계약 저장됨 — 조감도에 사택 생성"+(j.over?" (초과 플래그)":""));
 }
 
 /* ---- 계약 수정 ---- */
