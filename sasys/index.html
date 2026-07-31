@@ -134,7 +134,7 @@ td.wrap,th.wrap{white-space:normal;min-width:180px}
 .fld.over input{border-color:var(--red);background:var(--red-l)}
 
 /* 모달 */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-start;justify-content:center;padding:36px 14px;z-index:50;overflow:auto}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-start;justify-content:center;padding:36px 14px;z-index:9000;overflow:auto}
 .modal{background:#fff;border-radius:12px;max-width:860px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)}
 .modal .mhead{display:flex;justify-content:space-between;align-items:center;padding:15px 20px;border-bottom:2px solid var(--green)}
 .modal .mhead h3{margin:0;font-size:16px;color:var(--green)}
@@ -296,7 +296,7 @@ nav.tabs{box-shadow:0 2px 8px rgba(20,40,30,.04)}
 .dashgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:14px}
 
 /* 조감도 씬 */
-.scene{position:relative;height:560px;border-radius:14px;overflow:hidden;user-select:none;cursor:grab;
+.scene{position:relative;height:560px;border-radius:14px;overflow:hidden;user-select:none;cursor:grab;isolation:isolate;
   background:linear-gradient(180deg,#eef7f2,#e4f0ea)}
 .scene.panning{cursor:grabbing}
 .stage{position:absolute;inset:0;--s:1}   /* --s = 줌 배율(글꼴/크기 실제 스케일 → 확대해도 선명) */
