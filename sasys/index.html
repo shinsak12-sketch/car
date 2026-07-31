@@ -309,18 +309,41 @@ nav.tabs{box-shadow:0 2px 8px rgba(20,40,30,.04)}
 .bld.drag{cursor:grabbing}
 .bld .tower{width:66px;height:var(--h);border-radius:5px 5px 0 0;position:relative;box-shadow:0 8px 16px rgba(20,40,30,.22);transition:transform .12s}
 .bld:hover .tower{transform:translateY(-3px)}
-.bld.ok .tower{background:linear-gradient(180deg,#0a9d59,#00703e)}
-.bld.over .tower{background:linear-gradient(180deg,#ef5a42,#c62f1a)}
-.bld.vac .tower{background:linear-gradient(180deg,#c0c9c3,#98a49d)}
+/* 급지별 색상 (A 진초록 · B 청록 · C 파랑 · D 주황갈색) */
+.bld.gA .tower{background:linear-gradient(180deg,#0a8a4d,#00623a)}
+.bld.gB .tower{background:linear-gradient(180deg,#2aa17a,#1c7d5e)}
+.bld.gC .tower{background:linear-gradient(180deg,#4a90d9,#2f6fb0)}
+.bld.gD .tower{background:linear-gradient(180deg,#d1913f,#a76a22)}
+.bld.vac .tower{opacity:.4;filter:grayscale(.55)}
 .bld .roof{position:absolute;top:-5px;left:-3px;right:-3px;height:5px;border-radius:5px 5px 0 0;background:rgba(0,0,0,.28)}
+.bld .gbadge{position:absolute;top:4px;left:4px;font-size:10px;font-weight:900;color:rgba(255,255,255,.92);background:rgba(0,0,0,.22);border-radius:4px;padding:0 4px;z-index:2}
 .bld .facade{position:absolute;inset:0;padding:9px 7px;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;overflow:hidden}
 .bld .wr{display:flex;gap:7px;justify-content:center}
 .bld .wr span{width:13px;height:9px;background:rgba(255,255,255,.9);border-radius:1px;box-shadow:inset 0 0 2px rgba(0,0,0,.15)}
 .bld.vac .wr span{background:rgba(255,255,255,.55)}
 .bld .lbl{position:absolute;bottom:calc(var(--h) + 16px);left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11px;font-weight:700;background:#fff;padding:3px 9px;border-radius:9px;box-shadow:0 3px 10px rgba(0,0,0,.14);text-align:center;line-height:1.35}
 .bld .shadow{position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);width:78px;height:15px;background:radial-gradient(ellipse,rgba(0,0,0,.24),transparent 70%);border-radius:50%}
-.bld .excl{position:absolute;bottom:calc(var(--h) + 48px);left:50%;transform:translateX(-50%);width:28px;height:28px;border-radius:50%;background:#d32f2f;color:#fff;font-weight:900;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 5px 12px rgba(211,47,47,.55);animation:bounce 1.1s ease-in-out infinite;z-index:9}
-@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-6px)}}
+.bld .mks{position:absolute;bottom:calc(var(--h) + 20px);left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:8}
+.bld .mk{width:26px;height:26px;border-radius:50%;color:#fff;font-weight:900;font-size:17px;display:flex;align-items:center;justify-content:center;box-shadow:0 5px 12px rgba(0,0,0,.3);animation:bounce 1.1s ease-in-out infinite}
+.bld .mk.red{background:#d32f2f}.bld .mk.amber{background:#e59300}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+/* 조감도 범례 */
+.scLegend{position:absolute;top:8px;left:8px;display:flex;gap:10px;flex-wrap:wrap;background:rgba(255,255,255,.88);padding:5px 10px;border-radius:10px;font-size:11px;font-weight:700;color:#444;z-index:20;max-width:92%}
+.scLegend span{display:flex;align-items:center;gap:4px}
+.scLegend .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
+.scLegend .sw.gA{background:#0a8a4d}.scLegend .sw.gB{background:#2aa17a}.scLegend .sw.gC{background:#4a90d9}.scLegend .sw.gD{background:#d1913f}.scLegend .sw.vacsw{background:#c0c9c3}
+.scLegend .mkl{width:15px;height:15px;border-radius:50%;color:#fff;font-weight:900;font-size:11px;display:inline-flex;align-items:center;justify-content:center}
+.scLegend .mkl.red{background:#d32f2f}.scLegend .mkl.amber{background:#e59300}
+/* 밀집 모드(다수 건물): 라벨은 hover 시 표시, 건물 축소 */
+.scene.dense{height:600px}
+.scene.dense .bld .tower{width:34px}
+.scene.dense .bld .wr{gap:4px}
+.scene.dense .bld .wr span{width:8px;height:6px}
+.scene.dense .bld .gbadge{font-size:8px;padding:0 3px}
+.scene.dense .bld .lbl{opacity:0;transition:opacity .15s;pointer-events:none}
+.scene.dense .bld:hover{z-index:999!important}
+.scene.dense .bld:hover .lbl{opacity:1}
+.scene.dense .bld .mk{width:20px;height:20px;font-size:13px}
 
 /* 도넛 차트 */
 .charts{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-around;padding:8px 0}
@@ -686,7 +709,8 @@ function findOrCreateProperty(data){
     address: data.address||"", owner:data.owner||"",
     ownerContact:data.ownerContact||"", ownerAccount:data.ownerAccount||"",
     contractType:data.contractType||"", floor:data.floor||"", area:data.area||"",
-    region:data.region||"", status:"공실"
+    region:data.region||"", grade:data.grade||"C", status:"공실",
+    vizX: 8+Math.random()*82, vizY: 20+Math.random()*70   // 조감도 초기 위치(이후 드래그로 이동)
   };
   db.properties.push(p);
   return p;
@@ -777,69 +801,80 @@ function settlementComplete(s){
 /* ============================ [SAMPLE] 샘플 데이터 ============================ */
 function seedSample(){
   db=emptyDB();
-  // 한도 기준표(지역·직급 → 프로토타입은 지역 기준, 직급 열 확장 가능)
-  db.limits=[
-    {region:"서울", grade:"공통", jeonseLimit:300000000, wolseDepositLimit:50000000, wolseRentLimit:1500000},
-    {region:"경기", grade:"공통", jeonseLimit:200000000, wolseDepositLimit:30000000, wolseRentLimit:1000000},
-    {region:"인천", grade:"실무자", jeonseLimit:150000000, wolseDepositLimit:20000000, wolseRentLimit:600000},
-    {region:"대전", grade:"공통", jeonseLimit:150000000, wolseDepositLimit:20000000, wolseRentLimit:800000},
-    {region:"부산", grade:"공통", jeonseLimit:200000000, wolseDepositLimit:30000000, wolseRentLimit:1000000},
-    {region:"광주", grade:"공통", jeonseLimit:130000000, wolseDepositLimit:20000000, wolseRentLimit:700000},
-  ];
-  // 1~12월 월세 예산 계획(만원 단위 X, 원 단위)
-  db.plan=[3800000,3800000,4200000,4200000,4200000,4500000,4500000,4500000,4500000,4800000,4800000,4800000];
+  // 지역별 한도(전세보증금/월세보증금/월세)
+  const R=[["서울",400000000,60000000,1800000],["경기",300000000,40000000,1200000],["인천",200000000,25000000,700000],["대전",180000000,22000000,800000],["부산",250000000,35000000,1100000],["광주",150000000,20000000,700000],["대구",180000000,25000000,800000],["울산",170000000,22000000,750000],["세종",160000000,20000000,700000],["강원",130000000,18000000,600000]];
+  db.limits=R.map(r=>({region:r[0],grade:"공통",jeonseLimit:r[1],wolseDepositLimit:r[2],wolseRentLimit:r[3]}));
+  // 재현 가능한 난수(xorshift32 — 균등 분포)
+  let seed=20260731>>>0; const rnd=()=>{ seed^=seed<<13; seed>>>=0; seed^=seed>>>17; seed^=seed<<5; seed>>>=0; return seed/4294967296; };
+  const pick=a=>a[Math.floor(rnd()*a.length)], ri=(a,b)=>a+Math.floor(rnd()*(b-a+1));
+  const iso=d=>d.toISOString().slice(0,10); const TD=new Date(today());
+  const addD=(base,n)=>{const d=new Date(base); d.setDate(d.getDate()+n); return iso(d);};
+  const grades=["A","A","B","B","B","C","C","C","D","D"];   // A~D 급지 분포
+  const fam=["김","이","박","최","정","강","조","윤","장","임","한","오","서","신","권","황","안","송","류","백"];
+  const giv=["민준","서연","도윤","하은","지호","수아","예준","지우","주원","서준","하준","지민","현우","윤서","은지","성민","다은","시우","유진","준서","서현","건우","예은","지훈"];
+  const centers=["서울센터","판교센터","인천센터","대전센터","부산센터","광주센터","대구센터","남인천센터","수원센터","울산센터"];
+  const ST={"서울":["강남구 테헤란로","마포구 월드컵로","송파구 올림픽로","용산구 한강대로","서초구 강남대로"],"경기":["성남시 분당구 정자로","수원시 팔달구 팔달로","고양시 일산동구 중앙로","용인시 기흥구 동백로"],"인천":["남동구 구월동","연수구 송도과학로","부평구 부평대로"],"대전":["유성구 대학로","서구 둔산로","중구 중앙로"],"부산":["해운대구 마린시티2로","수영구 광안해변로","부산진구 서면로"],"광주":["서구 상무대로","북구 첨단과기로"],"대구":["수성구 달구벌대로","중구 동성로"],"울산":["남구 삼산로","중구 종가로"],"세종":["한누리대로","도움로"],"강원":["춘천시 중앙로","강릉시 경강로"]};
+  const P=(o)=>{o.propertyId=nextId("property"); db.properties.push(o); return o;};
+  const C=(o)=>{o.contractId=nextId("contract"); o.round=o.round||1; o.renewedFrom=o.renewedFrom||""; o.rentPayType=o.rentPayType||""; o.limitReason=o.limitReason||""; db.contracts.push(o); return o;};
+  const emps=[]; for(let i=0;i<72;i++) emps.push({name:pick(fam)+pick(giv), id:"20"+ri(15,24)+String(ri(1,999)).padStart(4,"0")});
+  const doc=(y)=>`총무-${y}-${String(ri(1,9999)).padStart(4,"0")}`;
 
-  // 헬퍼: property / contract 생성(더미 데이터 대량 구성)
-  let vi=0;
-  const P=(o)=>{ o.propertyId=nextId("property"); if(o.vizX==null){const row=Math.floor(vi/4); o.vizX=10+(vi%4)*24+(row%2)*12; o.vizY=42+row*25; vi++;} db.properties.push(o); return o; };
-  const C=(o)=>{ o.contractId=nextId("contract"); o.round=o.round||1; o.renewedFrom=o.renewedFrom||""; o.rentPayType=o.rentPayType||""; o.limitReason=o.limitReason||""; db.contracts.push(o); return o; };
-
-  const p1=P({address:"서울 강남구 테헤란로 12, 3동 1201호",owner:"김소유",ownerContact:"010-1111-2222",ownerAccount:"국민 123-45-6789",contractType:"전세",floor:"12층",area:"84.9㎡",region:"서울",status:"입주중"});
-  const p2=P({address:"경기 성남시 분당구 정자로 45, 502호",owner:"이집주",ownerContact:"010-3333-4444",contractType:"월세",floor:"5층",area:"59.5㎡",region:"경기",status:"입주중"});
-  const p3=P({address:"대전 유성구 대학로 99, 1004호",owner:"박대전",contractType:"월세",floor:"10층",area:"49.6㎡",region:"대전",status:"공실"});
-  const p4=P({address:"인천 남동구 구월동 1456 이토타워 1동 939호",owner:"장인복",contractType:"월세",floor:"9층",area:"28.57㎡",region:"인천",status:"입주중"});
-  const p5=P({address:"서울 마포구 월드컵로 210, 1503호",owner:"정마포",ownerContact:"010-5555-6666",contractType:"월세",floor:"15층",area:"74.2㎡",region:"서울",status:"입주중"});
-  const p6=P({address:"경기 수원시 팔달구 팔달로 88, 704호",owner:"한수원",contractType:"전세",floor:"7층",area:"66.1㎡",region:"경기",status:"입주중"});
-  const p7=P({address:"부산 해운대구 마린시티2로 33, 2201호",owner:"오해운",ownerContact:"010-7777-8888",contractType:"월세",floor:"22층",area:"84.9㎡",region:"부산",status:"입주중"});
-  const p8=P({address:"인천 연수구 송도과학로 16, 3동 810호",owner:"신송도",contractType:"월세",floor:"8층",area:"59.9㎡",region:"인천",status:"공실"});
-  const p9=P({address:"대전 서구 둔산로 100, 1102호",owner:"윤둔산",contractType:"전세",floor:"11층",area:"59.9㎡",region:"대전",status:"입주중"});
-
-  // 계약(입주자/한도/기간 다양화 — 만료임박·초과·정산중 케이스 포함)
-  const c1=C({propertyId:p1.propertyId,docNumber:"총무-2026-0012",centerName:"서울센터",tenantName:"홍길동",employeeId:"20180412",homeAddress:"부산 해운대구 우동 …",contractType:"전세",deposit:280000000,monthlyRent:0,rentPayDay:"",startDate:"2026-03-01",endDate:"2028-02-28",approvalDate:"2026-02-20",region:"서울",limitCheck:"적정",status:"계약중"});
-  const c2a=C({propertyId:p2.propertyId,docNumber:"총무-2025-0021",centerName:"판교센터",tenantName:"김영희",employeeId:"20200133",homeAddress:"광주 서구 …",contractType:"월세",deposit:30000000,monthlyRent:1100000,rentPayDay:"13일",rentPayType:"후불",startDate:"2025-01-15",endDate:"2026-01-14",approvalDate:"2025-01-05",region:"경기",limitCheck:"초과",limitReason:"월세 한도 초과 — 팀장 승인",status:"갱신완료"});
-  const c2=C({propertyId:p2.propertyId,round:2,renewedFrom:c2a.contractId,docNumber:"총무-2026-0021",centerName:"판교센터",tenantName:"김영희",employeeId:"20200133",homeAddress:"광주 서구 …",contractType:"월세",deposit:30000000,monthlyRent:1200000,rentPayDay:"13일",rentPayType:"후불",startDate:"2026-01-15",endDate:"2027-01-14",approvalDate:"2026-01-05",region:"경기",limitCheck:"초과",limitReason:"월세 한도(100만원) 초과 — 팀장 승인",status:"계약중"});
-  const c3=C({propertyId:p3.propertyId,docNumber:"총무-2024-0088",centerName:"대전센터",tenantName:"이철수",employeeId:"20150077",homeAddress:"서울 …",contractType:"월세",deposit:20000000,monthlyRent:700000,rentPayDay:"25일",rentPayType:"선불",startDate:"2024-08-01",endDate:"2026-07-31",approvalDate:"2024-07-15",region:"대전",limitCheck:"적정",status:"해지완료"});
-  const c4=C({propertyId:p1.propertyId,docNumber:"총무-2022-0011",centerName:"서울센터",tenantName:"이철수",employeeId:"20150077",homeAddress:"서울 …",contractType:"전세",deposit:250000000,monthlyRent:0,startDate:"2022-03-01",endDate:"2024-02-29",approvalDate:"2022-02-10",region:"서울",limitCheck:"적정",status:"해지완료"});
-  const c5=C({propertyId:p4.propertyId,docNumber:"2026-07130646",centerName:"남인천센터",tenantName:"정재훈",employeeId:"11700600",homeAddress:"서울 강동구 …",contractType:"월세",deposit:5000000,monthlyRent:450000,rentPayDay:"13일",rentPayType:"후불",startDate:"2026-07-13",endDate:"2027-07-12",approvalDate:"2026-07-13",region:"인천",limitCheck:"적정",status:"계약중"});
-  const c6=C({propertyId:p5.propertyId,docNumber:"총무-2025-0102",centerName:"서울센터",tenantName:"박민수",employeeId:"20190555",homeAddress:"대구 …",contractType:"월세",deposit:40000000,monthlyRent:1800000,rentPayDay:"5일",rentPayType:"선불",startDate:"2025-09-10",endDate:"2026-09-09",approvalDate:"2025-08-25",region:"서울",limitCheck:"초과",limitReason:"월세 한도(150만원) 초과 — 본부장 승인",status:"계약중"});
-  const c7=C({propertyId:p6.propertyId,docNumber:"총무-2026-0044",centerName:"수원센터",tenantName:"최지현",employeeId:"20210311",homeAddress:"전주 …",contractType:"전세",deposit:190000000,monthlyRent:0,startDate:"2026-04-01",endDate:"2028-03-31",approvalDate:"2026-03-15",region:"경기",limitCheck:"적정",status:"계약중"});
-  const c8=C({propertyId:p7.propertyId,docNumber:"총무-2025-0077",centerName:"부산센터",tenantName:"강동원",employeeId:"20170822",homeAddress:"서울 …",contractType:"월세",deposit:30000000,monthlyRent:950000,rentPayDay:"20일",rentPayType:"후불",startDate:"2025-06-01",endDate:"2026-05-31",approvalDate:"2025-05-15",region:"부산",limitCheck:"적정",status:"해지예정"});
-  const c9=C({propertyId:p9.propertyId,docNumber:"총무-2026-0051",centerName:"대전센터",tenantName:"윤서연",employeeId:"20220199",homeAddress:"광주 …",contractType:"전세",deposit:145000000,monthlyRent:0,startDate:"2024-08-20",endDate:"2026-08-20",approvalDate:"2024-08-01",region:"대전",limitCheck:"적정",status:"계약중"});
-  const c10=C({propertyId:p8.propertyId,docNumber:"총무-2024-0033",centerName:"인천센터",tenantName:"김영희",employeeId:"20200133",homeAddress:"광주 …",contractType:"월세",deposit:20000000,monthlyRent:600000,rentPayDay:"10일",rentPayType:"선불",startDate:"2023-02-01",endDate:"2024-12-31",approvalDate:"2023-01-15",region:"인천",limitCheck:"적정",status:"해지완료"});
-
-  // 정산: c3(완료), c8(해지예정→진행중)
-  db.settlements.push({settlementId:nextId("settlement"),contractId:c3.contractId,moveOutDate:"2026-07-10",status:"완료",completedDate:"2026-07-15",notes:"원상복구 경미, 입주자 부담",
-    depositReturn:{amount:19500000}, cleaningFee:{amount:150000,payer:"입주자"}, unpaidMgmtFee:{amount:0,payer:"입주자"},
-    restorationFee:{amount:350000,payer:"입주자"}, utilityBill:{amount:80000,payer:"입주자"}, longTermRepairFund:{amount:120000,received:true}});
-  const s8={settlementId:nextId("settlement"),contractId:c8.contractId,moveOutDate:"2026-05-28",status:"진행중",completedDate:"",notes:"청소·공과금 확인 중"};
-  SETTLE_ITEMS.forEach(it=>{ s8[it.key]= it.received?{amount:"",received:false}:(it.payer?{amount:"",payer:""}:{amount:""}); });
-  s8.depositReturn={amount:29000000}; s8.cleaningFee={amount:200000,payer:"입주자"};
-  db.settlements.push(s8);
-
-  // 이슈(여러 건)
-  const iss=[
-    ["property",p1.propertyId,"2026-06-10","누수","화장실 천장 누수, 윗집 배관 문제","진행","집주인 통해 배관 수리 요청",""],
-    ["contract",c2.contractId,"2026-05-02","집주인분쟁","월세 인상 요구 분쟁","종결","계약서상 인상 불가 확인","2026-05-20"],
-    ["contract",c4.contractId,"2023-05-02","설비고장","보일러 고장","종결","집주인 수리","2023-05-10"],
-    ["property",p5.propertyId,"2026-07-05","소음","윗층 층간소음 민원","접수","관리사무소 협조 요청",""],
-    ["property",p7.propertyId,"2026-03-11","계약분쟁","퇴실 원상복구 범위 이견","진행","견적 비교 중",""],
-    ["property",p4.propertyId,"2026-07-20","설비고장","에어컨 미작동","접수","",""],
-  ];
-  iss.forEach(a=>db.issues.push({issueId:nextId("issue"),targetType:a[0],targetId:a[1],occurredDate:a[2],type:a[3],content:a[4],status:a[5],resolution:a[6],closedDate:a[7]}));
-
-  // 변경이력 샘플
-  logChange("contract",c2.contractId,"status","","계약중","자동갱신 (2회차, 월세 110→120만)");
-  logChange("contract",c6.contractId,"monthlyRent","1700000","1800000","재계약 월세 인상(한도 초과)");
+  const N=100;
+  for(let i=0;i<N;i++){
+    const r=pick(R), region=r[0], grade=pick(grades);
+    const type=rnd()<0.55?"월세":"전세";
+    const roll=rnd(); const status=roll<0.14?"공실":(roll<0.22?"해지예정":"입주중");
+    const gf={A:1.12,B:0.95,C:0.78,D:0.6}[grade];   // 급지별 금액 배율
+    let deposit,rent;
+    if(type==="전세"){ deposit=Math.round(r[1]*gf*(0.58+rnd()*0.38)/1000000)*1000000; rent=0; }
+    else { deposit=Math.round(r[2]*(0.3+rnd()*0.6)/1000000)*1000000; rent=Math.round(r[3]*gf*(0.45+rnd()*0.55)/10000)*10000; }
+    if(rnd()<0.08){ if(type==="전세") deposit=Math.round(r[1]*1.15/1000000)*1000000; else rent=Math.round(r[3]*1.25/10000)*10000; } // 일부 강제 초과
+    const addr=`${region} ${pick(ST[region]||["중앙로"])} ${ri(1,320)}, ${ri(1,25)}동 ${ri(1,20)}${ri(0,9)}${ri(1,9)}호`;
+    const p=P({address:addr,owner:pick(fam)+pick(giv),ownerContact:rnd()<0.5?`010-${ri(1000,9999)}-${ri(1000,9999)}`:"",contractType:type,floor:ri(2,25)+"층",area:ri(29,110)+"㎡",region,grade,status});
+    const emp=pick(emps);
+    if(status==="공실"){
+      if(rnd()<0.6){ const end=addD(TD,-ri(30,500)); const start=addD(end,-ri(365,760));
+        C({propertyId:p.propertyId,docNumber:doc(start.slice(0,4)),centerName:pick(centers),tenantName:emp.name,employeeId:emp.id,homeAddress:pick(R)[0]+" …",contractType:type,deposit,monthlyRent:rent,rentPayDay:type==="월세"?ri(1,28)+"일":"",rentPayType:type==="월세"?pick(["선불","후불"]):"",startDate:start,endDate:end,approvalDate:addD(start,-ri(10,40)),region,limitCheck:"적정",status:"해지완료"});
+      }
+      continue;
+    }
+    const expiring = rnd()<0.14;                       // 만료임박 케이스
+    const end = expiring? addD(TD, ri(4,58)) : addD(TD, ri(120,860));
+    const start = addD(end, -ri(365,760));
+    const base={propertyId:p.propertyId,docNumber:doc(start.slice(0,4)),centerName:pick(centers),tenantName:emp.name,employeeId:emp.id,homeAddress:pick(R)[0]+" …",contractType:type,deposit,monthlyRent:rent,rentPayDay:type==="월세"?ri(1,28)+"일":"",rentPayType:type==="월세"?pick(["선불","후불"]):"",startDate:start,endDate:end,approvalDate:addD(start,-ri(10,40)),region,status: status==="해지예정"?"해지예정":"계약중"};
+    let c;
+    if(rnd()<0.16 && status==="입주중"){                // 자동갱신(2회차) 케이스
+      const pStart=addD(start,-ri(365,400)), pEnd=addD(start,-1);
+      const prev=C(Object.assign({},base,{docNumber:doc(pStart.slice(0,4)),startDate:pStart,endDate:pEnd,approvalDate:addD(pStart,-20),monthlyRent:type==="월세"?Math.round(rent*0.92/10000)*10000:0,status:"갱신완료"}));
+      prev.limitCheck=judgeLimit(prev).result;
+      c=C(Object.assign({},base,{round:2,renewedFrom:prev.contractId}));
+    } else c=C(base);
+    c.limitCheck=judgeLimit(c).result; c.limitReason=c.limitCheck==="초과"?"지역 한도 초과 — 승인 첨부":"";
+    if(status==="해지예정"){                            // 정산 진행중 자동 생성
+      const s={settlementId:nextId("settlement"),contractId:c.contractId,moveOutDate:addD(end,-ri(1,20)),status:"진행중",completedDate:"",notes:""};
+      SETTLE_ITEMS.forEach(it=>{ s[it.key]= it.received?{amount:"",received:false}:(it.payer?{amount:"",payer:""}:{amount:""}); });
+      s.depositReturn={amount:Math.round(deposit*0.95/10000)*10000}; if(rnd()<0.5) s.cleaningFee={amount:ri(10,30)*10000,payer:"입주자"};
+      db.settlements.push(s);
+    }
+  }
+  // 이슈 다수
+  const itypes=["누수","소음","집주인분쟁","설비고장","계약분쟁","기타"], istat=["접수","진행","종결"];
+  const pcont=["윗집 누수 발생","층간소음 민원","에어컨 고장","보일러 점검 필요","공용부 파손","주차 분쟁"];
+  const ccont=["월세 인상 요구","원상복구 범위 이견","설비 노후 교체 요청","관리비 정산 분쟁"];
+  const actC=db.contracts.filter(c=>["계약중","해지예정"].includes(c.status));
+  for(let k=0;k<24;k++){
+    const st=pick(istat), when=addD(TD,-ri(3,320));
+    if(rnd()<0.5){ const p=pick(db.properties); db.issues.push({issueId:nextId("issue"),targetType:"property",targetId:p.propertyId,occurredDate:when,type:pick(itypes),content:pick(pcont),status:st,resolution:st==="종결"?"조치 완료":"",closedDate:st==="종결"?addD(when,ri(3,30)):""}); }
+    else { const c=pick(actC); if(!c) continue; db.issues.push({issueId:nextId("issue"),targetType:"contract",targetId:c.contractId,occurredDate:when,type:pick(itypes),content:pick(ccont),status:st,resolution:st==="종결"?"합의 완료":"",closedDate:st==="종결"?addD(when,ri(3,30)):""}); }
+  }
+  layoutScene();   // 조감도 초기 배치(급지별 밴드 격자)
+}
+// 조감도 초기 좌표: 급지(A→D) 순으로 정렬해 격자로 고르게 펼침(가운데 뭉침 방지)
+function layoutScene(){
+  const arr=[...db.properties].sort((a,b)=>{ const ga=a.grade||"Z",gb=b.grade||"Z"; if(ga!==gb) return ga<gb?-1:1; return (a.region||"")<(b.region||"")?-1:1; });
+  const n=arr.length, cols=Math.max(1,Math.ceil(Math.sqrt(n*1.9))), rows=Math.ceil(n/cols);
+  arr.forEach((p,i)=>{ const c=i%cols, r=Math.floor(i/cols);
+    p.vizX=6+c*(88/Math.max(1,cols-1)); p.vizY=15+r*(80/Math.max(1,rows-1)); });
 }
 
 /* ============================ [RENDER] 렌더링 ============================ */
@@ -851,6 +886,7 @@ function prop(id){ return db.properties.find(p=>p.propertyId===id); }
 function contract(id){ return db.contracts.find(c=>c.contractId===id); }
 function statusBadge(s){ const m={"입주중":"b-green","공실":"b-gray","계약중":"b-green","해지예정":"b-amber","해지완료":"b-gray","갱신완료":"b-blue","신청":"b-blue"}; return `<span class="badge ${m[s]||'b-gray'}">${s}</span>`; }
 function roundBadge(n){ return `<span class="badge b-blue">${n||1}회차</span>`; }
+function gradeBadge(g){ if(!g) return ""; const col={A:"#0a8a4d",B:"#2aa17a",C:"#4a90d9",D:"#d1913f"}[g]||"#888"; return `<span class="badge" style="background:${col}22;color:${col}">${g}급지</span>`; }
 function limitBadge(v){ if(v==="초과") return `<span class="badge b-red">초과</span>`; if(v==="적정") return `<span class="badge b-green">적정</span>`; return `<span class="badge b-gray">${v||"-"}</span>`; }
 function tbl(cols,body){ return `<div class="tblwrap"><table><thead><tr>${cols.map(c=>`<th class="${/주소|내용|사유/.test(c)?'wrap':''}">${c}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`; }
 function kv(k,v){ return `<div><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`; }
@@ -956,7 +992,7 @@ function litem(p){
   const c=currentContract(p.propertyId);
   return `<div class="litem ${ui.sel===p.propertyId?'sel':''}" onclick="selectProp('${p.propertyId}')">
     <div class="a1"><div class="addr">${esc(p.address)}</div>${statusBadge(p.status)}</div>
-    <div class="sub">${esc(p.region||"-")} · ${c?esc(c.tenantName)+" / "+esc(c.centerName):"입주자 없음"}${c&&c.monthlyRent?" · 월 "+won(c.monthlyRent):""}</div>
+    <div class="sub">${gradeBadge(p.grade)} ${esc(p.region||"-")} · ${c?esc(c.tenantName)+" / "+esc(c.centerName):"입주자 없음"}${c&&c.monthlyRent?" · 월 "+won(c.monthlyRent):""}</div>
   </div>`;
 }
 // 검색 입력 시 목록만 갱신(입력 포커스 유지)
@@ -973,7 +1009,7 @@ function propHeaderPanel(p){
   return `<div class="panel"><div class="pbd" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
     <div><div style="font-size:17px;font-weight:800">${esc(p.address)}</div>
       <div class="muted small" style="margin-top:3px">${p.propertyId} · ${esc(p.region||"-")} · ${esc(p.contractType||"")} · 전용 ${esc(p.area||"-")} · ${esc(p.floor||"-")}</div></div>
-    ${statusBadge(p.status)}
+    <div style="display:flex;gap:6px;align-items:center">${gradeBadge(p.grade)}${statusBadge(p.status)}</div>
   </div></div>`;
 }
 function noContractPanel(p){
@@ -1076,28 +1112,38 @@ function viewDash(){
     <span><button class="btn sm ${ui.dashMode==='map'?'':'ghost'}" onclick="setDash('map')">🏢 조감도</button>
     <button class="btn sm ${ui.dashMode==='chart'?'':'ghost'}" onclick="setDash('chart')">📊 비중</button></span></div>
     <div class="pbd">${ui.dashMode==='chart'? chartsHTML() : sceneHTML()}</div>
-  </div>
-  ${monthlyTableHTML()}`;
+  </div>`;
 }
-// 건물 조감도(정방향, 바닥 전체, 드래그 배치, 초과=느낌표)
+// 건물 조감도: A~D 급지별 색상 · 금액=높이 · 초과/만료임박=느낌표 · 정방향 · 바닥 전체 · 드래그 배치
 function sceneHTML(){
+  const dense=db.properties.length>25;
   const blds=db.properties.map(p=>{
     const c=currentContract(p.propertyId);
-    const over=c&&["계약중","해지예정"].includes(c.status)&&c.limitCheck==="초과";
+    const active=c&&["계약중","해지예정"].includes(c.status);
+    const over=active&&c.limitCheck==="초과";
+    const expiring=active&&c.endDate&&daysBetween(today(),c.endDate)>=0&&daysBetween(today(),c.endDate)<=60;
     const vacant=p.status==="공실";
-    const val=c?(c.contractType==="전세"?c.deposit/2500000:c.monthlyRent/12000):40;
-    const h=Math.max(52,Math.min(190,Math.round(val)));
-    const cls=vacant?"vac":(over?"over":"ok");
-    const label=c?`${esc(c.tenantName)}<br><b>${c.contractType==="전세"?won(c.deposit):won(c.monthlyRent)+"/월"}</b>`:"<b>공실</b>";
-    const floors=Math.max(2,Math.round(h/34)); let win=""; for(let f=0;f<floors;f++) win+=`<div class="wr"><span></span><span></span><span></span></div>`;
+    const g=p.grade||"C";
+    const val=c?(c.contractType==="전세"?c.deposit/2500000:c.monthlyRent/12000):34;  // 금액 → 높이
+    const h=Math.max(46,Math.min(dense?150:190,Math.round(val)));
+    const floors=Math.max(2,Math.round(h/(dense?30:34))); let win=""; for(let f=0;f<floors;f++) win+=`<div class="wr"><span></span><span></span><span></span></div>`;
     const x=p.vizX==null?50:p.vizX, y=p.vizY==null?70:p.vizY;
-    return `<div class="bld ${cls}" data-pid="${p.propertyId}" style="left:${x}%;top:${y}%;--h:${h}px;z-index:${Math.round(y)}" title="${esc(p.address)}">
-      ${over?'<div class="excl">!</div>':""}
+    let mk=""; if(over) mk+='<div class="mk red" title="한도초과">!</div>'; if(expiring) mk+='<div class="mk amber" title="만료임박">!</div>';
+    const amt=c?(c.contractType==="전세"?won(c.deposit):won(c.monthlyRent)+"/월"):"공실";
+    const label=`${c?esc(c.tenantName)+"<br>":""}<b>${amt}</b>`;
+    return `<div class="bld g${g} ${vacant?'vac':''}" data-pid="${p.propertyId}" style="left:${x}%;top:${y}%;--h:${h}px;z-index:${Math.round(y)}" title="${esc(p.address)} · ${g}급${over?' · 한도초과':''}${expiring?' · 만료임박':''}">
+      ${mk?`<div class="mks">${mk}</div>`:""}
       <div class="lbl">${label}</div>
-      <div class="tower"><div class="roof"></div><div class="facade">${win}</div></div>
+      <div class="tower"><div class="roof"></div><div class="gbadge">${g}</div><div class="facade">${win}</div></div>
       <div class="shadow"></div></div>`;
   }).join("");
-  return `<div class="scene" id="scene"><div class="sky"></div><div class="floor"></div>${blds}<div class="hint">건물 드래그 = 위치 이동 · 클릭 = 상세 · 빈 바닥 클릭 = 비중 차트</div></div>`;
+  return `<div class="scene ${dense?'dense':''}" id="scene"><div class="sky"></div><div class="floor"></div>${sceneLegend()}${blds}<div class="hint">건물 드래그=이동 · 클릭=상세 · 빈 바닥=비중차트 · 🔴한도초과 🟠만료임박</div></div>`;
+}
+function sceneLegend(){
+  return `<div class="scLegend">
+    <span><i class="sw gA"></i>A급</span><span><i class="sw gB"></i>B급</span><span><i class="sw gC"></i>C급</span><span><i class="sw gD"></i>D급</span>
+    <span><i class="sw vacsw"></i>공실</span><span><i class="mkl red">!</i>초과</span><span><i class="mkl amber">!</i>만료임박</span>
+    <span class="muted">높이=금액</span></div>`;
 }
 function afterDash(){
   if(ui.screen!=="dash"||ui.dashMode!=="map") return;
@@ -1131,21 +1177,6 @@ function chartsHTML(){
   const lim=[{label:"적정",value:active.filter(c=>c.limitCheck!=="초과").length,color:"#00854A"},{label:"초과",value:active.filter(c=>c.limitCheck==="초과").length,color:"#d32f2f"}];
   return `<div class="charts">${donut("상태",st)}${donut("전/월세",tp)}${donut("지역",rg)}${donut("한도",lim)}</div>
     <div class="muted small" style="text-align:center;margin-top:8px">← 🏢 조감도 로 돌아가려면 상단 버튼을 누르세요</div>`;
-}
-// 월별 계획/집행
-function execMonth(m){ const mm=String(m).padStart(2,"0"), ms=`2026-${mm}-01`, me=`2026-${mm}-28`;
-  return db.contracts.filter(c=>Number(c.monthlyRent)>0&&c.startDate&&c.startDate<=me&&(!c.endDate||c.endDate>=ms)&&c.status!=="갱신완료").reduce((s,c)=>s+Number(c.monthlyRent),0); }
-function setPlan(i,v){ if(!db.plan) db.plan=[]; db.plan[i]=Number(v||0); save(); const el=document.getElementById("planSum"); if(el) el.textContent=won((db.plan||[]).reduce((a,b)=>a+Number(b||0),0)); }
-function monthlyTableHTML(){
-  const months=[...Array(12)].map((_,i)=>i+1);
-  const exec=months.map(execMonth), plan=months.map((m,i)=>Number((db.plan||[])[i]||0));
-  const maxv=Math.max(1,...exec,...plan);
-  return `<div class="panel"><div class="phd">2026년 월별 월세 계획 · 집행 <span class="muted small">계획은 직접 입력 가능</span></div><div class="pbd" style="overflow-x:auto">
-    <table class="mtbl"><thead><tr><th>구분</th>${months.map(m=>`<th>${m}월</th>`).join("")}<th>합계</th></tr></thead><tbody>
-    <tr><td>계획</td>${months.map((m,i)=>`<td><input class="mpin" type="number" value="${plan[i]||0}" onchange="setPlan(${i},this.value)"></td>`).join("")}<td><b id="planSum">${won(plan.reduce((a,b)=>a+b,0))}</b></td></tr>
-    <tr><td>집행</td>${exec.map(v=>`<td><div>${v?won(v):"-"}</div><div class="mbar"><i style="width:${Math.round(v/maxv*100)}%"></i></div></td>`).join("")}<td><b class="g">${won(exec.reduce((a,b)=>a+b,0))}</b></td></tr>
-    <tr><td>달성률</td>${months.map((m,i)=>{const r=plan[i]?Math.round(exec[i]/plan[i]*100):0;return `<td class="${r>100?'flag':''}">${plan[i]?r+"%":"-"}</td>`;}).join("")}<td>-</td></tr>
-    </tbody></table></div></div>`;
 }
 
 // ── 직원별 사택 사용 이력 ──
