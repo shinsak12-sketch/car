@@ -296,56 +296,54 @@ nav.tabs{box-shadow:0 2px 8px rgba(20,40,30,.04)}
 .dashgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:14px}
 
 /* 조감도 씬 */
-.scene{position:relative;height:480px;border-radius:14px;overflow:hidden;user-select:none;cursor:crosshair;
-  background:linear-gradient(180deg,#eef7f2 0%,#e9f3ee 44%,#dfeee6 44%,#d2e7db 100%)}
-.scene .sky{position:absolute;left:0;right:0;top:0;height:44%;background:linear-gradient(180deg,#f4faf7,#eaf4ef);pointer-events:none}
-.scene .floor{position:absolute;left:0;right:0;top:44%;bottom:0;pointer-events:auto;
+.scene{position:relative;height:560px;border-radius:14px;overflow:hidden;user-select:none;cursor:crosshair;
+  background:linear-gradient(180deg,#eef7f2,#e4f0ea)}
+.stage{position:absolute;inset:0;transform-origin:0 0;will-change:transform}
+.scene .floor{position:absolute;inset:0;pointer-events:auto;
   background:
-    repeating-linear-gradient(90deg,rgba(0,133,74,.06) 0 1px,transparent 1px 46px),
-    repeating-linear-gradient(0deg,rgba(0,133,74,.05) 0 1px,transparent 1px 30px),
-    linear-gradient(180deg,#dcece4,#cfe6da)}
-.scene .hint{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:11px;color:#5a6b63;background:rgba(255,255,255,.75);padding:4px 12px;border-radius:12px;pointer-events:none}
+    repeating-linear-gradient(90deg,rgba(0,133,74,.06) 0 1px,transparent 1px 44px),
+    repeating-linear-gradient(0deg,rgba(0,133,74,.055) 0 1px,transparent 1px 44px),
+    linear-gradient(180deg,#e8f2ec,#dcece4)}
+.scene .hint{position:absolute;bottom:8px;left:12px;font-size:11px;color:#5a6b63;background:rgba(255,255,255,.8);padding:4px 12px;border-radius:12px;pointer-events:none;z-index:22}
+/* 집(삼각지붕, 균일 크기) */
 .bld{position:absolute;transform:translate(-50%,-100%);cursor:grab;touch-action:none}
-.bld.drag{cursor:grabbing}
-.bld .tower{width:66px;height:var(--h);border-radius:5px 5px 0 0;position:relative;box-shadow:0 8px 16px rgba(20,40,30,.22);transition:transform .12s}
-.bld:hover .tower{transform:translateY(-3px)}
-/* 급지별 색상 (A 진초록 · B 청록 · C 파랑 · D 주황갈색) */
-.bld.gA .tower{background:linear-gradient(180deg,#0a8a4d,#00623a)}
-.bld.gB .tower{background:linear-gradient(180deg,#2aa17a,#1c7d5e)}
-.bld.gC .tower{background:linear-gradient(180deg,#4a90d9,#2f6fb0)}
-.bld.gD .tower{background:linear-gradient(180deg,#d1913f,#a76a22)}
-.bld.vac .tower{opacity:.4;filter:grayscale(.55)}
-.bld .roof{position:absolute;top:-5px;left:-3px;right:-3px;height:5px;border-radius:5px 5px 0 0;background:rgba(0,0,0,.28)}
-.bld .gbadge{position:absolute;top:4px;left:4px;font-size:10px;font-weight:900;color:rgba(255,255,255,.92);background:rgba(0,0,0,.22);border-radius:4px;padding:0 4px;z-index:2}
-.bld .facade{position:absolute;inset:0;padding:9px 7px;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;overflow:hidden}
-.bld .wr{display:flex;gap:7px;justify-content:center}
-.bld .wr span{width:13px;height:9px;background:rgba(255,255,255,.9);border-radius:1px;box-shadow:inset 0 0 2px rgba(0,0,0,.15)}
-.bld.vac .wr span{background:rgba(255,255,255,.55)}
-.bld .lbl{position:absolute;bottom:calc(var(--h) + 16px);left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11px;font-weight:700;background:#fff;padding:3px 9px;border-radius:9px;box-shadow:0 3px 10px rgba(0,0,0,.14);text-align:center;line-height:1.35}
-.bld .shadow{position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);width:78px;height:15px;background:radial-gradient(ellipse,rgba(0,0,0,.24),transparent 70%);border-radius:50%}
-/* 느낌표는 건물 정면 '가운데'에 배치(라벨 안 가리게) */
-.bld .mks{position:absolute;bottom:calc(var(--h)/2 - 14px);left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:8}
-.bld .mk{width:28px;height:28px;border-radius:50%;color:#fff;font-weight:900;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 9px rgba(0,0,0,.35);border:2px solid rgba(255,255,255,.85);animation:pulse 1.2s ease-in-out infinite}
+.bld.drag{cursor:grabbing;filter:drop-shadow(0 10px 14px rgba(0,0,0,.28))}
+.bld .house{width:56px;position:relative;transition:transform .1s}
+.bld:hover .house{transform:translateY(-2px)}
+.bld .roof2{width:0;height:0;margin:0 auto;border-left:31px solid transparent;border-right:31px solid transparent;border-bottom:17px solid var(--roof)}
+.bld .body{width:50px;height:32px;margin:0 auto;background:var(--body);border-radius:0 0 5px 5px;position:relative;display:flex;align-items:center;justify-content:center;box-shadow:0 5px 9px rgba(20,40,30,.18)}
+.bld .gL{color:#fff;font-weight:900;font-size:13px;opacity:.55}
+.bld .door{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:11px;height:14px;background:rgba(0,0,0,.24);border-radius:3px 3px 0 0}
+.bld.gA{--body:#14a35c;--roof:#0a6e3f}
+.bld.gB{--body:#34ad86;--roof:#1c7d5e}
+.bld.gC{--body:#4a90d9;--roof:#2f6fb0}
+.bld.gD{--body:#d99a45;--roof:#a76a22}
+.bld.vac{opacity:.5;filter:grayscale(.55)}
+.bld .lbl2{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:5px;white-space:nowrap;text-align:center;background:#fff;padding:2px 7px;border-radius:8px;box-shadow:0 2px 7px rgba(0,0,0,.15);line-height:1.2;z-index:1}
+.bld .lbl2 b{display:block;font-size:10.5px;font-weight:800;color:#1a1a1a}
+.bld .lbl2 span{font-size:9.5px;color:#00854A;font-weight:700}
+.bld .shadow{position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);width:56px;height:12px;background:radial-gradient(ellipse,rgba(0,0,0,.22),transparent 70%);border-radius:50%}
+.bld .mks{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;gap:3px;z-index:3}
+.bld .mk{width:22px;height:22px;border-radius:50%;color:#fff;font-weight:900;font-size:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.35);border:2px solid rgba(255,255,255,.9);animation:pulse 1.2s ease-in-out infinite}
 .bld .mk.red{background:#d32f2f}.bld .mk.amber{background:#e59300}
-@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
-/* 조감도 범례 */
-.scLegend{position:absolute;top:8px;left:8px;display:flex;gap:10px;flex-wrap:wrap;background:rgba(255,255,255,.88);padding:5px 10px;border-radius:10px;font-size:11px;font-weight:700;color:#444;z-index:20;max-width:92%}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
+/* 범례 */
+.scLegend{position:absolute;top:8px;left:8px;display:flex;gap:10px;flex-wrap:wrap;background:rgba(255,255,255,.9);padding:5px 10px;border-radius:10px;font-size:11px;font-weight:700;color:#444;z-index:22;max-width:70%}
 .scLegend span{display:flex;align-items:center;gap:4px}
 .scLegend .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
-.scLegend .sw.gA{background:#0a8a4d}.scLegend .sw.gB{background:#2aa17a}.scLegend .sw.gC{background:#4a90d9}.scLegend .sw.gD{background:#d1913f}.scLegend .sw.vacsw{background:#c0c9c3}
+.scLegend .sw.gA{background:#14a35c}.scLegend .sw.gB{background:#34ad86}.scLegend .sw.gC{background:#4a90d9}.scLegend .sw.gD{background:#d99a45}.scLegend .sw.vacsw{background:#c0c9c3}
 .scLegend .mkl{width:15px;height:15px;border-radius:50%;color:#fff;font-weight:900;font-size:11px;display:inline-flex;align-items:center;justify-content:center}
 .scLegend .mkl.red{background:#d32f2f}.scLegend .mkl.amber{background:#e59300}
-/* 밀집 모드(다수 건물): 라벨은 hover 시 표시, 건물 축소 */
-.scene.dense{height:600px}
-.scene.dense .bld .tower{width:34px}
-.scene.dense .bld .wr{gap:4px}
-.scene.dense .bld .wr span{width:8px;height:6px}
-.scene.dense .bld .gbadge{font-size:8px;padding:0 3px}
-.scene.dense .bld .lbl{opacity:0;transition:opacity .15s;pointer-events:none}
-.scene.dense .bld:hover{z-index:999!important}
-.scene.dense .bld:hover .lbl{opacity:1}
-.scene.dense .bld .mk{width:20px;height:20px;font-size:13px;border-width:1.5px}
-.scene.dense .bld .mks{bottom:calc(var(--h)/2 - 10px)}
+/* 우측 드롭존(휴지통 느낌) */
+.dropzones{position:absolute;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:9px;z-index:25}
+.dz{width:76px;height:62px;border:2px dashed #b7c3bc;border-radius:13px;background:rgba(255,255,255,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:20px;color:#667;font-weight:800;transition:all .15s}
+.dz span{font-size:11px;margin-top:2px}
+.dz.hot{border-color:var(--green);background:var(--green-l);color:var(--green-d);transform:scale(1.08);box-shadow:0 6px 16px rgba(0,133,74,.25)}
+.dz.hot.danger{border-color:#d32f2f;background:#fdeaea;color:#d32f2f;box-shadow:0 6px 16px rgba(211,47,47,.25)}
+/* 확대/축소 컨트롤 */
+.zoomctl{position:absolute;bottom:8px;right:10px;display:flex;gap:4px;z-index:25}
+.zoomctl button{width:30px;height:30px;border:1px solid var(--line);background:#fff;border-radius:8px;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.1)}
+.zoomctl button:hover{border-color:var(--green);color:var(--green)}
 
 /* 도넛 차트 */
 .charts{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-around;padding:8px 0}
@@ -876,7 +874,7 @@ function layoutScene(){
   const arr=[...db.properties].sort((a,b)=>{ const ga=a.grade||"Z",gb=b.grade||"Z"; if(ga!==gb) return ga<gb?-1:1; return (a.region||"")<(b.region||"")?-1:1; });
   const n=arr.length, cols=Math.max(1,Math.ceil(Math.sqrt(n*1.9))), rows=Math.ceil(n/cols);
   arr.forEach((p,i)=>{ const c=i%cols, r=Math.floor(i/cols);
-    p.vizX=6+c*(88/Math.max(1,cols-1)); p.vizY=15+r*(80/Math.max(1,rows-1)); });
+    p.vizX=4+c*(82/Math.max(1,cols-1)); p.vizY=14+r*(82/Math.max(1,rows-1)); });
 }
 
 /* ============================ [RENDER] 렌더링 ============================ */
@@ -1116,50 +1114,87 @@ function viewDash(){
     <div class="pbd">${ui.dashMode==='chart'? chartsHTML() : sceneHTML()}</div>
   </div>`;
 }
-// 건물 조감도: A~D 급지별 색상 · 금액=높이 · 초과/만료임박=느낌표 · 정방향 · 바닥 전체 · 드래그 배치
+// 건물 조감도: A~D 급지 색상 · 삼각지붕 집(균일 크기) · 이름+금액 상시표시 · 초과/만료임박=가운데 느낌표
+//   · 우측 드롭존(갱신/해지/정산) · 휠 확대축소 · 드래그 배치
+function houseHTML(p){
+  const c=currentContract(p.propertyId);
+  const active=c&&["계약중","해지예정"].includes(c.status);
+  const over=active&&c.limitCheck==="초과";
+  const expiring=active&&c.endDate&&daysBetween(today(),c.endDate)>=0&&daysBetween(today(),c.endDate)<=60;
+  const vacant=p.status==="공실";
+  const g=p.grade||"C";
+  const x=p.vizX==null?50:p.vizX, y=p.vizY==null?70:p.vizY;
+  let mk=""; if(over) mk+='<div class="mk red" title="한도초과">!</div>'; if(expiring) mk+='<div class="mk amber" title="만료임박">!</div>';
+  const amt=c?(c.contractType==="전세"?won(c.deposit):won(c.monthlyRent)+"/월"):"공실";
+  const nm=c?esc(c.tenantName):"공실";
+  return `<div class="bld g${g} ${vacant?'vac':''}" data-pid="${p.propertyId}" style="left:${x}%;top:${y}%;z-index:${Math.round(y)}" title="${esc(p.address)} · ${g}급${over?' · 한도초과':''}${expiring?' · 만료임박':''}">
+    <div class="lbl2"><b>${nm}</b><span>${amt}</span></div>
+    <div class="house"><div class="roof2"></div><div class="body"><span class="gL">${g}</span><i class="door"></i>${mk?`<div class="mks">${mk}</div>`:""}</div></div>
+    <div class="shadow"></div></div>`;
+}
 function sceneHTML(){
-  const dense=db.properties.length>25;
-  const blds=db.properties.map(p=>{
-    const c=currentContract(p.propertyId);
-    const active=c&&["계약중","해지예정"].includes(c.status);
-    const over=active&&c.limitCheck==="초과";
-    const expiring=active&&c.endDate&&daysBetween(today(),c.endDate)>=0&&daysBetween(today(),c.endDate)<=60;
-    const vacant=p.status==="공실";
-    const g=p.grade||"C";
-    const val=c?(c.contractType==="전세"?c.deposit/2500000:c.monthlyRent/12000):34;  // 금액 → 높이
-    const h=Math.max(46,Math.min(dense?150:190,Math.round(val)));
-    const floors=Math.max(2,Math.round(h/(dense?30:34))); let win=""; for(let f=0;f<floors;f++) win+=`<div class="wr"><span></span><span></span><span></span></div>`;
-    const x=p.vizX==null?50:p.vizX, y=p.vizY==null?70:p.vizY;
-    let mk=""; if(over) mk+='<div class="mk red" title="한도초과">!</div>'; if(expiring) mk+='<div class="mk amber" title="만료임박">!</div>';
-    const amt=c?(c.contractType==="전세"?won(c.deposit):won(c.monthlyRent)+"/월"):"공실";
-    const label=`${c?esc(c.tenantName)+"<br>":""}<b>${amt}</b>`;
-    return `<div class="bld g${g} ${vacant?'vac':''}" data-pid="${p.propertyId}" style="left:${x}%;top:${y}%;--h:${h}px;z-index:${Math.round(y)}" title="${esc(p.address)} · ${g}급${over?' · 한도초과':''}${expiring?' · 만료임박':''}">
-      ${mk?`<div class="mks">${mk}</div>`:""}
-      <div class="lbl">${label}</div>
-      <div class="tower"><div class="roof"></div><div class="gbadge">${g}</div><div class="facade">${win}</div></div>
-      <div class="shadow"></div></div>`;
-  }).join("");
-  return `<div class="scene ${dense?'dense':''}" id="scene"><div class="sky"></div><div class="floor"></div>${sceneLegend()}${blds}<div class="hint">건물 드래그=이동 · 클릭=상세 · 빈 바닥=비중차트 · 🔴한도초과 🟠만료임박</div></div>`;
+  const blds=db.properties.map(houseHTML).join("");
+  return `<div class="scene" id="scene">
+    <div class="stage" id="stage"><div class="floor"></div>${blds}</div>
+    ${sceneLegend()}
+    <div class="dropzones" id="dropzones">
+      <div class="dz" data-act="detail" title="상세 열기">📄<span>상세</span></div>
+      <div class="dz" data-act="renew" title="여기에 떨구면 갱신">🔄<span>갱신</span></div>
+      <div class="dz" data-act="terminate" title="여기에 떨구면 해지">🚪<span>해지</span></div>
+      <div class="dz" data-act="settle" title="여기에 떨구면 정산">🧾<span>정산</span></div>
+    </div>
+    <div class="zoomctl"><button onclick="sceneZoomBtn(1)">＋</button><button onclick="sceneZoomBtn(-1)">−</button><button onclick="sceneZoomBtn(0)">⟳</button></div>
+    <div class="hint">드래그=이동 · 우측 존에 떨구면 갱신/해지/정산 · 휠=확대축소 · 클릭=상세 · 빈바닥=비중</div>
+  </div>`;
 }
 function sceneLegend(){
   return `<div class="scLegend">
     <span><i class="sw gA"></i>A급</span><span><i class="sw gB"></i>B급</span><span><i class="sw gC"></i>C급</span><span><i class="sw gD"></i>D급</span>
-    <span><i class="sw vacsw"></i>공실</span><span><i class="mkl red">!</i>초과</span><span><i class="mkl amber">!</i>만료임박</span>
-    <span class="muted">높이=금액</span></div>`;
+    <span><i class="sw vacsw"></i>공실</span><span><i class="mkl red">!</i>초과</span><span><i class="mkl amber">!</i>만료임박</span></div>`;
+}
+// 조감도 확대/이동 상태
+let sceneView={z:1,px:0,py:0};
+function applyStage(){ const st=document.getElementById("stage"); if(st) st.style.transform=`translate(${sceneView.px}px,${sceneView.py}px) scale(${sceneView.z})`; }
+function zoomAt(cx,cy,factor){ const z1=sceneView.z, z2=Math.max(0.6,Math.min(3.2,z1*factor)); sceneView.px=cx-(cx-sceneView.px)*(z2/z1); sceneView.py=cy-(cy-sceneView.py)*(z2/z1); sceneView.z=z2; applyStage(); }
+function sceneZoomBtn(dir){ const sc=document.getElementById("scene"); if(!sc) return; if(dir===0){ sceneView={z:1,px:0,py:0}; applyStage(); return; } const r=sc.getBoundingClientRect(); zoomAt(r.width/2,r.height/2, dir>0?1.25:1/1.25); }
+function zoneAt(cx,cy,zones){ for(const z of zones){ const r=z.getBoundingClientRect(); if(cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom) return z; } return null; }
+function dropAction(act,pid){
+  const c=currentContract(pid);
+  if(act==="detail"){ selectProp(pid); return; }
+  if(!c){ toast("계약이 없는 사택입니다"); return; }
+  if(act==="renew"){ if(c.status!=="계약중"){ toast("‘계약중’ 상태만 갱신할 수 있습니다"); return; } openRenew(c.contractId); }
+  else if(act==="terminate"){ if(c.status!=="계약중"){ toast("‘계약중’ 상태만 해지할 수 있습니다"); return; } doTerminate(c.contractId); }
+  else if(act==="settle"){ const s=db.settlements.find(x=>x.contractId===c.contractId); if(s) openSettle(s.settlementId); else toast("해지예정(정산 대상) 계약이 아닙니다"); }
 }
 function afterDash(){
   if(ui.screen!=="dash"||ui.dashMode!=="map") return;
   const scene=document.getElementById("scene"); if(!scene) return;
+  sceneView={z:1,px:0,py:0}; applyStage();
+  const zones=[...scene.querySelectorAll(".dz")];
+  scene.addEventListener("wheel",e=>{ e.preventDefault(); const r=scene.getBoundingClientRect(); zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY<0?1.12:1/1.12); },{passive:false});
   scene.querySelectorAll(".bld").forEach(el=>{
-    let sx,sy,moved,dragging=false;
-    el.addEventListener("pointerdown",e=>{ e.preventDefault(); dragging=true; moved=false; sx=e.clientX; sy=e.clientY; el.setPointerCapture(e.pointerId); el.classList.add("drag"); });
-    el.addEventListener("pointermove",e=>{ if(!dragging) return; if(Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy)>4) moved=true;
-      const r=scene.getBoundingClientRect(); let x=(e.clientX-r.left)/r.width*100, y=(e.clientY-r.top)/r.height*100;
-      x=Math.max(3,Math.min(94,x)); y=Math.max(12,Math.min(94,y)); el.style.left=x+"%"; el.style.top=y+"%"; el.style.zIndex=Math.round(y); el._x=x; el._y=y; });
-    el.addEventListener("pointerup",e=>{ if(!dragging) return; dragging=false; el.classList.remove("drag"); const pid=el.dataset.pid;
-      if(moved){ const p=prop(pid); if(p){ p.vizX=el._x; p.vizY=el._y; save(); } } else { selectProp(pid); } });
+    el.addEventListener("pointerdown",e=>{
+      e.preventDefault(); e.stopPropagation();
+      const pid=el.dataset.pid, sx=e.clientX, sy=e.clientY; let moved=false;
+      el.classList.add("drag");
+      const onMove=ev=>{
+        if(Math.abs(ev.clientX-sx)+Math.abs(ev.clientY-sy)>4) moved=true;
+        const r=scene.getBoundingClientRect();
+        let x=((ev.clientX-r.left-sceneView.px)/sceneView.z)/r.width*100, y=((ev.clientY-r.top-sceneView.py)/sceneView.z)/r.height*100;
+        x=Math.max(2,Math.min(97,x)); y=Math.max(8,Math.min(98,y)); el.style.left=x+"%"; el.style.top=y+"%"; el.style.zIndex=999; el._x=x; el._y=y;
+        const zn=zoneAt(ev.clientX,ev.clientY,zones); zones.forEach(z=>{ z.classList.toggle("hot", z===zn); z.classList.toggle("danger", z===zn&&z.dataset.act==="terminate"); });
+      };
+      const onUp=ev=>{
+        document.removeEventListener("pointermove",onMove); document.removeEventListener("pointerup",onUp);
+        el.classList.remove("drag");
+        const zn=zoneAt(ev.clientX,ev.clientY,zones); zones.forEach(z=>z.classList.remove("hot","danger"));
+        if(zn){ if(moved) dropAction(zn.dataset.act,pid); else selectProp(pid); return; }
+        if(moved){ const p=prop(pid); if(p){ p.vizX=el._x; p.vizY=el._y; el.style.zIndex=Math.round(el._y); save(); } } else selectProp(pid);
+      };
+      document.addEventListener("pointermove",onMove); document.addEventListener("pointerup",onUp);
+    });
   });
-  scene.addEventListener("click",e=>{ if(e.target===scene||e.target.classList.contains("floor")||e.target.classList.contains("sky")) setDash("chart"); });
+  scene.addEventListener("click",e=>{ if(e.target.classList.contains("floor")||e.target.id==="scene"||e.target.id==="stage") setDash("chart"); });
 }
 // 도넛 차트(항목별 비중)
 function donut(title,data){
