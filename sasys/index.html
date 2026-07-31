@@ -327,7 +327,7 @@ nav.tabs{box-shadow:0 2px 8px rgba(20,40,30,.04)}
 .bld.dim{opacity:.12;filter:grayscale(.8)}
 .bld.hit{z-index:600!important}
 .bld.hit .htag{border-color:var(--green);box-shadow:0 0 0 3px rgba(0,133,74,.45),0 3px 8px rgba(0,0,0,.2)}
-.mapSearch{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:2000;width:230px;max-width:44%;padding:6px 12px;border:1px solid var(--line);border-radius:20px;font-size:12.5px;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.1);z-index:2000}
+.mapSearch{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:2000;width:330px;max-width:52%;padding:6px 12px;border:1px solid var(--line);border-radius:20px;font-size:12.5px;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.1);z-index:2000}
 .mapSearch:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(0,133,74,.15)}
 .mapHit{position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:2000;font-size:11px;font-weight:700;color:var(--green-d);background:rgba(255,255,255,.85);padding:1px 8px;border-radius:10px}
 /* 범례 */
@@ -1185,7 +1185,7 @@ function sceneHTML(){
     <div class="floor"></div>
     <div class="stage" id="stage">${blds}</div>
     ${sceneLegend()}
-    <input class="mapSearch" id="mapSearch" placeholder="🔍 이름·주소·금액 찾기" value="${esc(ui.mapQ||'')}" oninput="mapSearch(this.value)">
+    <input class="mapSearch" id="mapSearch" placeholder="🔍 이름·사번·센터·계약구분·임대인·주소·금액 찾기" value="${esc(ui.mapQ||'')}" oninput="mapSearch(this.value)">
     <span id="mapHit" class="mapHit"></span>
     <div class="dropzones" id="dropzones">
       <div class="dz dznew" onclick="openNewContract()" title="신규 계약 등록(PDF 업로드)">＋<span>신규 PDF</span></div>
@@ -1228,12 +1228,15 @@ function sortLayout(mode){
 }
 function zoneAt(cx,cy,zones){ for(const z of zones){ const r=z.getBoundingClientRect(); if(cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom) return z; } return null; }
 // 조감도 검색: 매칭 집 강조, 나머지 흐리게(재렌더 없이 클래스만 변경 → 줌/포커스 유지)
+// 조감도 검색: 사번·센터·계약구분·임대인·이름·주소·문서번호·금액 등 광범위(과거 계약 포함)
 function mapSearch(q){
   ui.mapQ=q; const ql=(q||"").trim().toLowerCase(); const sc=document.getElementById("scene"); if(!sc) return;
-  let hit=0, tot=0;
-  sc.querySelectorAll(".bld").forEach(el=>{ tot++;
-    const p=prop(el.dataset.pid); const c=currentContract(el.dataset.pid);
-    const hay=((p?p.address+" "+p.region+" "+(p.grade||"")+" "+(p.owner||""):"")+" "+(c?c.tenantName+" "+(c.employeeId||"")+" "+(c.centerName||"")+" "+c.monthlyRent+" "+c.deposit:"")).toLowerCase();
+  let hit=0;
+  sc.querySelectorAll(".bld").forEach(el=>{
+    const pid=el.dataset.pid, p=prop(pid);
+    const cs=db.contracts.filter(x=>x.propertyId===pid);
+    const cbits=cs.map(x=>[x.tenantName,x.employeeId,x.centerName,x.contractType,x.rentPayType,x.docNumber,x.monthlyRent,x.deposit].join(" ")).join(" ");
+    const hay=[p&&p.address,p&&p.region,p&&p.grade,(p&&p.grade)?p.grade+"급":"",p&&p.owner,p&&p.ownerContact,p&&p.contractType,p&&p.status,cbits].join(" ").toLowerCase();
     const ok=!ql||hay.includes(ql);
     el.classList.toggle("dim",!!ql&&!ok); el.classList.toggle("hit",!!ql&&ok); if(!ql||ok) hit++;
   });
