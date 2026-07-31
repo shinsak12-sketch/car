@@ -323,10 +323,11 @@ nav.tabs{box-shadow:0 2px 8px rgba(20,40,30,.04)}
 .bld.vac .wr span{background:rgba(255,255,255,.55)}
 .bld .lbl{position:absolute;bottom:calc(var(--h) + 16px);left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11px;font-weight:700;background:#fff;padding:3px 9px;border-radius:9px;box-shadow:0 3px 10px rgba(0,0,0,.14);text-align:center;line-height:1.35}
 .bld .shadow{position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);width:78px;height:15px;background:radial-gradient(ellipse,rgba(0,0,0,.24),transparent 70%);border-radius:50%}
-.bld .mks{position:absolute;bottom:calc(var(--h) + 20px);left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:8}
-.bld .mk{width:26px;height:26px;border-radius:50%;color:#fff;font-weight:900;font-size:17px;display:flex;align-items:center;justify-content:center;box-shadow:0 5px 12px rgba(0,0,0,.3);animation:bounce 1.1s ease-in-out infinite}
+/* 느낌표는 건물 정면 '가운데'에 배치(라벨 안 가리게) */
+.bld .mks{position:absolute;bottom:calc(var(--h)/2 - 14px);left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:8}
+.bld .mk{width:28px;height:28px;border-radius:50%;color:#fff;font-weight:900;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 9px rgba(0,0,0,.35);border:2px solid rgba(255,255,255,.85);animation:pulse 1.2s ease-in-out infinite}
 .bld .mk.red{background:#d32f2f}.bld .mk.amber{background:#e59300}
-@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
 /* 조감도 범례 */
 .scLegend{position:absolute;top:8px;left:8px;display:flex;gap:10px;flex-wrap:wrap;background:rgba(255,255,255,.88);padding:5px 10px;border-radius:10px;font-size:11px;font-weight:700;color:#444;z-index:20;max-width:92%}
 .scLegend span{display:flex;align-items:center;gap:4px}
@@ -343,7 +344,8 @@ nav.tabs{box-shadow:0 2px 8px rgba(20,40,30,.04)}
 .scene.dense .bld .lbl{opacity:0;transition:opacity .15s;pointer-events:none}
 .scene.dense .bld:hover{z-index:999!important}
 .scene.dense .bld:hover .lbl{opacity:1}
-.scene.dense .bld .mk{width:20px;height:20px;font-size:13px}
+.scene.dense .bld .mk{width:20px;height:20px;font-size:13px;border-width:1.5px}
+.scene.dense .bld .mks{bottom:calc(var(--h)/2 - 10px)}
 
 /* 도넛 차트 */
 .charts{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-around;padding:8px 0}
