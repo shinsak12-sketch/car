@@ -296,48 +296,49 @@ nav.tabs{box-shadow:0 2px 8px rgba(20,40,30,.04)}
 .dashgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:14px}
 
 /* 조감도 씬 */
-.scene{position:relative;height:560px;border-radius:14px;overflow:hidden;user-select:none;cursor:crosshair;
+.scene{position:relative;height:560px;border-radius:14px;overflow:hidden;user-select:none;cursor:grab;
   background:linear-gradient(180deg,#eef7f2,#e4f0ea)}
-.stage{position:absolute;inset:0;transform-origin:0 0;will-change:transform}
+.scene.panning{cursor:grabbing}
+.stage{position:absolute;inset:0;--s:1}   /* --s = 줌 배율(글꼴/크기 실제 스케일 → 확대해도 선명) */
 .scene .floor{position:absolute;inset:0;pointer-events:auto;
   background:
     repeating-linear-gradient(90deg,rgba(0,133,74,.06) 0 1px,transparent 1px 44px),
     repeating-linear-gradient(0deg,rgba(0,133,74,.055) 0 1px,transparent 1px 44px),
     linear-gradient(180deg,#e8f2ec,#dcece4)}
-.scene .hint{position:absolute;bottom:8px;left:12px;font-size:11px;color:#5a6b63;background:rgba(255,255,255,.8);padding:4px 12px;border-radius:12px;pointer-events:none;z-index:22}
-/* 집: 문구 칩(이름+금액)=몸통, 그 위 삼각지붕 (작고 균일) */
+.scene .hint{position:absolute;bottom:8px;left:12px;font-size:11px;color:#5a6b63;background:rgba(255,255,255,.8);padding:4px 12px;border-radius:12px;pointer-events:none;z-index:1990}
+/* 집: 문구 칩(이름+금액)=몸통, 그 위 삼각지붕. 크기는 var(--s) 배율로 스케일(글꼴 실제 크기 → 확대 시 선명) */
 .bld{position:absolute;transform:translate(-50%,-100%);cursor:grab;touch-action:none;transition:opacity .15s,filter .15s}
 .bld.drag{cursor:grabbing;filter:drop-shadow(0 8px 12px rgba(0,0,0,.3))}
-.bld:hover{transform:translate(-50%,-100%) scale(1.06)}
-.bld .roofTri{width:0;height:0;margin:0 auto -1px;border-left:29px solid transparent;border-right:29px solid transparent;border-bottom:14px solid var(--roof)}
-.bld .htag{background:#fff;border:1.5px solid var(--roof);border-top:none;border-radius:0 0 8px 8px;padding:2px 8px 3px;text-align:center;line-height:1.15;box-shadow:0 2px 6px rgba(0,0,0,.12);position:relative;min-width:48px;-webkit-font-smoothing:antialiased}
-.bld .htag b{display:block;font-size:9.5px;font-weight:800;color:#1a1a1a}
-.bld .htag span{font-size:8.5px;color:#00854A;font-weight:700}
-.bld .gdot{position:absolute;top:-10px;left:-8px;width:14px;height:14px;border-radius:50%;background:var(--roof);color:#fff;font-size:8px;font-weight:900;font-style:normal;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.3);z-index:3}
+.bld:hover{z-index:700;filter:drop-shadow(0 4px 8px rgba(0,0,0,.22))}
+.bld .roofTri{width:0;height:0;margin:0 auto -1px;border-left:calc(29px*var(--s)) solid transparent;border-right:calc(29px*var(--s)) solid transparent;border-bottom:calc(14px*var(--s)) solid var(--roof)}
+.bld .htag{background:#fff;border:1.5px solid var(--roof);border-top:none;border-radius:0 0 calc(8px*var(--s)) calc(8px*var(--s));padding:calc(2px*var(--s)) calc(8px*var(--s)) calc(3px*var(--s));text-align:center;line-height:1.15;box-shadow:0 2px 6px rgba(0,0,0,.12);position:relative;min-width:calc(48px*var(--s));-webkit-font-smoothing:antialiased}
+.bld .htag b{display:block;font-size:calc(9.5px*var(--s));font-weight:800;color:#1a1a1a}
+.bld .htag span{font-size:calc(8.5px*var(--s));color:#00854A;font-weight:700}
+.bld .gdot{position:absolute;top:calc(-10px*var(--s));left:calc(-8px*var(--s));width:calc(14px*var(--s));height:calc(14px*var(--s));border-radius:50%;background:var(--roof);color:#fff;font-size:calc(8px*var(--s));font-weight:900;font-style:normal;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.3);z-index:3}
 .bld.gA{--roof:#14a35c}.bld.gB{--roof:#2f9f79}.bld.gC{--roof:#4a90d9}.bld.gD{--roof:#d19a45}
 .bld.vac{opacity:.55;filter:grayscale(.5)}
 .bld.vac .htag span{color:#888}
-.bld .shadow{position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:44px;height:8px;background:radial-gradient(ellipse,rgba(0,0,0,.2),transparent 70%);border-radius:50%}
-.bld .mks{position:absolute;top:-4px;left:50%;transform:translateX(-50%);display:flex;gap:2px;z-index:4}
-.bld .mk{width:16px;height:16px;border-radius:50%;color:#fff;font-weight:900;font-size:11px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 5px rgba(0,0,0,.35);border:1.5px solid #fff;animation:pulse 1.2s ease-in-out infinite}
+.bld .shadow{position:absolute;bottom:calc(-5px*var(--s));left:50%;transform:translateX(-50%);width:calc(44px*var(--s));height:calc(8px*var(--s));background:radial-gradient(ellipse,rgba(0,0,0,.2),transparent 70%);border-radius:50%}
+.bld .mks{position:absolute;top:calc(-4px*var(--s));left:50%;transform:translateX(-50%);display:flex;gap:2px;z-index:4}
+.bld .mk{width:calc(16px*var(--s));height:calc(16px*var(--s));border-radius:50%;color:#fff;font-weight:900;font-size:calc(11px*var(--s));display:flex;align-items:center;justify-content:center;box-shadow:0 2px 5px rgba(0,0,0,.35);border:1.5px solid #fff;animation:pulse 1.2s ease-in-out infinite}
 .bld .mk.red{background:#d32f2f}.bld .mk.amber{background:#e59300}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
 /* 검색 강조 */
 .bld.dim{opacity:.12;filter:grayscale(.8)}
 .bld.hit{z-index:600!important}
 .bld.hit .htag{border-color:var(--green);box-shadow:0 0 0 3px rgba(0,133,74,.45),0 3px 8px rgba(0,0,0,.2)}
-.mapSearch{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:23;width:230px;max-width:44%;padding:6px 12px;border:1px solid var(--line);border-radius:20px;font-size:12.5px;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.mapSearch{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:2000;width:230px;max-width:44%;padding:6px 12px;border:1px solid var(--line);border-radius:20px;font-size:12.5px;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.1);z-index:2000}
 .mapSearch:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(0,133,74,.15)}
-.mapHit{position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:23;font-size:11px;font-weight:700;color:var(--green-d);background:rgba(255,255,255,.85);padding:1px 8px;border-radius:10px}
+.mapHit{position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:2000;font-size:11px;font-weight:700;color:var(--green-d);background:rgba(255,255,255,.85);padding:1px 8px;border-radius:10px}
 /* 범례 */
-.scLegend{position:absolute;top:8px;left:8px;display:flex;gap:10px;flex-wrap:wrap;background:rgba(255,255,255,.9);padding:5px 10px;border-radius:10px;font-size:11px;font-weight:700;color:#444;z-index:22;max-width:70%}
+.scLegend{position:absolute;top:8px;left:8px;display:flex;gap:10px;flex-wrap:wrap;background:rgba(255,255,255,.9);padding:5px 10px;border-radius:10px;font-size:11px;font-weight:700;color:#444;z-index:2000;max-width:70%}
 .scLegend span{display:flex;align-items:center;gap:4px}
 .scLegend .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
 .scLegend .sw.gA{background:#14a35c}.scLegend .sw.gB{background:#2f9f79}.scLegend .sw.gC{background:#4a90d9}.scLegend .sw.gD{background:#d19a45}.scLegend .sw.vacsw{background:#c0c9c3}
 .scLegend .mkl{width:15px;height:15px;border-radius:50%;color:#fff;font-weight:900;font-size:11px;display:inline-flex;align-items:center;justify-content:center}
 .scLegend .mkl.red{background:#d32f2f}.scLegend .mkl.amber{background:#e59300}
 /* 우측 드롭존(휴지통 느낌) */
-.dropzones{position:absolute;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:9px;z-index:25}
+.dropzones{position:absolute;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:9px;z-index:2000}
 .dz{width:76px;height:62px;border:2px dashed #b7c3bc;border-radius:13px;background:rgba(255,255,255,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:20px;color:#667;font-weight:800;transition:all .15s}
 .dz span{font-size:11px;margin-top:2px}
 .dz.hot{border-color:var(--green);background:var(--green-l);color:var(--green-d);transform:scale(1.08);box-shadow:0 6px 16px rgba(0,133,74,.25)}
@@ -345,7 +346,7 @@ nav.tabs{box-shadow:0 2px 8px rgba(20,40,30,.04)}
 .dz.dznew{border-style:solid;border-color:var(--green);background:var(--green);color:#fff;cursor:pointer}
 .dz.dznew:hover{background:var(--green-d);transform:scale(1.05);box-shadow:0 6px 16px rgba(0,133,74,.3)}
 /* 확대/축소 컨트롤 */
-.zoomctl{position:absolute;bottom:8px;right:10px;display:flex;gap:4px;z-index:25}
+.zoomctl{position:absolute;bottom:8px;right:10px;display:flex;gap:4px;z-index:2000}
 .zoomctl button{width:30px;height:30px;border:1px solid var(--line);background:#fff;border-radius:8px;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.1)}
 .zoomctl button:hover{border-color:var(--green);color:var(--green)}
 .sortSel{padding:5px 9px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-weight:700;font-family:inherit;color:var(--ink);cursor:pointer;background:#fff}
@@ -1172,7 +1173,7 @@ function houseHTML(p){
   const amt=c?(c.contractType==="전세"?won(c.deposit):won(c.monthlyRent)+"/월"):"공실";
   const nm=c?esc(c.tenantName):"공실";
   // 문구 칩(이름+금액)을 집 몸통으로, 그 위에 삼각지붕
-  return `<div class="bld g${g} ${vacant?'vac':''}" data-pid="${p.propertyId}" style="left:${x}%;top:${y}%;z-index:${Math.round(y)}" title="${esc(p.address)} · ${g}급${over?' · 한도초과':''}${expiring?' · 만료임박':''}">
+  return `<div class="bld g${g} ${vacant?'vac':''}" data-pid="${p.propertyId}" data-x="${x}" data-y="${y}" style="left:${x}%;top:${y}%;z-index:${Math.round(y)}" title="${esc(p.address)} · ${g}급${over?' · 한도초과':''}${expiring?' · 만료임박':''}">
     <div class="roofTri"></div>
     ${mk?`<div class="mks">${mk}</div>`:""}
     <div class="htag"><i class="gdot">${g}</i><b>${nm}</b><span>${amt}</span></div>
@@ -1181,7 +1182,8 @@ function houseHTML(p){
 function sceneHTML(){
   const blds=db.properties.map(houseHTML).join("");
   return `<div class="scene" id="scene">
-    <div class="stage" id="stage"><div class="floor"></div>${blds}</div>
+    <div class="floor"></div>
+    <div class="stage" id="stage">${blds}</div>
     ${sceneLegend()}
     <input class="mapSearch" id="mapSearch" placeholder="🔍 이름·주소·금액 찾기" value="${esc(ui.mapQ||'')}" oninput="mapSearch(this.value)">
     <span id="mapHit" class="mapHit"></span>
@@ -1191,7 +1193,7 @@ function sceneHTML(){
       <div class="dz" data-act="terminate" title="여기에 떨구면 해지→정산">🗑️<span>해지·정산</span></div>
     </div>
     <div class="zoomctl"><button onclick="sceneZoomBtn(1)" title="확대">＋</button><button onclick="sceneZoomBtn(-1)" title="축소">−</button><button onclick="sceneZoomBtn(0)" title="원래 크기">⟳</button></div>
-    <div class="hint">신규는 우측 ＋신규 · 갱신/해지는 우측 존에 떨구기 · 드래그=이동 · 휠=확대 · 이름 클릭=아래 현황</div>
+    <div class="hint">빈곳 드래그=화면이동 · 휠=확대 · 건물 드래그=배치/우측존(갱신·해지) · 이름 클릭=아래 현황</div>
   </div>`;
 }
 function sceneLegend(){
@@ -1200,11 +1202,17 @@ function sceneLegend(){
     <span><i class="sw vacsw"></i>공실</span><span><i class="mkl red">!</i>초과</span><span><i class="mkl amber">!</i>만료임박</span></div>`;
 }
 // 조감도 확대/이동 상태
+// 줌: 글꼴/크기를 실제로 키우고(--s) 위치는 %로 재계산 → 확대해도 글자 선명. px/py=이동(%).
 let sceneView={z:1,px:0,py:0};
-function applyStage(){ const st=document.getElementById("stage"); if(st) st.style.transform=`translate(${sceneView.px}px,${sceneView.py}px) scale(${sceneView.z})`; }
-// 확대/축소 (0.7~3.6배). 원본=1배.
-function zoomAt(cx,cy,factor){ const z1=sceneView.z, z2=Math.max(0.7,Math.min(3.6,z1*factor)); if(z2===z1) return; sceneView.px=cx-(cx-sceneView.px)*(z2/z1); sceneView.py=cy-(cy-sceneView.py)*(z2/z1); if(z2<=1){sceneView.px=0;sceneView.py=0;} sceneView.z=z2; applyStage(); }
-function sceneZoomBtn(dir){ const sc=document.getElementById("scene"); if(!sc) return; if(dir===0){ sceneView={z:1,px:0,py:0}; applyStage(); return; } const r=sc.getBoundingClientRect(); zoomAt(r.width/2,r.height/2, dir>0?1.25:1/1.25); }
+function applyStage(){ const st=document.getElementById("stage"); if(!st) return;
+  st.style.setProperty("--s", sceneView.z);
+  st.querySelectorAll(".bld").forEach(el=>{ if(el.classList.contains("drag")) return;
+    const x=parseFloat(el.dataset.x)||0, y=parseFloat(el.dataset.y)||0;
+    el.style.left=(x*sceneView.z+sceneView.px)+"%"; el.style.top=(y*sceneView.z+sceneView.py)+"%"; }); }
+// 커서(%) 기준 확대/축소 (0.7~3.6배)
+function zoomAt(cxp,cyp,factor){ const z1=sceneView.z, z2=Math.max(0.7,Math.min(3.6,z1*factor)); if(z2===z1) return;
+  sceneView.px=cxp-(cxp-sceneView.px)*(z2/z1); sceneView.py=cyp-(cyp-sceneView.py)*(z2/z1); sceneView.z=z2; applyStage(); }
+function sceneZoomBtn(dir){ const sc=document.getElementById("scene"); if(!sc) return; if(dir===0){ sceneView={z:1,px:0,py:0}; applyStage(); return; } zoomAt(50,50, dir>0?1.25:1/1.25); }
 // 정렬: 이름/금액/등급 오름·내림차순으로 건물 재배치
 function sortLayout(mode){
   if(!mode) return; ui.sortMode=mode;
@@ -1249,7 +1257,19 @@ function afterDash(){
   const scene=document.getElementById("scene"); if(!scene) return;
   sceneView={z:1,px:0,py:0}; applyStage();
   const zones=[...scene.querySelectorAll(".dz[data-act]")];   // 신규 버튼(data-act 없음)은 드롭 대상 제외
-  scene.addEventListener("wheel",e=>{ e.preventDefault(); const r=scene.getBoundingClientRect(); zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY<0?1.12:1/1.12); },{passive:false});
+  const pct=(ev)=>{ const r=scene.getBoundingClientRect(); return [(ev.clientX-r.left)/r.width*100,(ev.clientY-r.top)/r.height*100]; };
+  // 휠 확대/축소(커서 기준)
+  scene.addEventListener("wheel",e=>{ e.preventDefault(); const [cx,cy]=pct(e); zoomAt(cx,cy, e.deltaY<0?1.12:1/1.12); },{passive:false});
+  // 빈 공간 드래그 = 화면 이동(팬)
+  scene.addEventListener("pointerdown",e=>{
+    if(e.target.closest(".bld")||e.target.closest(".dz")||e.target.closest(".zoomctl")||e.target.closest(".mapSearch")||e.target.closest(".scLegend")) return;
+    const sx=e.clientX, sy=e.clientY, px0=sceneView.px, py0=sceneView.py, r=scene.getBoundingClientRect();
+    scene.classList.add("panning");
+    const mv=ev=>{ sceneView.px=px0+(ev.clientX-sx)/r.width*100; sceneView.py=py0+(ev.clientY-sy)/r.height*100; applyStage(); };
+    const up=()=>{ document.removeEventListener("pointermove",mv); document.removeEventListener("pointerup",up); scene.classList.remove("panning"); };
+    document.addEventListener("pointermove",mv); document.addEventListener("pointerup",up);
+  });
+  // 건물 드래그(이동/드롭존)
   scene.querySelectorAll(".bld").forEach(el=>{
     el.addEventListener("pointerdown",e=>{
       e.preventDefault(); e.stopPropagation();
@@ -1257,9 +1277,8 @@ function afterDash(){
       el.classList.add("drag");
       const onMove=ev=>{
         if(Math.abs(ev.clientX-sx)+Math.abs(ev.clientY-sy)>4) moved=true;
-        const r=scene.getBoundingClientRect();
-        let x=((ev.clientX-r.left-sceneView.px)/sceneView.z)/r.width*100, y=((ev.clientY-r.top-sceneView.py)/sceneView.z)/r.height*100;
-        x=Math.max(2,Math.min(97,x)); y=Math.max(8,Math.min(98,y)); el.style.left=x+"%"; el.style.top=y+"%"; el.style.zIndex=999; el._x=x; el._y=y;
+        const [dx,dy]=pct(ev); const x=Math.max(1,Math.min(99,dx)), y=Math.max(4,Math.min(99,dy));
+        el.style.left=x+"%"; el.style.top=y+"%"; el.style.zIndex=999; el._dx=x; el._dy=y;   // 표시 위치(화면%)
         const zn=zoneAt(ev.clientX,ev.clientY,zones); zones.forEach(z=>{ z.classList.toggle("hot", z===zn); z.classList.toggle("danger", z===zn&&z.dataset.act==="terminate"); });
       };
       const onUp=ev=>{
@@ -1267,12 +1286,14 @@ function afterDash(){
         el.classList.remove("drag");
         const zn=zoneAt(ev.clientX,ev.clientY,zones); zones.forEach(z=>z.classList.remove("hot","danger"));
         if(zn){ if(moved) dropAction(zn.dataset.act,pid); else dashSelect(pid); return; }
-        if(moved){ const p=prop(pid); if(p){ p.vizX=el._x; p.vizY=el._y; el.style.zIndex=Math.round(el._y); save(); } } else dashSelect(pid);
+        if(moved){ const p=prop(pid); if(p){ // 표시위치(%) → 기준좌표 역산 저장
+            const bx=(el._dx-sceneView.px)/sceneView.z, by=(el._dy-sceneView.py)/sceneView.z;
+            p.vizX=bx; p.vizY=by; el.dataset.x=bx; el.dataset.y=by; el.style.zIndex=Math.round(by); save(); applyStage(); } }
+        else dashSelect(pid);
       };
       document.addEventListener("pointermove",onMove); document.addEventListener("pointerup",onUp);
     });
   });
-  // (빈 바닥 클릭으로 비중 전환하던 동작 제거 — 비중은 상단 '📊 비중' 버튼으로만)
   if(ui.mapQ) mapSearch(ui.mapQ);   // 화면 재구성 후 검색 강조 복원
 }
 // 도넛 차트(항목별 비중)
