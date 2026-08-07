@@ -788,22 +788,13 @@ function terminateContract(id){
 }
 // 정산 완료: 체크리스트 전부 입력되면 status→해지완료, property→공실
 function completeSettlement(id){
+  // 정산 항목은 모두 선택사항 — 아무것도 입력 안 해도 완료 가능
   const s=db.settlements.find(x=>x.settlementId===id); if(!s) return false;
-  if(!settlementComplete(s)) return false;
   s.status="완료"; s.completedDate=today();
   const c=db.contracts.find(x=>x.contractId===s.contractId);
   if(c){ logChange("contract",c.contractId,"status",c.status,"해지완료","퇴실정산 완료"); c.status="해지완료";
     const p=db.properties.find(x=>x.propertyId===c.propertyId); if(p) p.status="공실"; }
   save(); return true;
-}
-// 체크리스트 완결 여부: 모든 항목 금액 입력 + 부담주체 필요한 항목은 주체까지
-function settlementComplete(s){
-  return SETTLE_ITEMS.every(it=>{
-    const v=s[it.key]||{};
-    if(v.amount===""||v.amount==null) return false;
-    if(it.payer && !v.payer) return false;
-    return true;
-  });
 }
 
 /* ============================ [SAMPLE] 샘플 데이터 ============================ */
@@ -1621,6 +1612,7 @@ function openSettle(id){
   const readonly = s.status==="완료";
   modal("퇴실 정산 · "+id,
     `<div class="small muted">계약 ${s.contractId} · 입주자 ${esc(c?.tenantName||"")}</div>
+     <div class="notice gray small">모든 항목은 <b>선택사항</b>입니다. 해당 없으면 비워둬도 되고, 아무것도 없어도 <b>정산 완료</b>가 가능합니다.</div>
      <div class="grid" style="margin:10px 0">
        ${f("퇴실일","s_moveOutDate",s.moveOutDate,"date")}
      </div>
@@ -1648,14 +1640,12 @@ function readSettle(id){
   return s;
 }
 function saveSettle(id,complete){
-  const s=readSettle(id);
-  if(complete){
-    if(!settlementComplete(s)){ $("#settleWarn").innerHTML=`<div class="notice warn">모든 항목의 금액(및 부담주체)을 입력해야 정산 완료가 가능합니다.</div>`; save(); return; }
+  readSettle(id);
+  if(complete){   // 모든 항목 선택사항 — 미입력이어도 완료 가능
     if(completeSettlement(id)){ closeModal(); render(); toast("정산 완료 — 사택이 공실로 전환되었습니다"); return; }
   }
   save(); render(); toast("정산 임시 저장");
-  // 모달 유지 상태 갱신 위해 다시 열기
-  openSettle(id);
+  openSettle(id);   // 모달 유지 상태 갱신 위해 다시 열기
 }
 
 /* ---- 이슈 등록/수정 ---- */
