@@ -1186,17 +1186,19 @@ ${duty}
     const a = PV.pensionAutofill && PV.pensionAutofill(store, sabun);
     if (!a || !a.연봉계약.length) { toast('연결된 데이터에 해당 사번의 연봉내역이 없습니다', 'bad'); return; }
     $('#pn-sabun').value = sabun;
-    if (a.성명) $('#pn-name').value = a.성명;
+    $('#pn-name').value = a.성명 || '';
     if (a.입사일) $('#pn-join').value = a.입사일;
     if (a.연차수당) $('#pn-annual').value = a.연차수당;
     if (a.고정역량월) $('#pn-duty').value = a.고정역량월;
     pf.sal = a.연봉계약.map(s => ({ ...s })); renderSalRows();
     pf.orders = a.발령 || []; pf.vac = a.휴가 || [];
-    // 퇴직일 자동(발령의 퇴직/퇴직일)
-    const ret = (pf.orders).find(o => /(퇴직|퇴사)/.test(o.발령구분 || '') || o.퇴직일);
-    if (ret) { const d = ret.퇴직일 || ret.발령시작일; if (d) $('#pn-leave').value = d; }
+    // 퇴직일 자동(발령)
+    const 퇴직일 = a.퇴직일 || (pf.orders.find(o => /(퇴직|퇴사)/.test(o.발령구분 || '') || o.퇴직일) || {}).퇴직일 || '';
+    if (퇴직일) $('#pn-leave').value = 퇴직일;
     applyAvgEnd();
-    toast(`불러옴 · ${a.성명 || sabun} · 연봉 ${a.연봉계약.length}건 · 발령 ${pf.orders.length}건`, 'ok');
+    const miss = [];
+    if (!a.성명) miss.push('성명'); if (!a.입사일) miss.push('입사일(명부에 없음)');
+    toast(`불러옴 · ${a.성명 || sabun} · 연봉 ${a.연봉계약.length}건` + (miss.length ? ' · 수기필요: ' + miss.join(', ') : ''), miss.length ? 'bad' : 'ok');
   }
   { const b = $('#pn-load'); if (b) b.onclick = () => loadBySabun($('#pn-sabun').value); }
   { const sel = $('#pn-retiree'); if (sel) sel.onchange = () => { if (sel.value) loadBySabun(sel.value); }; }

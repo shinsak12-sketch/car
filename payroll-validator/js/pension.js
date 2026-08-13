@@ -225,6 +225,7 @@ window.PV = window.PV || {};
       변동역량2: num(r.변동역량2 || (r.items && r.items.변동역량2)),
     }));
     const roster = (store.roster || []).find(r => String(r.사번) === String(사번)) || {};
+    const orderRow = (store.order || []).find(r => String(r.사번) === String(사번) && (r.성명 || r.퇴직일)) || {};
     // 고정역량가급: 최근 급여대장 값
     let 고정역량월 = 0;
     (store.ledger || []).filter(r => String(r.사번) === String(사번)).forEach(r => { const v = num((r.pay && r.pay.고정역량가급) || r.고정역량가급); if (v) 고정역량월 = v; });
@@ -233,6 +234,11 @@ window.PV = window.PV || {};
     (store.ledger || []).filter(r => String(r.사번) === String(사번)).forEach(r => { const v = num((r.pay && r.pay.연차수당) || r.연차수당); if (v) 연차수당 = v; });
     const 발령 = (store.order || []).filter(r => String(r.사번) === String(사번)).map(o => ({ 발령구분: o.발령구분, 발령시작일: o.발령시작일, 퇴직일: o.퇴직일 || '' })).sort((a, b) => cmp(a.발령시작일 || '', b.발령시작일 || ''));
     const 휴가 = (store.vacation || []).filter(r => String(r.사번) === String(사번)).map(v => ({ 종류: v.휴가종류 || v.종류, 시작일: v.시작일, 종료일: v.종료일, 일수: v.휴가일수 || v.일수 }));
-    return { 성명: roster.성명 || '', 입사일: roster.그룹입사일 || roster.입사일 || roster.입사일자 || '', 연봉계약: sList, 고정역량월, 연차수당, 발령, 휴가 };
+    return {
+      성명: roster.성명 || orderRow.성명 || '',              // 퇴직자는 명부에 없을 수 있어 발령 성명 폴백
+      입사일: roster.그룹입사일 || roster.입사일 || roster.입사일자 || '',
+      퇴직일: orderRow.퇴직일 || '',
+      연봉계약: sList, 고정역량월, 연차수당, 발령, 휴가,
+    };
   };
 })(window.PV);
