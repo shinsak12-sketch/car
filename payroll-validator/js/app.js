@@ -1140,7 +1140,7 @@ ${duty}
   });
 
   /* ================= 퇴직연금 계산기 ================= */
-  const pf = { sal: [], excl: [], orders: [], vac: [], shift: null };
+  const pf = { sal: [], excl: [], orders: [], vac: [], shift: null, slots: new Array(10).fill(null), active: 0 };
   let pnLast = null;
   const pnum = v => { if (v == null) return 0; const n = Number(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n; };
   const pwon = n => Math.round(n).toLocaleString('ko-KR');
@@ -1208,22 +1208,70 @@ ${duty}
   }
   { const lv = $('#pn-leave'); if (lv) lv.onchange = applyAvgEnd; }
 
-  { const b = $('#pn-calc'); if (b) b.onclick = () => {
-    try {
-      const 입사일 = $('#pn-join').value, 퇴직일 = $('#pn-leave').value;
-      if (!입사일 || !퇴직일) { toast('입사일·퇴직일은 필수입니다', 'bad'); return; }
-      if (입사일 >= 퇴직일) { toast('퇴직일이 입사일보다 뒤여야 합니다', 'bad'); return; }
-      if (!pf.sal.length) { toast('연봉내역을 불러오거나 추가하세요', 'bad'); return; }
-      const input = {
-        사번: $('#pn-sabun').value.trim(), 성명: $('#pn-name').value.trim(), 제도: $('#pn-type').value,
-        입사일, 퇴직일, 평균임금종료일: $('#pn-avgend').value || null, 중간정산일: $('#pn-mid').value || null,
-        연차수당: pnum($('#pn-annual').value), 고정역량월: pnum($('#pn-duty').value),
-        연봉계약: pf.sal, 제외기간: pf.excl.filter(e => e.시작 && e.종료),
-        발령: pf.orders, 휴가: pf.vac, shift: pf.shift,
-      };
-      pnLast = PV.computeSeverance(input); renderPensionResult(pnLast);
-    } catch (e) { console.error(e); toast('계산 오류: ' + e.message, 'bad'); }
+  function runPensionCalc(silent) {
+    const 입사일 = $('#pn-join').value, 퇴직일 = $('#pn-leave').value;
+    if (!입사일 || !퇴직일) { if (!silent) toast('입사일·퇴직일은 필수입니다', 'bad'); return; }
+    if (입사일 >= 퇴직일) { if (!silent) toast('퇴직일이 입사일보다 뒤여야 합니다', 'bad'); return; }
+    if (!pf.sal.length) { if (!silent) toast('연봉내역을 불러오거나 추가하세요', 'bad'); return; }
+    const input = {
+      사번: $('#pn-sabun').value.trim(), 성명: $('#pn-name').value.trim(), 제도: $('#pn-type').value,
+      입사일, 퇴직일, 평균임금종료일: $('#pn-avgend').value || null, 중간정산일: $('#pn-mid').value || null,
+      연차수당: pnum($('#pn-annual').value), 고정역량월: pnum($('#pn-duty').value),
+      연봉계약: pf.sal, 제외기간: pf.excl.filter(e => e.시작 && e.종료),
+      발령: pf.orders, 휴가: pf.vac, shift: pf.shift,
+    };
+    pnLast = PV.computeSeverance(input); renderPensionResult(pnLast);
+    pf.slots[pf.active] = gatherPension(); renderSlots();
+  }
+  { const b = $('#pn-calc'); if (b) b.onclick = () => { try { runPensionCalc(false); } catch (e) { console.error(e); toast('계산 오류: ' + e.message, 'bad'); } }; }
+
+  /* ---- 퇴직자 슬롯(1~10) 저장/전환 + 계산기 초기화 ---- */
+  function gatherPension() {
+    return {
+      사번: $('#pn-sabun').value, 성명: $('#pn-name').value, 제도: $('#pn-type').value,
+      입사: $('#pn-join').value, 퇴직: $('#pn-leave').value, avgend: $('#pn-avgend').value,
+      중간: $('#pn-mid').value, 연차: $('#pn-annual').value, 고정: $('#pn-duty').value,
+      sal: JSON.parse(JSON.stringify(pf.sal)), excl: JSON.parse(JSON.stringify(pf.excl)),
+      orders: pf.orders, vac: pf.vac, shift: pf.shift, note: $('#pn-avgend-note').innerHTML,
+    };
+  }
+  function applyPension(s) {
+    s = s || {};
+    $('#pn-sabun').value = s.사번 || ''; $('#pn-name').value = s.성명 || ''; $('#pn-type').value = s.제도 || 'DB';
+    $('#pn-join').value = s.입사 || ''; $('#pn-leave').value = s.퇴직 || ''; $('#pn-avgend').value = s.avgend || '';
+    $('#pn-mid').value = s.중간 || ''; $('#pn-annual').value = s.연차 || ''; $('#pn-duty').value = s.고정 || '';
+    pf.sal = s.sal ? JSON.parse(JSON.stringify(s.sal)) : []; pf.excl = s.excl ? JSON.parse(JSON.stringify(s.excl)) : [];
+    pf.orders = s.orders || []; pf.vac = s.vac || []; pf.shift = s.shift || null;
+    $('#pn-avgend-note').innerHTML = s.note || '';
+    renderSalRows(); renderExclRows();
+  }
+  function clearPnResult() { $('#pn-result').innerHTML = '<div class="pn-empty">좌측 정보를 입력하고 <b>퇴직급여 계산</b>을 누르세요.</div>'; }
+  function renderSlots() {
+    const box = $('#pn-slot-btns'); if (!box) return;
+    box.innerHTML = '';
+    for (let i = 0; i < 10; i++) {
+      const s = pf.slots[i], b = el('button', 'pn-slot' + (i === pf.active ? ' on' : '') + (s ? ' filled' : ''));
+      b.textContent = i + 1;
+      b.title = s ? `${s.성명 || s.사번 || '입력됨'} (슬롯 ${i + 1})` : `슬롯 ${i + 1} (빈칸)`;
+      b.onclick = () => selectSlot(i);
+      box.appendChild(b);
+    }
+  }
+  function selectSlot(i) {
+    if (i === pf.active) return;
+    pf.slots[pf.active] = gatherPension();          // 현재 저장
+    pf.active = i;
+    const s = pf.slots[i];
+    applyPension(s);
+    if (s && s.입사 && s.퇴직 && s.sal && s.sal.length) { try { runPensionCalc(true); } catch (e) { clearPnResult(); } }
+    else clearPnResult();
+    renderSlots();
+  }
+  { const rb = $('#pn-reset'); if (rb) rb.onclick = () => {
+    applyPension(null); pf.slots[pf.active] = null; clearPnResult(); renderSlots();
+    toast(`슬롯 ${pf.active + 1} 초기화`, 'ok');
   }; }
+  renderSlots();
 
   function renderPensionResult(r) {
     const box = $('#pn-result');
