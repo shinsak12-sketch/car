@@ -100,12 +100,14 @@ window.PV = window.PV || {};
         const k = contractOn(salaryList, rs) || {};
         // 월 급액을 먼저 원단위 절상 → 부분월은 (월액 × 근무일수 ÷ 그달일수) 반올림
         const 기본월 = ceilWon(num(k.기본급) / 12);
+        const 능력월 = ceilWon(num(k.실적급) / 12);
         const 성과월 = ceilWon((num(k.성과급) + num(k.성과가급)) / 12);
         const 기타월 = ceilWon((num(k.변동역량1) + num(k.변동역량2)) / 12) + num(고정역량월);
         const 급여 = Math.round(기본월 * 일수 / 월일);
+        const 능력급 = Math.round(능력월 * 일수 / 월일);
         const 성과급 = Math.round(성과월 * 일수 / 월일);
         const 기타 = Math.round(기타월 * 일수 / 월일);
-        rows.push({ 기간: `${rs} ~ ${re}`, 시작: rs, 종료: re, 일수, 급여, 성과급, 기타 });
+        rows.push({ 기간: `${rs} ~ ${re}`, 시작: rs, 종료: re, 일수, 급여, 능력급, 성과급, 기타 });
       }
       if (cy === P(endISO).y && cm === P(endISO).m) break;
       cm++; if (cm > 12) { cm = 1; cy++; }
@@ -143,6 +145,7 @@ window.PV = window.PV || {};
     const win = wageWindow(input.연봉계약, endISO, input.고정역량월);
     const D = win.totalDays;
     const sum급여 = win.rows.reduce((a, r) => a + r.급여, 0);
+    const sum능력 = win.rows.reduce((a, r) => a + r.능력급, 0);
     const sum성과 = win.rows.reduce((a, r) => a + r.성과급, 0);
     const sum기타 = win.rows.reduce((a, r) => a + r.기타, 0);
     const 안분율 = (C().퇴직_연차수당_안분 != null ? C().퇴직_연차수당_안분 : 0.25);
@@ -151,12 +154,13 @@ window.PV = window.PV || {};
     const avg30 = v => D > 0 ? v / D * 30 : 0;
     const avgRows = [
       { 구분: '급여', 지급총액: sum급여, 평균임금: avg30(sum급여) },
+      { 구분: '능력급', 지급총액: sum능력, 평균임금: avg30(sum능력) },
       { 구분: '성과급', 지급총액: sum성과, 평균임금: avg30(sum성과) },
       { 구분: '연차수당', 지급총액: 연차전액, 평균임금: avg30(연차반영), 표기전액: true, 반영액: 연차반영 },
       { 구분: '기타급여', 지급총액: sum기타, 평균임금: avg30(sum기타) },
     ];
-    const 합계지급총액 = sum급여 + sum성과 + sum기타 + 연차전액;   // 표시용(연차 전액)
-    const 반영총액 = sum급여 + sum성과 + sum기타 + 연차반영;       // 계산용(연차 3/12)
+    const 합계지급총액 = sum급여 + sum능력 + sum성과 + sum기타 + 연차전액;   // 표시용(연차 전액)
+    const 반영총액 = sum급여 + sum능력 + sum성과 + sum기타 + 연차반영;       // 계산용(연차 3/12)
     const 평균임금30 = avg30(반영총액);   // 30일분 평균임금(연차는 3개월 환산 반영)
 
     const sf = serviceFactor(입사일, 퇴직일, input.제외기간, input.중간정산일);
@@ -212,7 +216,8 @@ window.PV = window.PV || {};
   PV.pensionAutofill = function (store, 사번) {
     if (!store) return null;
     const sList = (store.salary || []).filter(r => String(r.사번) === String(사번)).map(r => ({
-      연봉일자: r.연봉일자, 기본급: num(r.기본급 || (r.items && r.items.기본급)), 성과급: num(r.성과급 || (r.items && r.items.성과급)),
+      연봉일자: r.연봉일자, 기본급: num(r.기본급 || (r.items && r.items.기본급)), 실적급: num(r.실적급 || (r.items && r.items.실적급)),
+      성과급: num(r.성과급 || (r.items && r.items.성과급)),
       성과가급: num(r.성과가급 || (r.items && r.items.성과가급)), 변동역량1: num(r.변동역량1 || (r.items && r.items.변동역량1)),
       변동역량2: num(r.변동역량2 || (r.items && r.items.변동역량2)),
     }));

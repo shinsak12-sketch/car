@@ -1151,11 +1151,12 @@ ${duty}
     pf.sal.forEach((s, i) => {
       const r = el('div', 'pf-line');
       r.innerHTML = `<input type="date" data-k="연봉일자" style="width:130px" value="${esc(s.연봉일자 || '')}">
-        <input type="number" data-k="기본급" placeholder="기본급" style="width:96px" value="${s.기본급 || ''}">
-        <input type="number" data-k="성과급" placeholder="성과급" style="width:88px" value="${s.성과급 || ''}">
-        <input type="number" data-k="성과가급" placeholder="성과가급" style="width:88px" value="${s.성과가급 || ''}">
-        <input type="number" data-k="변동역량1" placeholder="변동1" style="width:76px" value="${s.변동역량1 || ''}">
-        <input type="number" data-k="변동역량2" placeholder="변동2" style="width:76px" value="${s.변동역량2 || ''}">
+        <input type="number" data-k="기본급" placeholder="기본급" style="width:92px" value="${s.기본급 || ''}">
+        <input type="number" data-k="실적급" placeholder="능력급" style="width:82px" value="${s.실적급 || ''}">
+        <input type="number" data-k="성과급" placeholder="성과급" style="width:82px" value="${s.성과급 || ''}">
+        <input type="number" data-k="성과가급" placeholder="성과가급" style="width:82px" value="${s.성과가급 || ''}">
+        <input type="number" data-k="변동역량1" placeholder="변동1" style="width:74px" value="${s.변동역량1 || ''}">
+        <input type="number" data-k="변동역량2" placeholder="변동2" style="width:74px" value="${s.변동역량2 || ''}">
         <button class="pf-del" title="삭제">✕</button>`;
       r.querySelectorAll('input').forEach(inp => inp.onchange = () => { s[inp.dataset.k] = inp.dataset.k === '연봉일자' ? inp.value : pnum(inp.value); });
       r.querySelector('.pf-del').onclick = () => { pf.sal.splice(i, 1); renderSalRows(); };
@@ -1175,7 +1176,7 @@ ${duty}
       box.appendChild(r);
     });
   }
-  { const b = $('#pn-add-sal'); if (b) b.onclick = () => { pf.sal.push({ 연봉일자: '', 기본급: 0, 성과급: 0, 성과가급: 0, 변동역량1: 0, 변동역량2: 0 }); renderSalRows(); }; }
+  { const b = $('#pn-add-sal'); if (b) b.onclick = () => { pf.sal.push({ 연봉일자: '', 기본급: 0, 실적급: 0, 성과급: 0, 성과가급: 0, 변동역량1: 0, 변동역량2: 0 }); renderSalRows(); }; }
   { const b = $('#pn-add-excl'); if (b) b.onclick = () => { pf.excl.push({ 시작: '', 종료: '' }); renderExclRows(); }; }
   { const b = $('#pn-load'); if (b) b.onclick = () => {
     const sabun = $('#pn-sabun').value.trim();
@@ -1226,7 +1227,8 @@ ${duty}
   function renderPensionResult(r) {
     const box = $('#pn-result');
     const i = r.info, sv = r.service, tx = r.tax;
-    const winRows = r.window.rows.map(x => `<tr><td class="l">${x.기간}</td><td>${x.일수}</td><td>${pwon(x.급여)}</td><td>${pwon(x.성과급)}</td><td>${pwon(x.기타)}</td></tr>`).join('');
+    const ws = k => r.window.rows.reduce((a, x) => a + x[k], 0);
+    const winRows = r.window.rows.map(x => `<tr><td class="l">${x.기간}</td><td>${x.일수}</td><td>${pwon(x.급여)}</td><td>${pwon(x.능력급)}</td><td>${pwon(x.성과급)}</td><td>${pwon(x.기타)}</td></tr>`).join('');
     const avgRows = r.avg.rows.map(x => `<tr><td class="l">${x.구분}</td><td>${pwon(x.지급총액)}</td><td>${pwon(x.평균임금)}</td></tr>`).join('');
     box.innerHTML = `
       <div class="pn-card">
@@ -1241,9 +1243,9 @@ ${duty}
 
       <div class="pn-card">
         <h3>직전 3개월 임금총액</h3>
-        <table class="pn-tbl"><thead><tr><th class="l">기간</th><th>일수</th><th>급여</th><th>성과급</th><th>기타</th></tr></thead>
+        <table class="pn-tbl"><thead><tr><th class="l">기간</th><th>일수</th><th>급여</th><th>능력급</th><th>성과급</th><th>기타</th></tr></thead>
         <tbody>${winRows}</tbody>
-        <tfoot><tr><td class="l">합계 ${r.window.totalDays}일</td><td>${r.window.totalDays}</td><td>${pwon(r.avg.rows[0].지급총액)}</td><td>${pwon(r.avg.rows[1].지급총액)}</td><td>${pwon(r.avg.rows[3].지급총액)}</td></tr></tfoot></table>
+        <tfoot><tr><td class="l">합계 ${r.window.totalDays}일</td><td>${r.window.totalDays}</td><td>${pwon(ws('급여'))}</td><td>${pwon(ws('능력급'))}</td><td>${pwon(ws('성과급'))}</td><td>${pwon(ws('기타'))}</td></tr></tfoot></table>
         <div class="pn-mut">연봉내역 ÷12 기반 · 부분월 일할 · 성과가급 12분할 · 고정역량가급은 급여대장/수기</div>
       </div>
 
@@ -1296,13 +1298,13 @@ ${duty}
 
   function backdataHtml(b) {
     if (!b) return '<div class="pn-mut">없음</div>';
-    const sal = (b.연봉계약 || []).map(s => `<tr><td class="l">${esc(s.연봉일자 || '-')}</td><td>${pwon(s.기본급)}</td><td>${pwon(s.성과급)}</td><td>${pwon(s.성과가급)}</td><td>${pwon(s.변동역량1)}</td><td>${pwon(s.변동역량2)}</td></tr>`).join('');
+    const sal = (b.연봉계약 || []).map(s => `<tr><td class="l">${esc(s.연봉일자 || '-')}</td><td>${pwon(s.기본급)}</td><td>${pwon(s.실적급)}</td><td>${pwon(s.성과급)}</td><td>${pwon(s.성과가급)}</td><td>${pwon(s.변동역량1)}</td><td>${pwon(s.변동역량2)}</td></tr>`).join('');
     const ord = (b.발령 || []).slice().sort((a, c) => (c.발령시작일 || '') < (a.발령시작일 || '') ? -1 : 1).map(o => `<div class="pn-bd-li">📋 ${esc(o.발령시작일 || '')} ${esc(o.발령구분 || '')}${o.퇴직일 ? ' (퇴직일 ' + esc(o.퇴직일) + ')' : ''}</div>`).join('');
     const vac = (b.휴가 || []).slice().sort((a, c) => (c.시작일 || '') < (a.시작일 || '') ? -1 : 1).slice(0, 40).map(v => `<div class="pn-bd-li">🏖 ${esc(v.시작일 || '')}${v.종료일 && v.종료일 !== v.시작일 ? '~' + esc(v.종료일) : ''} ${esc(v.종류 || '')} ${esc(v.일수 != null ? v.일수 + '일' : '')}</div>`).join('');
     const exc = (b.제외기간 || []).map(e => `<div class="pn-bd-li">⛔ ${esc(e.시작)} ~ ${esc(e.종료)} (근속 제외)</div>`).join('');
     return `
       <div class="pn-bd-sub">연봉계약 (÷12 반영)</div>
-      <table class="pn-tbl"><thead><tr><th class="l">연봉일자</th><th>기본급</th><th>성과급</th><th>성과가급</th><th>변동1</th><th>변동2</th></tr></thead><tbody>${sal || '<tr><td colspan="6" class="l">없음</td></tr>'}</tbody></table>
+      <table class="pn-tbl"><thead><tr><th class="l">연봉일자</th><th>기본급</th><th>능력급</th><th>성과급</th><th>성과가급</th><th>변동1</th><th>변동2</th></tr></thead><tbody>${sal || '<tr><td colspan="7" class="l">없음</td></tr>'}</tbody></table>
       ${b.shift ? `<div class="pn-mut" style="color:var(--warn);margin-top:8px">⚠ 급여변동(${esc(b.shift.사유 || '')} ${esc(b.shift.시작일 || '')}~) 감지 → 평균임금 종료일 ${esc(b.shift.종료일 || '')}로 이동</div>` : ''}
       ${exc ? `<div class="pn-bd-sub">근속 제외기간</div>${exc}` : ''}
       <div class="pn-bd-sub">발령 이력</div>${ord || '<div class="pn-mut">없음</div>'}
@@ -1318,8 +1320,8 @@ ${duty}
     L.push(`평균임금 산정 종료일 ${i.endISO}${r.back && r.back.shift ? ` (급여변동 이동: ${r.back.shift.사유})` : ''}`);
     if (i.중간정산일) L.push(`중간정산일 ${i.중간정산일}`);
     L.push('');
-    L.push('[직전 3개월 임금총액]  기간 | 일수 | 급여 | 성과급 | 기타');
-    r.window.rows.forEach(x => L.push(`  ${x.기간} | ${x.일수} | ${nf(x.급여)} | ${nf(x.성과급)} | ${nf(x.기타)}`));
+    L.push('[직전 3개월 임금총액]  기간 | 일수 | 급여 | 능력급 | 성과급 | 기타');
+    r.window.rows.forEach(x => L.push(`  ${x.기간} | ${x.일수} | ${nf(x.급여)} | ${nf(x.능력급)} | ${nf(x.성과급)} | ${nf(x.기타)}`));
     L.push(`  합계 ${r.window.totalDays}일`);
     L.push('');
     L.push('[평균임금 산출]  구분 | 지급총액 | 평균임금(30일분)');
