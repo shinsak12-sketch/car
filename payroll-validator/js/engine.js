@@ -82,9 +82,20 @@ window.PV = window.PV || {};
       discipline: store.discipline || [],
       carry: store.carry || new Map(),
       overrides: { unpaidVac: ov.unpaidVac || new Map(), maternity: ov.maternity || new Map() },
-      dutyExtra: new Set(store.dutyExtra || []),
+      dutyFixedBy: dutyExtraMap(store.dutyExtra, '직책'),   // 직책수당 → 고정역량가급 (사번→월금액)
+      dutyJobBy: dutyExtraMap(store.dutyExtra, '직무'),     // 직무수당 → 변동역량가급1 (사번→월금액)
     };
   };
+  function dutyExtraMap(list, kind) {
+    const m = new Map();
+    (list || []).forEach(d => {
+      if (typeof d === 'string') { if (kind === '직책') m.set(d, (m.get(d) || 0) + 100000); return; }  // 구형(사번만)=직책수당 10만
+      const isJob = /직무/.test(d.구분 || '');
+      if ((kind === '직무') !== isJob) return;
+      m.set(d.사번, (m.get(d.사번) || 0) + (num(d.금액) || 0));
+    });
+    return m;
+  }
 
   function effContract(ctx, sabun, dateISO) {
     const list = ctx.salaryBy.get(sabun); if (!list || !list.length) return null;
@@ -391,10 +402,12 @@ window.PV = window.PV || {};
     });
     if (paidUnits < 0) paidUnits = 0;
 
-    const dutyBase = dutyAllowance(roster), dutyExt = ctx.dutyExtra.has(sabun) ? 100000 : 0;
+    const dutyBase = dutyAllowance(roster), dutyExt = ctx.dutyFixedBy.get(sabun) || 0;   // 기타수당 파일 직책수당
     const flat = dutyBase + dutyExt;
     if (flat > 0) real['고정역량가급'] += flat / 30 * paidUnits;
 
+    const jobExt = ctx.dutyJobBy.get(sabun) || 0;   // 기타수당 파일 직무수당 → 변동역량가급1
+    if (jobExt > 0) real['변동역량가급1'] += jobExt / 30 * paidUnits;
     const applied14 = is14(ctx, sabun, monthEnd);
     if (applied14) real['변동역량가급1'] += (C().특례_14명_금액 || 500000) / 30 * paidUnits;
 

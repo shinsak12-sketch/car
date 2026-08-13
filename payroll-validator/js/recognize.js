@@ -72,9 +72,10 @@ window.PV = window.PV || {};
     if (has('발령구분', '발령시작일')) return 'order';
     if (has('휴가종류') && some('결재진행상태', '휴가일수')) return 'vacation';
     if (some('공휴일', '휴일') && some('일자', '날짜', '날') ) return 'holiday';
+    if (has('구분', '사번', '금액')) return 'dutyextra';
     // filename fallback
     const fn = (fname || '');
-    if (/직책수당|본점/i.test(fn)) return 'dutyextra';
+    if (/기타수당|직책수당|직무수당|본점/i.test(fn)) return 'dutyextra';
     if (/급여대장|payroll|ledger/i.test(fn)) return 'ledger';
     if (/연봉/i.test(fn)) return 'salary';
     if (/명부/i.test(fn)) return 'roster';
@@ -194,16 +195,25 @@ window.PV = window.PV || {};
     return out;
   }
 
-  // 직책수당(본점) 예외자: 사번·성명 (사번만 사용)
+  // 수당 예외자: 구분·사번·성명·금액(월). 구분=직책수당→고정역량가급 / 직무수당→변동역량가급1
+  //  (구형: 사번만 있는 파일 → 직책수당 10만원으로 호환)
   function parseDutyExtra(rows) {
-    let start = 0;
     const first = (rows[0] || []).map(txt);
-    if (first.some(t => /사번|성명|이름/.test(t))) start = 1;
+    const hasHeader = first.some(t => /구분|사번|성명|금액/.test(t));
+    const H = hasHeader ? headerMap(rows[0]) : {};
     const out = [];
-    for (let r = start; r < rows.length; r++) {
+    for (let r = hasHeader ? 1 : 0; r < rows.length; r++) {
       const row = rows[r]; if (!row) continue;
-      const sabun = txt(row[0]); if (!sabun || sabun === 'Σ') continue;
-      out.push(sabun);
+      let 구분, 사번, 성명, 금액;
+      if (hasHeader && H['사번'] != null) {
+        구분 = txt(row[H['구분']]); 사번 = txt(row[H['사번']]); 성명 = txt(row[H['성명']]); 금액 = num(row[H['금액']]);
+      } else {
+        const c0 = txt(row[0]);
+        if (/직책수당|직무수당/.test(c0)) { 구분 = c0; 사번 = txt(row[1]); 성명 = txt(row[2]); 금액 = num(row[3]); }
+        else { 구분 = '직책수당'; 사번 = c0; 성명 = txt(row[1]); 금액 = num(row[2]) || 100000; }  // 구형(사번만)
+      }
+      if (!사번 || 사번 === 'Σ' || /합계/.test(사번)) continue;
+      out.push({ 구분: /직무/.test(구분) ? '직무수당' : '직책수당', 사번, 성명, 금액: 금액 || 0 });
     }
     return out;
   }
@@ -295,7 +305,7 @@ window.PV = window.PV || {};
     order: { name: '발령정보', sub: '퇴직/휴직/복직/직무변경 (누적)' },
     vacation: { name: '휴가데이터', sub: '무급휴가 공제 (결재완료)' },
     holiday: { name: '공휴일', sub: '실제 지급일 산출' },
-    dutyextra: { name: '직책수당(본점)', sub: '직책 없는 월 10만 예외자' },
+    dutyextra: { name: '기타수당', sub: '구분·사번·성명·금액 (직책수당→고정역량, 직무수당→변동역량1)' },
     ledger: { name: '급여대장', sub: '검증 대상 (세전)' },
   };
 
