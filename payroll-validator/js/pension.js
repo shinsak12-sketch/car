@@ -96,12 +96,15 @@ window.PV = window.PV || {};
       const rs = cmp(mStart, startISO) < 0 ? startISO : mStart;
       const re = cmp(mEnd, endISO) > 0 ? endISO : mEnd;
       if (cmp(rs, re) <= 0) {
-        const 일수 = daysInc(rs, re), 월일 = dim(cy, cm), ratio = 일수 / 월일;
+        const 일수 = daysInc(rs, re), 월일 = dim(cy, cm);
         const k = contractOn(salaryList, rs) || {};
-        // 월 금액은 원단위 절상(부분월은 일할 후 절상)
-        const 급여 = ceilWon((num(k.기본급) / 12) * ratio);
-        const 성과급 = ceilWon(((num(k.성과급) + num(k.성과가급)) / 12) * ratio);
-        const 기타 = ceilWon((((num(k.변동역량1) + num(k.변동역량2)) / 12) + num(고정역량월)) * ratio);
+        // 월 급액을 먼저 원단위 절상 → 부분월은 (월액 × 근무일수 ÷ 그달일수) 반올림
+        const 기본월 = ceilWon(num(k.기본급) / 12);
+        const 성과월 = ceilWon((num(k.성과급) + num(k.성과가급)) / 12);
+        const 기타월 = ceilWon((num(k.변동역량1) + num(k.변동역량2)) / 12) + num(고정역량월);
+        const 급여 = Math.round(기본월 * 일수 / 월일);
+        const 성과급 = Math.round(성과월 * 일수 / 월일);
+        const 기타 = Math.round(기타월 * 일수 / 월일);
         rows.push({ 기간: `${rs} ~ ${re}`, 시작: rs, 종료: re, 일수, 급여, 성과급, 기타 });
       }
       if (cy === P(endISO).y && cm === P(endISO).m) break;
@@ -174,15 +177,36 @@ window.PV = window.PV || {};
     };
   };
 
-  // 퇴직 직전 급여변동(육아휴직·무급휴직 등) 감지 → 평균임금 산정 종료일 제안(변동 시작 전날)
-  PV.pensionSuggestAvgEnd = function (orders, 퇴직일) {
-    const isLeave = g => /휴직|정직|직위해제|육아|휴업/.test(g || '') && !/복직/.test(g || '') && !/종료/.test(g || '');
-    const os = (orders || []).filter(o => o.발령시작일 && !/퇴직/.test(o.발령구분 || '') && cmp(o.발령시작일, 퇴직일) <= 0)
-      .sort((a, b) => cmp(a.발령시작일, b.발령시작일));
-    if (!os.length || !isLeave(os[os.length - 1].발령구분)) return { 종료일: 퇴직일, shifted: false };
-    let bs = os[os.length - 1];                     // 퇴직 시점 휴직상태 → 연속 휴직블록 시작 찾기
-    for (let j = os.length - 2; j >= 0; j--) { if (isLeave(os[j].발령구분)) bs = os[j]; else break; }
-    return { 종료일: addDays(bs.발령시작일, -1), shifted: true, 사유: bs.발령구분, 시작일: bs.발령시작일 };
+  // 급여변동(정상급여 아님) 기간 = ①발령 휴직/단축 블록 ②출산전후휴가(휴가내역)
+  //  → 기타 무급휴가는 감액 없다 가정(제외). 통합 후 퇴직 직전 변동을 건너뛴 정상기간 종료일 산출.
+  function variancePeriods(orders, vacs, 퇴직일) {
+    const isLeaveOrd = g => /휴직|정직|직위해제|단축/.test(g || '') && !/복직/.test(g || '') && !/종료/.test(g || '');
+    const isMatVac = t => /출산|유사산/.test(t || '') && !/배우자/.test(t || '');
+    const periods = [];
+    const os = (orders || []).filter(o => o.발령시작일 && !/퇴직/.test(o.발령구분 || '') && cmp(o.발령시작일, 퇴직일) <= 0).sort((a, b) => cmp(a.발령시작일, b.발령시작일));
+    os.forEach((o, idx) => {
+      if (!isLeaveOrd(o.발령구분)) return;
+      const next = os[idx + 1];
+      periods.push({ s: o.발령시작일, e: next ? addDays(next.발령시작일, -1) : 퇴직일, 사유: o.발령구분 });
+    });
+    const md = (vacs || []).filter(v => isMatVac(v.종류) && v.시작일).map(v => ({ s: v.시작일, e: v.종료일 || v.시작일 }));
+    if (md.length) {
+      const s = md.reduce((a, x) => x.s < a ? x.s : a, md[0].s);
+      const e = md.reduce((a, x) => x.e > a ? x.e : a, md[0].e);
+      periods.push({ s, e: cmp(e, 퇴직일) > 0 ? 퇴직일 : e, 사유: '출산전후휴가' });
+    }
+    return periods;
+  }
+  PV.pensionSuggestAvgEnd = function (orders, vacs, 퇴직일) {
+    const periods = variancePeriods(orders, vacs, 퇴직일);
+    if (!periods.length) return { 종료일: 퇴직일, shifted: false, periods };
+    let end = 퇴직일, 사유 = null, 시작일 = null, moved = false, guard = 0;
+    while (guard++ < 60) {
+      const hit = periods.find(p => cmp(p.s, end) <= 0 && cmp(end, p.e) <= 0);
+      if (!hit) break;
+      end = addDays(hit.s, -1); 사유 = hit.사유; 시작일 = hit.s; moved = true;
+    }
+    return moved ? { 종료일: end, shifted: true, 사유, 시작일, periods } : { 종료일: 퇴직일, shifted: false, periods };
   };
 
   PV.pensionAutofill = function (store, 사번) {

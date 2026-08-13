@@ -1197,8 +1197,8 @@ ${duty}
     const 퇴직일 = $('#pn-leave').value;
     const note = $('#pn-avgend-note');
     pf.shift = null;
-    if (!퇴직일 || !pf.orders.length || !PV.pensionSuggestAvgEnd) { if (note) note.textContent = ''; return; }
-    const s = PV.pensionSuggestAvgEnd(pf.orders, 퇴직일);
+    if (!퇴직일 || !PV.pensionSuggestAvgEnd || (!pf.orders.length && !pf.vac.length)) { if (note) note.textContent = ''; return; }
+    const s = PV.pensionSuggestAvgEnd(pf.orders, pf.vac, 퇴직일);
     if (s.shifted) {
       $('#pn-avgend').value = s.종료일; pf.shift = s;
       if (note) note.innerHTML = `⚠ 급여변동 감지: <b>${esc(s.사유)}</b> ${s.시작일}~ → 평균임금 종료일 <b>${s.종료일}</b>로 자동 이동 (수정 가능)`;
@@ -1230,7 +1230,7 @@ ${duty}
     const avgRows = r.avg.rows.map(x => `<tr><td class="l">${x.구분}</td><td>${pwon(x.지급총액)}</td><td>${pwon(x.평균임금)}</td></tr>`).join('');
     box.innerHTML = `
       <div class="pn-card">
-        <h3>기본정보 ${i.제도 === 'DC' ? '<span class="pn-badge">DC</span>' : '<span class="pn-badge">DB</span>'}<span class="pn-exp" id="pn-export" title="계산근거·백데이터를 텍스트 파일로 저장">⬇ 내보내기</span></h3>
+        <h3>기본정보 ${i.제도 === 'DC' ? '<span class="pn-badge">DC</span>' : '<span class="pn-badge">DB</span>'}<span class="pn-exp" id="pn-export" title="계산근거·백데이터를 텍스트 파일로 저장">⬇ 내보내기</span><span class="pn-exp" id="pn-back" title="고려한 발령·휴가·연봉계약 백데이터 보기">🗂 백데이터</span></h3>
         <div class="pn-kv">
           <div class="k">사번 · 성명</div><div class="v">${esc(i.사번 || '-')} · ${esc(i.성명 || '-')}</div>
           <div class="k">입사일 → 퇴직일</div><div class="v">${i.입사일} → ${i.퇴직일}</div>
@@ -1281,13 +1281,17 @@ ${duty}
         </div>
         <div class="pn-final"><span>실지급액 (세후)</span><span>${pwon(r.실지급액)} 원</span></div>
         ${r.dc ? `<div class="pn-mut">DC 제도 — 동일 산식으로 산출. 회사 부담은 미적립 기간분만 지급(미적립금은 별도 확인).</div>` : ''}
-      </div>
-
-      <div class="pn-card">
-        <h3>고려한 백데이터</h3>
-        ${backdataHtml(r.back)}
       </div>`;
     const eb = $('#pn-export'); if (eb) eb.onclick = () => exportPension(r);
+    const bb = $('#pn-back'); if (bb) bb.onclick = () => openPensionBackdata(r);
+  }
+
+  function openPensionBackdata(r) {
+    const ov = el('div', 'pn-modal-ov');
+    ov.innerHTML = `<div class="pn-modal"><div class="pn-modal-h"><b>고려한 백데이터</b> <span class="pf-h">${esc(r.info.사번 || '')} ${esc(r.info.성명 || '')}</span><span class="pn-modal-x">✕</span></div><div class="pn-modal-b">${backdataHtml(r.back)}</div></div>`;
+    ov.onclick = e => { if (e.target === ov) ov.remove(); };
+    ov.querySelector('.pn-modal-x').onclick = () => ov.remove();
+    document.body.appendChild(ov);
   }
 
   function backdataHtml(b) {
