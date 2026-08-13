@@ -167,10 +167,22 @@ window.PV = window.PV || {};
     const dc = input.제도 === 'DC' ? { 제도: 'DC', 미적립금: num(input.dcMisFund) || null, 안내: '동일 산식 · 회사 부담 = 미적립 기간분' } : null;
 
     return {
-      info: { 사번: input.사번, 성명: input.성명, 입사일, 퇴직일, 제도: input.제도 || 'DB', endISO, 중간정산일: input.중간정산일 || null },
+      info: { 사번: input.사번, 성명: input.성명, 입사일, 퇴직일, 제도: input.제도 || 'DB', endISO, 중간정산일: input.중간정산일 || null, 연차수당: 연차전액, 고정역량월: num(input.고정역량월) },
       window: win, avg: { rows: avgRows, 합계지급총액, 반영총액, 평균임금30, 연차전액, 연차반영 },
       service: sf, 퇴직급여, tax, 실지급액, dc,
+      back: { 연봉계약: input.연봉계약 || [], 제외기간: input.제외기간 || [], 발령: input.발령 || [], 휴가: input.휴가 || [], shift: endISO !== 퇴직일 ? (input.shift || { 종료일: endISO }) : null },
     };
+  };
+
+  // 퇴직 직전 급여변동(육아휴직·무급휴직 등) 감지 → 평균임금 산정 종료일 제안(변동 시작 전날)
+  PV.pensionSuggestAvgEnd = function (orders, 퇴직일) {
+    const isLeave = g => /휴직|정직|직위해제|육아|휴업/.test(g || '') && !/복직/.test(g || '') && !/종료/.test(g || '');
+    const os = (orders || []).filter(o => o.발령시작일 && !/퇴직/.test(o.발령구분 || '') && cmp(o.발령시작일, 퇴직일) <= 0)
+      .sort((a, b) => cmp(a.발령시작일, b.발령시작일));
+    if (!os.length || !isLeave(os[os.length - 1].발령구분)) return { 종료일: 퇴직일, shifted: false };
+    let bs = os[os.length - 1];                     // 퇴직 시점 휴직상태 → 연속 휴직블록 시작 찾기
+    for (let j = os.length - 2; j >= 0; j--) { if (isLeave(os[j].발령구분)) bs = os[j]; else break; }
+    return { 종료일: addDays(bs.발령시작일, -1), shifted: true, 사유: bs.발령구분, 시작일: bs.발령시작일 };
   };
 
   PV.pensionAutofill = function (store, 사번) {
@@ -187,6 +199,8 @@ window.PV = window.PV || {};
     // 연차수당: 최근 1개월 지급분
     let 연차수당 = 0;
     (store.ledger || []).filter(r => String(r.사번) === String(사번)).forEach(r => { const v = num((r.pay && r.pay.연차수당) || r.연차수당); if (v) 연차수당 = v; });
-    return { 성명: roster.성명 || '', 연봉계약: sList, 고정역량월, 연차수당 };
+    const 발령 = (store.order || []).filter(r => String(r.사번) === String(사번)).map(o => ({ 발령구분: o.발령구분, 발령시작일: o.발령시작일, 퇴직일: o.퇴직일 || '' })).sort((a, b) => cmp(a.발령시작일 || '', b.발령시작일 || ''));
+    const 휴가 = (store.vacation || []).filter(r => String(r.사번) === String(사번)).map(v => ({ 종류: v.휴가종류 || v.종류, 시작일: v.시작일, 종료일: v.종료일, 일수: v.휴가일수 || v.일수 }));
+    return { 성명: roster.성명 || '', 입사일: roster.그룹입사일 || roster.입사일 || roster.입사일자 || '', 연봉계약: sList, 고정역량월, 연차수당, 발령, 휴가 };
   };
 })(window.PV);

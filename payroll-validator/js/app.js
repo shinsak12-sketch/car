@@ -1140,7 +1140,8 @@ ${duty}
   });
 
   /* ================= 퇴직연금 계산기 ================= */
-  const pf = { sal: [], excl: [] };
+  const pf = { sal: [], excl: [], orders: [], vac: [], shift: null };
+  let pnLast = null;
   const pnum = v => { if (v == null) return 0; const n = Number(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n; };
   const pwon = n => Math.round(n).toLocaleString('ko-KR');
 
@@ -1182,11 +1183,28 @@ ${duty}
     const a = PV.pensionAutofill && PV.pensionAutofill(store, sabun);
     if (!a || !a.연봉계약.length) { toast('연결된 데이터에 해당 사번의 연봉내역이 없습니다', 'bad'); return; }
     if (a.성명) $('#pn-name').value = a.성명;
+    if (a.입사일 && !$('#pn-join').value) $('#pn-join').value = a.입사일;
     if (a.연차수당) $('#pn-annual').value = a.연차수당;
     if (a.고정역량월) $('#pn-duty').value = a.고정역량월;
     pf.sal = a.연봉계약.map(s => ({ ...s })); renderSalRows();
-    toast(`불러옴 · 연봉계약 ${a.연봉계약.length}건`, 'ok');
+    pf.orders = a.발령 || []; pf.vac = a.휴가 || [];
+    applyAvgEnd();
+    toast(`불러옴 · 연봉 ${a.연봉계약.length}건 · 발령 ${pf.orders.length}건`, 'ok');
   }; }
+
+  // 퇴직 직전 급여변동(육아휴직 등) 감지 → 평균임금 종료일 자동 이동
+  function applyAvgEnd() {
+    const 퇴직일 = $('#pn-leave').value;
+    const note = $('#pn-avgend-note');
+    pf.shift = null;
+    if (!퇴직일 || !pf.orders.length || !PV.pensionSuggestAvgEnd) { if (note) note.textContent = ''; return; }
+    const s = PV.pensionSuggestAvgEnd(pf.orders, 퇴직일);
+    if (s.shifted) {
+      $('#pn-avgend').value = s.종료일; pf.shift = s;
+      if (note) note.innerHTML = `⚠ 급여변동 감지: <b>${esc(s.사유)}</b> ${s.시작일}~ → 평균임금 종료일 <b>${s.종료일}</b>로 자동 이동 (수정 가능)`;
+    } else if (note) note.textContent = '';
+  }
+  { const lv = $('#pn-leave'); if (lv) lv.onchange = applyAvgEnd; }
 
   { const b = $('#pn-calc'); if (b) b.onclick = () => {
     try {
@@ -1199,8 +1217,9 @@ ${duty}
         입사일, 퇴직일, 평균임금종료일: $('#pn-avgend').value || null, 중간정산일: $('#pn-mid').value || null,
         연차수당: pnum($('#pn-annual').value), 고정역량월: pnum($('#pn-duty').value),
         연봉계약: pf.sal, 제외기간: pf.excl.filter(e => e.시작 && e.종료),
+        발령: pf.orders, 휴가: pf.vac, shift: pf.shift,
       };
-      renderPensionResult(PV.computeSeverance(input));
+      pnLast = PV.computeSeverance(input); renderPensionResult(pnLast);
     } catch (e) { console.error(e); toast('계산 오류: ' + e.message, 'bad'); }
   }; }
 
@@ -1211,11 +1230,11 @@ ${duty}
     const avgRows = r.avg.rows.map(x => `<tr><td class="l">${x.구분}</td><td>${pwon(x.지급총액)}</td><td>${pwon(x.평균임금)}</td></tr>`).join('');
     box.innerHTML = `
       <div class="pn-card">
-        <h3>기본정보 ${i.제도 === 'DC' ? '<span class="pn-badge">DC</span>' : '<span class="pn-badge">DB</span>'}</h3>
+        <h3>기본정보 ${i.제도 === 'DC' ? '<span class="pn-badge">DC</span>' : '<span class="pn-badge">DB</span>'}<span class="pn-exp" id="pn-export" title="계산근거·백데이터를 텍스트 파일로 저장">⬇ 내보내기</span></h3>
         <div class="pn-kv">
           <div class="k">사번 · 성명</div><div class="v">${esc(i.사번 || '-')} · ${esc(i.성명 || '-')}</div>
           <div class="k">입사일 → 퇴직일</div><div class="v">${i.입사일} → ${i.퇴직일}</div>
-          <div class="k">평균임금 산정 종료일</div><div class="v">${i.endISO}</div>
+          <div class="k">평균임금 산정 종료일</div><div class="v">${i.endISO}${r.back && r.back.shift ? ` <span style="color:var(--warn)">(급여변동 이동: ${esc(r.back.shift.사유 || '')})</span>` : ''}</div>
           ${i.중간정산일 ? `<div class="k">중간정산일</div><div class="v">${i.중간정산일}</div>` : ''}
         </div>
       </div>
@@ -1262,7 +1281,68 @@ ${duty}
         </div>
         <div class="pn-final"><span>실지급액 (세후)</span><span>${pwon(r.실지급액)} 원</span></div>
         ${r.dc ? `<div class="pn-mut">DC 제도 — 동일 산식으로 산출. 회사 부담은 미적립 기간분만 지급(미적립금은 별도 확인).</div>` : ''}
+      </div>
+
+      <div class="pn-card">
+        <h3>고려한 백데이터</h3>
+        ${backdataHtml(r.back)}
       </div>`;
+    const eb = $('#pn-export'); if (eb) eb.onclick = () => exportPension(r);
+  }
+
+  function backdataHtml(b) {
+    if (!b) return '<div class="pn-mut">없음</div>';
+    const sal = (b.연봉계약 || []).map(s => `<tr><td class="l">${esc(s.연봉일자 || '-')}</td><td>${pwon(s.기본급)}</td><td>${pwon(s.성과급)}</td><td>${pwon(s.성과가급)}</td><td>${pwon(s.변동역량1)}</td><td>${pwon(s.변동역량2)}</td></tr>`).join('');
+    const ord = (b.발령 || []).slice().sort((a, c) => (c.발령시작일 || '') < (a.발령시작일 || '') ? -1 : 1).map(o => `<div class="pn-bd-li">📋 ${esc(o.발령시작일 || '')} ${esc(o.발령구분 || '')}${o.퇴직일 ? ' (퇴직일 ' + esc(o.퇴직일) + ')' : ''}</div>`).join('');
+    const vac = (b.휴가 || []).slice().sort((a, c) => (c.시작일 || '') < (a.시작일 || '') ? -1 : 1).slice(0, 40).map(v => `<div class="pn-bd-li">🏖 ${esc(v.시작일 || '')}${v.종료일 && v.종료일 !== v.시작일 ? '~' + esc(v.종료일) : ''} ${esc(v.종류 || '')} ${esc(v.일수 != null ? v.일수 + '일' : '')}</div>`).join('');
+    const exc = (b.제외기간 || []).map(e => `<div class="pn-bd-li">⛔ ${esc(e.시작)} ~ ${esc(e.종료)} (근속 제외)</div>`).join('');
+    return `
+      <div class="pn-bd-sub">연봉계약 (÷12 반영)</div>
+      <table class="pn-tbl"><thead><tr><th class="l">연봉일자</th><th>기본급</th><th>성과급</th><th>성과가급</th><th>변동1</th><th>변동2</th></tr></thead><tbody>${sal || '<tr><td colspan="6" class="l">없음</td></tr>'}</tbody></table>
+      ${b.shift ? `<div class="pn-mut" style="color:var(--warn);margin-top:8px">⚠ 급여변동(${esc(b.shift.사유 || '')} ${esc(b.shift.시작일 || '')}~) 감지 → 평균임금 종료일 ${esc(b.shift.종료일 || '')}로 이동</div>` : ''}
+      ${exc ? `<div class="pn-bd-sub">근속 제외기간</div>${exc}` : ''}
+      <div class="pn-bd-sub">발령 이력</div>${ord || '<div class="pn-mut">없음</div>'}
+      ${vac ? `<div class="pn-bd-sub">휴가 (최근 40건)</div>${vac}` : ''}`;
+  }
+
+  function exportPension(r) {
+    const i = r.info, sv = r.service, tx = r.tax, nf = n => Math.round(n || 0).toLocaleString('ko-KR');
+    const L = [];
+    L.push(`[퇴직급여 계산근거]  ${i.사번 || ''} ${i.성명 || ''}  (${i.제도})`);
+    L.push('='.repeat(46));
+    L.push(`입사일 ${i.입사일} → 퇴직일 ${i.퇴직일}`);
+    L.push(`평균임금 산정 종료일 ${i.endISO}${r.back && r.back.shift ? ` (급여변동 이동: ${r.back.shift.사유})` : ''}`);
+    if (i.중간정산일) L.push(`중간정산일 ${i.중간정산일}`);
+    L.push('');
+    L.push('[직전 3개월 임금총액]  기간 | 일수 | 급여 | 성과급 | 기타');
+    r.window.rows.forEach(x => L.push(`  ${x.기간} | ${x.일수} | ${nf(x.급여)} | ${nf(x.성과급)} | ${nf(x.기타)}`));
+    L.push(`  합계 ${r.window.totalDays}일`);
+    L.push('');
+    L.push('[평균임금 산출]  구분 | 지급총액 | 평균임금(30일분)');
+    r.avg.rows.forEach(x => L.push(`  ${x.구분} | ${nf(x.지급총액)} | ${nf(x.평균임금)}`));
+    L.push(`  합계 | ${nf(r.avg.합계지급총액)} | ${nf(r.avg.평균임금30)}`);
+    L.push(`  ※ 연차수당 표기=전액 ${nf(r.avg.연차전액)}, 계산=3개월분 ${nf(r.avg.연차반영)}`);
+    L.push('');
+    L.push('[재직연수·지급계수]');
+    L.push(`  일수법 ${sv.산입일수}일 ÷ 365 = ${sv.일수계수}`);
+    L.push(`  월력법 ${sv.합_Y}년 ${sv.합_M}개월 ${sv.합_D}일 → ${sv.총개월}개월 ÷ 12 = ${sv.월력계수}`);
+    L.push(`  채택 ${sv.계수} (${sv.method})`);
+    L.push('');
+    L.push('[퇴직소득세]');
+    L.push(`  세전 퇴직급여 ${nf(r.퇴직급여)}`);
+    L.push(`  근속연수 ${tx.근속연수}년 · 근속연수공제 ${nf(tx.근속연수공제)}`);
+    L.push(`  환산급여 ${nf(tx.환산급여)} · 환산급여공제 ${nf(tx.환산급여공제)}`);
+    L.push(`  과세표준 ${nf(tx.과세표준)} · 적용세율 ${(tx.세율 * 100).toFixed(0)}% (누진공제 ${nf(tx.누진공제)})`);
+    L.push(`  산출세액 ${nf(tx.산출세액)} · 지방소득세 ${nf(tx.지방소득세)} · 세액계 ${nf(tx.세액계)}`);
+    L.push(`  ★ 실지급액(세후) ${nf(r.실지급액)}`);
+    L.push('');
+    L.push('[고려한 백데이터]');
+    L.push(' 연봉계약: ' + (r.back.연봉계약 || []).map(s => `${s.연봉일자}(기본${nf(s.기본급)}/성과${nf(s.성과급)}/성과가${nf(s.성과가급)}/변동1 ${nf(s.변동역량1)}/변동2 ${nf(s.변동역량2)})`).join(' · '));
+    (r.back.제외기간 || []).forEach(e => L.push(`  제외 ${e.시작}~${e.종료}`));
+    (r.back.발령 || []).slice().sort((a, c) => (a.발령시작일 || '') < (c.발령시작일 || '') ? 1 : -1).forEach(o => L.push(`  발령 ${o.발령시작일} ${o.발령구분}${o.퇴직일 ? ' (퇴직일 ' + o.퇴직일 + ')' : ''}`));
+    (r.back.휴가 || []).slice().sort((a, c) => (a.시작일 || '') < (c.시작일 || '') ? 1 : -1).forEach(v => L.push(`  휴가 ${v.시작일}${v.종료일 && v.종료일 !== v.시작일 ? '~' + v.종료일 : ''} ${v.종류 || ''} ${v.일수 != null ? v.일수 + '일' : ''}`));
+    dlText(`퇴직급여_${i.사번 || ''}_${i.성명 || ''}.txt`, L.join('\n'));
+    toast('계산근거 텍스트 저장', 'ok');
   }
 
   renderSalRows(); renderExclRows();

@@ -123,6 +123,7 @@ window.PV = window.PV || {};
         피크적용: txt(g(row, '임금피크제적용여부')),
         피크예상일: toISO(g(row, '임금피크제예상일')),
         입사일: toISO(g(row, '입사일')),
+        그룹입사일: toISO(g(row, '그룹입사일')),
         생년월일: toISO(g(row, '생년월일')),
       });
     }
