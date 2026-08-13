@@ -98,9 +98,10 @@ window.PV = window.PV || {};
       if (cmp(rs, re) <= 0) {
         const 일수 = daysInc(rs, re), 월일 = dim(cy, cm), ratio = 일수 / 월일;
         const k = contractOn(salaryList, rs) || {};
-        const 급여 = (num(k.기본급) / 12) * ratio;
-        const 성과급 = ((num(k.성과급) + num(k.성과가급)) / 12) * ratio;
-        const 기타 = ((num(k.변동역량1) + num(k.변동역량2)) / 12 + num(고정역량월)) * ratio;
+        // 월 금액은 원단위 절상(부분월은 일할 후 절상)
+        const 급여 = ceilWon((num(k.기본급) / 12) * ratio);
+        const 성과급 = ceilWon(((num(k.성과급) + num(k.성과가급)) / 12) * ratio);
+        const 기타 = ceilWon((((num(k.변동역량1) + num(k.변동역량2)) / 12) + num(고정역량월)) * ratio);
         rows.push({ 기간: `${rs} ~ ${re}`, 시작: rs, 종료: re, 일수, 급여, 성과급, 기타 });
       }
       if (cy === P(endISO).y && cm === P(endISO).m) break;
@@ -127,7 +128,7 @@ window.PV = window.PV || {};
     const 환산산출세액 = b3 ? Math.max(0, 과세표준 * b3.rate - b3.deduct) : 0;
     const 산출세액 = floorWon(환산산출세액 / 12 * 근속연수);
     const 지방소득세 = floorWon(산출세액 * 0.1);
-    return { 근속연수, 근속연수공제, 환산급여, 환산급여공제, 과세표준, 환산산출세액, 산출세액, 지방소득세, 세액계: 산출세액 + 지방소득세 };
+    return { 근속연수, 근속연수공제, 환산급여, 환산급여공제, 과세표준, 환산산출세액, 산출세액, 지방소득세, 세액계: 산출세액 + 지방소득세, 세율: b3 ? b3.rate : 0, 누진공제: b3 ? b3.deduct : 0 };
   }
 
   // ---------- 메인 ----------
@@ -141,16 +142,19 @@ window.PV = window.PV || {};
     const sum급여 = win.rows.reduce((a, r) => a + r.급여, 0);
     const sum성과 = win.rows.reduce((a, r) => a + r.성과급, 0);
     const sum기타 = win.rows.reduce((a, r) => a + r.기타, 0);
-    const 연차안분 = num(input.연차수당) * (C().퇴직_연차수당_안분 != null ? C().퇴직_연차수당_안분 : 0.25);
+    const 안분율 = (C().퇴직_연차수당_안분 != null ? C().퇴직_연차수당_안분 : 0.25);
+    const 연차전액 = num(input.연차수당);        // 최근 1개월 지급 전액(표기용)
+    const 연차반영 = 연차전액 * 안분율;           // 3개월 환산(계산용)
     const avg30 = v => D > 0 ? v / D * 30 : 0;
     const avgRows = [
       { 구분: '급여', 지급총액: sum급여, 평균임금: avg30(sum급여) },
       { 구분: '성과급', 지급총액: sum성과, 평균임금: avg30(sum성과) },
-      { 구분: '연차수당', 지급총액: 연차안분, 평균임금: avg30(연차안분) },
+      { 구분: '연차수당', 지급총액: 연차전액, 평균임금: avg30(연차반영), 표기전액: true, 반영액: 연차반영 },
       { 구분: '기타급여', 지급총액: sum기타, 평균임금: avg30(sum기타) },
     ];
-    const 합계지급총액 = sum급여 + sum성과 + sum기타 + 연차안분;
-    const 평균임금30 = avg30(합계지급총액);   // 30일분 평균임금
+    const 합계지급총액 = sum급여 + sum성과 + sum기타 + 연차전액;   // 표시용(연차 전액)
+    const 반영총액 = sum급여 + sum성과 + sum기타 + 연차반영;       // 계산용(연차 3/12)
+    const 평균임금30 = avg30(반영총액);   // 30일분 평균임금(연차는 3개월 환산 반영)
 
     const sf = serviceFactor(입사일, 퇴직일, input.제외기간, input.중간정산일);
     const 퇴직급여 = ceilWon(평균임금30 * sf.계수);   // 세전, 원단위 절상
@@ -164,7 +168,7 @@ window.PV = window.PV || {};
 
     return {
       info: { 사번: input.사번, 성명: input.성명, 입사일, 퇴직일, 제도: input.제도 || 'DB', endISO, 중간정산일: input.중간정산일 || null },
-      window: win, avg: { rows: avgRows, 합계지급총액, 평균임금30 },
+      window: win, avg: { rows: avgRows, 합계지급총액, 반영총액, 평균임금30, 연차전액, 연차반영 },
       service: sf, 퇴직급여, tax, 실지급액, dc,
     };
   };

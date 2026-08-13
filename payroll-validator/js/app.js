@@ -1233,7 +1233,7 @@ ${duty}
         <table class="pn-tbl"><thead><tr><th class="l">구분</th><th>지급총액</th><th>평균임금(30일분)</th></tr></thead>
         <tbody>${avgRows}</tbody>
         <tfoot><tr><td class="l">합계</td><td>${pwon(r.avg.합계지급총액)}</td><td>${pwon(r.avg.평균임금30)}</td></tr></tfoot></table>
-        <div class="pn-mut">평균임금 = 지급총액 ÷ ${r.window.totalDays}일 × 30 · 연차수당은 3/12 안분</div>
+        <div class="pn-mut">평균임금 = 지급총액 ÷ ${r.window.totalDays}일 × 30 · <b>연차수당은 표기=전액(${pwon(r.avg.연차전액)}), 계산=3개월분(×3/12=${pwon(r.avg.연차반영)})</b></div>
       </div>
 
       <div class="pn-card">
@@ -1254,6 +1254,7 @@ ${duty}
           <div class="k">④ 환산급여</div><div class="v">${pwon(tx.환산급여)}</div>
           <div class="k">⑤ 환산급여공제</div><div class="v">${pwon(tx.환산급여공제)}</div>
           <div class="k">⑥ 과세표준</div><div class="v">${pwon(tx.과세표준)}</div>
+          <div class="k">　└ 적용세율</div><div class="v" style="color:var(--brand)">${(tx.세율 * 100).toFixed(0)}% <span style="color:var(--text-3);font-weight:600">(누진공제 ${pwon(tx.누진공제)})</span></div>
           <div class="k">⑦ 환산산출세액</div><div class="v">${pwon(tx.환산산출세액)}</div>
           <div class="k">⑧ 산출세액(소득세)</div><div class="v">${pwon(tx.산출세액)}</div>
           <div class="k">⑨ 지방소득세</div><div class="v">${pwon(tx.지방소득세)}</div>
