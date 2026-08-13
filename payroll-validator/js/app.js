@@ -1144,6 +1144,7 @@ ${duty}
   let pnLast = null;
   const pnum = v => { if (v == null) return 0; const n = Number(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n; };
   const pwon = n => Math.round(n).toLocaleString('ko-KR');
+  const ptr4 = x => (Math.floor((x + 1e-9) * 10000) / 10000).toFixed(4);   // 계수 표기: 4자리 절삭(계산은 full)
 
   function renderSalRows() {
     const box = $('#pn-sal-list'); box.innerHTML = '';
@@ -1260,9 +1261,9 @@ ${duty}
       <div class="pn-card">
         <h3>재직연수 · 지급계수</h3>
         <div class="pn-kv">
-          <div class="k">일수법</div><div class="v">${sv.산입일수.toLocaleString()}일 ÷ 365 = ${sv.일수계수}</div>
-          <div class="k">월력법</div><div class="v">${sv.합_Y}년 ${sv.합_M}개월 ${sv.합_D}일 → ${sv.총개월}개월 ÷ 12 = ${sv.월력계수}</div>
-          <div class="k">채택 계수</div><div class="v" style="color:var(--brand)">${sv.계수} <b>(${sv.method})</b></div>
+          <div class="k">일수법</div><div class="v">${sv.산입일수.toLocaleString()}일 ÷ 365 = ${ptr4(sv.일수계수)}</div>
+          <div class="k">월력법</div><div class="v">${sv.합_Y}년 ${sv.합_M}개월 ${sv.합_D}일 → ${sv.총개월}개월 ÷ 12 = ${ptr4(sv.월력계수)}</div>
+          <div class="k">채택 계수</div><div class="v" style="color:var(--brand)">${ptr4(sv.계수)} <b>(${sv.method})</b> <span style="color:var(--text-3);font-weight:600">· 계산은 full 정밀도</span></div>
         </div>
       </div>
 
@@ -1330,9 +1331,9 @@ ${duty}
     L.push(`  ※ 연차수당 표기=전액 ${nf(r.avg.연차전액)}, 계산=3개월분 ${nf(r.avg.연차반영)}`);
     L.push('');
     L.push('[재직연수·지급계수]');
-    L.push(`  일수법 ${sv.산입일수}일 ÷ 365 = ${sv.일수계수}`);
-    L.push(`  월력법 ${sv.합_Y}년 ${sv.합_M}개월 ${sv.합_D}일 → ${sv.총개월}개월 ÷ 12 = ${sv.월력계수}`);
-    L.push(`  채택 ${sv.계수} (${sv.method})`);
+    L.push(`  일수법 ${sv.산입일수}일 ÷ 365 = ${ptr4(sv.일수계수)}`);
+    L.push(`  월력법 ${sv.합_Y}년 ${sv.합_M}개월 ${sv.합_D}일 → ${sv.총개월}개월 ÷ 12 = ${ptr4(sv.월력계수)} (표기 4자리, 계산 full)`);
+    L.push(`  채택 ${ptr4(sv.계수)} (${sv.method})`);
     L.push('');
     L.push('[퇴직소득세]');
     L.push(`  세전 퇴직급여 ${nf(r.퇴직급여)}`);

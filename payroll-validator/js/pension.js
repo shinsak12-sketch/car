@@ -61,21 +61,21 @@ window.PV = window.PV || {};
   function serviceFactor(입사일, 퇴직일, 제외, 중간정산일) {
     const 기산일 = 중간정산일 ? addDays(중간정산일, 1) : 입사일;
     const segs = countedSegments(기산일, 퇴직일, 제외);
-    // 일수법
+    // 일수법 — 계수는 full 정밀도 사용(표기만 4자리 절삭)
     const 산입일수 = segs.reduce((a, s) => a + daysInc(s.s, s.e), 0);
-    const 일수계수 = truncate4(산입일수 / 365);
+    const 일수계수 = 산입일수 / 365;
     // 월력법
     const ret = P(퇴직일);
     let SY = 0, SM = 0, SD = 0;
     const segYmd = segs.map(s => { const r = ymd(s.s, s.e); SY += r.Y; SM += r.M; SD += r.D; return { seg: s, ...r }; });
     const 역산개월 = daysToMonths(SD, ret.y, ret.m);
     const 총개월 = SY * 12 + SM + 역산개월;
-    const 월력계수 = truncate4(총개월 / 12);
-    const 채택 = Math.max(일수계수, 월력계수);
+    const 월력계수 = 총개월 / 12;
+    const 채택 = Math.max(일수계수, 월력계수);   // full 정밀도 — 퇴직급여 계산에 그대로 사용
     return {
       기산일, segs, segYmd, 산입일수, 일수계수,
       합_Y: SY, 합_M: SM, 합_D: SD, 역산개월, 총개월, 월력계수,
-      계수: truncate4(채택), method: 월력계수 >= 일수계수 ? '월력법' : '일수법',
+      계수: 채택, method: 월력계수 >= 일수계수 ? '월력법' : '일수법',
     };
   }
 
