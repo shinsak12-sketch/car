@@ -37,7 +37,9 @@ window.PV = window.PV || {};
   }
   const truncate4 = x => Math.floor(x * 10000) / 10000;
   const ceilWon = x => Math.ceil(x - 1e-6);
+  const ceilU = x => (Math.ceil((x - 1e-6) / 10) * 10) || 0;   // 십원 절상(급여검증 엔진과 동일)
   const floorWon = x => Math.floor(x + 1e-6);
+  const floorU = x => (Math.floor((x + 1e-6) / 10) * 10) || 0; // 십원 절사(세액 단수처리)
 
   // ---------- 산입구간(제외기간 반영) ----------
   // 입력: 기산일~퇴직일에서 제외기간 빼고 남은 연속구간들 [{s,e}]
@@ -99,10 +101,11 @@ window.PV = window.PV || {};
         const 일수 = daysInc(rs, re), 월일 = dim(cy, cm);
         const k = contractOn(salaryList, rs) || {};
         // 월 급액을 먼저 원단위 절상 → 부분월은 (월액 × 근무일수 ÷ 그달일수) 반올림
-        const 기본월 = ceilWon(num(k.기본급) / 12);
-        const 능력월 = ceilWon(num(k.실적급) / 12);
-        const 성과월 = ceilWon((num(k.성과급) + num(k.성과가급)) / 12);
-        const 기타월 = ceilWon((num(k.변동역량1) + num(k.변동역량2)) / 12) + num(고정역량월);
+        // 각 연봉 항목을 12로 나눈 뒤 십원 절상(급여검증과 동일). 부분월은 ×일수/월일 후 반올림.
+        const 기본월 = ceilU(num(k.기본급) / 12);
+        const 능력월 = ceilU(num(k.실적급) / 12);
+        const 성과월 = ceilU(num(k.성과급) / 12) + ceilU(num(k.성과가급) / 12);
+        const 기타월 = ceilU(num(k.변동역량1) / 12) + ceilU(num(k.변동역량2) / 12) + num(고정역량월);
         const 급여 = Math.round(기본월 * 일수 / 월일);
         const 능력급 = Math.round(능력월 * 일수 / 월일);
         const 성과급 = Math.round(성과월 * 일수 / 월일);
@@ -131,8 +134,8 @@ window.PV = window.PV || {};
     const 과세표준 = Math.max(0, 환산급여 - 환산급여공제);
     const b3 = pick(세율tbl, 과세표준);
     const 환산산출세액 = b3 ? Math.max(0, 과세표준 * b3.rate - b3.deduct) : 0;
-    const 산출세액 = floorWon(환산산출세액 / 12 * 근속연수);
-    const 지방소득세 = floorWon(산출세액 * 0.1);
+    const 산출세액 = floorU(환산산출세액 / 12 * 근속연수);
+    const 지방소득세 = floorU(산출세액 * 0.1);
     return { 근속연수, 근속연수공제, 환산급여, 환산급여공제, 과세표준, 환산산출세액, 산출세액, 지방소득세, 세액계: 산출세액 + 지방소득세, 세율: b3 ? b3.rate : 0, 누진공제: b3 ? b3.deduct : 0 };
   }
 
@@ -164,7 +167,7 @@ window.PV = window.PV || {};
     const 평균임금30 = avg30(반영총액);   // 30일분 평균임금(연차는 3개월 환산 반영)
 
     const sf = serviceFactor(입사일, 퇴직일, input.제외기간, input.중간정산일);
-    const 퇴직급여 = ceilWon(평균임금30 * sf.계수);   // 세전, 원단위 절상
+    const 퇴직급여 = ceilU(평균임금30 * sf.계수);   // 세전, 십원 절상
 
     const 근속연수 = Math.ceil(sf.총개월 / 12);
     const tax = retirementTax(퇴직급여, 근속연수);
