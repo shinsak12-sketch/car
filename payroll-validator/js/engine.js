@@ -84,6 +84,7 @@ window.PV = window.PV || {};
       overrides: { unpaidVac: ov.unpaidVac || new Map(), maternity: ov.maternity || new Map() },
       dutyFixedBy: dutyExtraMap(store.dutyExtra, '직책'),   // 직책수당 → 고정역량가급 (사번→월금액)
       dutyJobBy: dutyExtraMap(store.dutyExtra, '직무'),     // 직무수당 → 변동역량가급1 (사번→월금액)
+      sogeupAbsorb: store.sogeupAbsorb || new Map(),        // 전월 소급 앞/뒤 수기 선택(사번→'front'|'rear')
     };
   };
   function dutyExtraMap(list, kind) {
@@ -517,7 +518,10 @@ window.PV = window.PV || {};
     // 전월 처리 방식(앞단/후단): resolution(전월 검증처리) 우선 → 없으면 전월 대장과 일치하는 방식 자동 감지.
     //  (전월에 후단처리했으면 후단으로 재계산해야 유령 소급이 안 생김. 예: 한지혜 전월 30−후단)
     const ledMatch = a => SOGEUP_ITEMS.every(k => Math.round(a.pay[k] || 0) === Math.round(paid[k] || 0));
-    let absorb = (res && res.processedMode === 'rear') ? 'rear' : (res && res.processedMode) ? 'front' : null;
+    // 담당자 수기 선택(앞/뒤) 최우선 → 전월 처리방식 → 자동감지
+    const manual = ctx.sogeupAbsorb && ctx.sogeupAbsorb.get(sabun);
+    let absorb = (manual === 'front' || manual === 'rear') ? manual
+      : (res && res.processedMode === 'rear') ? 'rear' : (res && res.processedMode) ? 'front' : null;
     let correct;
     if (absorb) {
       correct = computeBase(ctx, sabun, ctx.prevY, ctx.prevM, 'actual', [], null, null, calMode, absorb);

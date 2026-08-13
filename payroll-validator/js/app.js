@@ -15,6 +15,7 @@
     files: {}, fileCounts: {}, uploads: { annual: new Map(), prod: new Map(), etc: new Map() },
     discipline: [], carry: new Map(), overrides: { unpaidVac: new Map(), maternity: new Map() }, dutyextra: [],
     resolutions: new Map(), // 전월 처리내역(사번 → {review, processedMode}) — 이번달 소급 계산 시 반영
+    sogeupAbsorb: new Map(), // 전월 소급 앞/뒤 수기 선택(사번 → 'front'|'rear')
   };
   let payrollResult = null, verifyResult = null;
 
@@ -233,7 +234,7 @@
     $('#calcBtn').disabled = !(store.salary && store.roster && store.order);
     $('#verifyBtn').disabled = !(payrollResult && !payrollResult.blocked && store.ledger);
   }
-  const storeForEngine = () => ({ salary: store.salary, roster: store.roster, order: store.order, vacation: store.vacation, holiday: store.holiday, ledger: store.ledger, uploads: store.uploads, discipline: store.discipline, carry: store.carry, overrides: store.overrides, dutyExtra: store.dutyextra, resolutions: store.resolutions });
+  const storeForEngine = () => ({ salary: store.salary, roster: store.roster, order: store.order, vacation: store.vacation, holiday: store.holiday, ledger: store.ledger, uploads: store.uploads, discipline: store.discipline, carry: store.carry, overrides: store.overrides, dutyExtra: store.dutyextra, resolutions: store.resolutions, sogeupAbsorb: store.sogeupAbsorb });
 
   /* ---------- alerts ---------- */
   const ALERT_ICON = {
@@ -493,6 +494,13 @@ ${duty}
     row.status = 'ok'; row.notes = ['정상처리' + (memo ? ': ' + memo : '')].concat(keep);
     refreshVerifyTiles();
   };
+  // 팝업 소급 박스 '앞단/후단'에서 호출 — 전월 소급 일수기준(앞/뒤) 수기 선택 → 재계산·재검증 후 최신 상세 반환
+  window.__pvSogeupAbsorb = function (사번, mode) {
+    store.sogeupAbsorb.set(사번, mode);
+    try { runCalc(false); runVerify(false); } catch (e) { console.error(e); return null; }
+    const row = verifyResult && verifyResult.rows.find(r => r.사번 === 사번);
+    return row ? buildDetail(row) : null;
+  };
   window.__pvUnmarkError = function (사번) {
     if (!verifyResult) return;
     const row = verifyResult.rows.find(r => r.사번 === 사번);
@@ -689,6 +697,7 @@ ${duty}
   .sg-ord{font-size:12.5px;margin:3px 0}.sg-ord u{text-decoration-color:var(--warn);text-underline-offset:2px}
   .sg-deriv{font-size:11.5px;color:var(--tx2);margin-top:8px;line-height:1.6}
   .sg-info{font-size:11px;color:var(--tx3)}
+  .sg-btns{display:flex;gap:6px;flex-wrap:wrap}
   @media print{.top button,.chips,.search2,.drecalc{display:none}.tbl{max-height:none;overflow:visible}th{position:static}}
   `;
 
@@ -903,7 +912,11 @@ ${duty}
           + '</div><div class="sg-right">'
           + (view === 'ignore'
             ? '<span class="rc-done">✔ 전월 이월(소급) 무시됨 — ' + nf(d.ignore ? d.ignore.total : d.ourTotal) + (d.ignore && d.ignore.status === 'ok' ? ' · 대장 일치' : '') + '</span>' + (R.resolved && R.processedMode === 'ignore' ? '' : '<button class="rc-btn" data-a="apply">이 값으로 처리</button>') + '<button class="rc-btn ghost" data-a="revert">되돌리기</button>'
-            : '<div class="sg-info">이미 처리됐거나 소급 대상이 아니면 →</div><button class="rc-btn ghost" data-a="ignore">⊘ 전월 이월 무시</button>')
+            : '<div class="sg-info">소급 일수기준 선택 <b>(현재 ' + (d.sogeup.absorb === 'rear' ? '후단' : '앞단') + ')</b> · 이월무시 가능</div>'
+              + '<div class="sg-btns">'
+              + '<button class="rc-btn ghost" data-a="sogFront"' + (d.sogeup.absorb === 'front' ? ' style="border-color:var(--br);color:var(--br);font-weight:800"' : '') + '>앞단(30−앞)</button>'
+              + '<button class="rc-btn ghost" data-a="sogRear"' + (d.sogeup.absorb === 'rear' ? ' style="border-color:var(--br);color:var(--br);font-weight:800"' : '') + '>후단(30−뒷단)</button>'
+              + '<button class="rc-btn ghost" data-a="ignore">⊘ 이월 무시</button></div>')
           + '</div></div>') : '';
         const reviewable = R._cls0 === 'rbad' || R.review;
         // 정상처리 박스: 대장이 맞고 우리 계산이 근태·징계 등 수기입력 누락으로 다른 경우 (불일치 행에만 노출)
@@ -950,6 +963,13 @@ ${duty}
           else if (a === 'unerror') { unmarkError(R); renderBody(); }
           else if (a === 'normal') { const memo = (window.prompt('정상처리 사유 (예: 결근 3일 수기누락, 대장 정상 — 선택):', R.normMemo || '') || '').trim(); markNormal(R, memo); renderBody(); }
           else if (a === 'unnormal') { unmarkError(R); renderBody(); }
+          else if (a === 'sogFront' || a === 'sogRear') {
+            const mode = a === 'sogFront' ? 'front' : 'rear';
+            try {
+              const fresh = window.opener && window.opener.__pvSogeupAbsorb && window.opener.__pvSogeupAbsorb(R.detail.사번, mode);
+              if (fresh) { R.detail = fresh; R.ourTotal = fresh.ourTotal; ov.remove(); openDetail(R); }  // 재계산값으로 상세 재오픈
+            } catch (err) {}
+          }
         });
       }
       renderBody();
