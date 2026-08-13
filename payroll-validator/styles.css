@@ -391,15 +391,51 @@ button:focus-visible,label.dropzone:focus-visible{outline:2px solid var(--brand)
 .cfg-body{max-height:70vh;overflow-y:auto;gap:0!important}
 .cfg-sec{padding:13px 0;border-bottom:1px dashed var(--border)}
 .cfg-sec:last-child{border-bottom:0}
-.cfg-h{font-size:12px;font-weight:850;color:var(--text-1);margin-bottom:9px}
+.cfg-h{font-size:12px;font-weight:850;color:var(--text);margin-bottom:9px}
 .cfg-hint{font-weight:600;color:var(--text-3);font-size:10.5px;margin-left:4px}
 .cfg-f{display:flex;align-items:center;gap:10px;margin-bottom:7px}
 .cfg-f label{flex:0 0 210px;font-size:11.5px;font-weight:700;color:var(--text-2)}
 .cfg-r{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .cfg-r-hd{font-size:10.5px;color:var(--text-3);font-weight:700;margin-bottom:2px}
-.cfg-body input{font-family:inherit;font-size:12.5px;padding:6px 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-1)}
+.cfg-body input{font-family:inherit;font-size:12.5px;padding:6px 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text)}
 .cfg-add{margin-top:4px;font-family:inherit;font-size:11.5px;font-weight:700;color:var(--brand);background:var(--brand-soft);border:1px solid var(--brand);border-radius:7px;padding:5px 11px;cursor:pointer}
-.cfg-del{font-family:inherit;font-size:12px;color:var(--danger);background:transparent;border:0;cursor:pointer;padding:2px 6px}
+.cfg-del{font-family:inherit;font-size:12px;color:var(--bad);background:transparent;border:0;cursor:pointer;padding:2px 6px}
 .cfg-foot{flex-wrap:wrap}
 .fade-swap{animation:cardIn .4s var(--ease)}
 kbd{font-family:var(--mono);background:var(--surface-inset);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:700}
+
+/* ===== 탭 메뉴 ===== */
+.tabs{display:flex;gap:4px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--border)}
+.tab{font-family:inherit;font-size:13.5px;font-weight:750;color:var(--text-3);background:none;border:0;padding:12px 18px;cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--brand);border-bottom-color:var(--brand)}
+/* ===== 퇴직연금 화면 ===== */
+.pf-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.pf-row label{font-size:12px;font-weight:750;color:var(--text-2);flex:0 0 auto}
+.pf-row input{flex:1;font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)}
+.pf-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 12px}
+.pf-f{display:flex;flex-direction:column;gap:4px}
+.pf-f label{font-size:11px;font-weight:700;color:var(--text-2)}
+.pf-f input,.pf-f select{font-family:inherit;font-size:12.5px;padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text)}
+.pf-h{font-weight:600;color:var(--text-3);font-size:9.5px}
+.rq{color:var(--bad)}
+.pf-sec{margin-top:14px}
+.pf-sec-h{font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:8px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.pf-line{display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap}
+.pf-line input{font-family:inherit;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)}
+.pf-del{font-family:inherit;font-size:12px;color:var(--bad);background:transparent;border:0;cursor:pointer;padding:2px 5px}
+.pn-empty{color:var(--text-3);font-size:13px;padding:40px 20px;text-align:center;border:1px dashed var(--border);border-radius:12px}
+/* 결과 카드/표 */
+.pn-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px;box-shadow:var(--shadow-sm)}
+.pn-card h3{margin:0 0 11px;font-size:12px;font-weight:800;letter-spacing:.03em;color:var(--brand);text-transform:uppercase}
+.pn-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.pn-tbl th,.pn-tbl td{border:1px solid var(--border);padding:6px 9px;text-align:right}
+.pn-tbl th{background:var(--surface-inset);font-weight:750;color:var(--text-2);text-align:center}
+.pn-tbl td.l,.pn-tbl th.l{text-align:left}
+.pn-tbl tfoot td,.pn-tbl tr.sum td{font-weight:800;background:var(--surface-inset)}
+.pn-kv{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:12.5px}
+.pn-kv .k{color:var(--text-2);font-weight:650}
+.pn-kv .v{text-align:right;font-weight:750;font-variant-numeric:tabular-nums}
+.pn-final{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:12px 15px;border-radius:10px;background:var(--brand-soft);font-weight:850;font-size:15px;color:var(--brand)}
+.pn-mut{font-size:11px;color:var(--text-3);margin-top:6px}
+.pn-badge{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;background:var(--info-soft);color:var(--info);margin-left:6px}

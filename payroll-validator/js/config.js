@@ -54,6 +54,36 @@ window.PV = window.PV || {};
     특례_14명_전직무: '소액전담',
     특례_14명_후직무: '대물보상',
     특례_14명_직급접두: 'JA',
+
+    // ===== 퇴직급여(퇴직연금 계산기) =====
+    // 연차수당 평균임금 가산 비율(3개월/12개월).
+    퇴직_연차수당_안분: 0.25,
+    // 퇴직소득세 — 근속연수공제 구간표. 공제 = base + per×(근속연수 − from). upTo=상한 근속연수(null=무제한).
+    근속연수공제: [
+      { upTo: 5, from: 0, base: 0, per: 1000000 },
+      { upTo: 10, from: 5, base: 5000000, per: 2000000 },
+      { upTo: 20, from: 10, base: 15000000, per: 2500000 },
+      { upTo: null, from: 20, base: 40000000, per: 3000000 },
+    ],
+    // 환산급여 차등공제. 공제 = base + rate×(환산급여 − from). upTo=환산급여 상한(null=무제한).
+    환산급여공제: [
+      { upTo: 8000000, from: 0, base: 0, rate: 1.0 },
+      { upTo: 70000000, from: 8000000, base: 8000000, rate: 0.6 },
+      { upTo: 100000000, from: 70000000, base: 45200000, rate: 0.55 },
+      { upTo: 300000000, from: 100000000, base: 61700000, rate: 0.45 },
+      { upTo: null, from: 300000000, base: 151700000, rate: 0.35 },
+    ],
+    // 기본세율(누진공제). 세액 = 과세표준×rate − deduct. upTo=과세표준 상한(null=무제한).
+    기본세율: [
+      { upTo: 14000000, rate: 0.06, deduct: 0 },
+      { upTo: 50000000, rate: 0.15, deduct: 1260000 },
+      { upTo: 88000000, rate: 0.24, deduct: 5760000 },
+      { upTo: 150000000, rate: 0.35, deduct: 15440000 },
+      { upTo: 300000000, rate: 0.38, deduct: 19940000 },
+      { upTo: 500000000, rate: 0.40, deduct: 25940000 },
+      { upTo: 1000000000, rate: 0.42, deduct: 35940000 },
+      { upTo: null, rate: 0.45, deduct: 65940000 },
+    ],
   };
 
   const KEY = 'payroll_config_v1';

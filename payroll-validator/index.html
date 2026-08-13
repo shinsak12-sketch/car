@@ -46,8 +46,14 @@
 </header>
 <div id="modalRoot"></div>
 
-<!-- ================= STAGE ================= -->
-<main class="stage">
+<!-- ================= 탭 메뉴 ================= -->
+<nav class="tabs">
+  <button class="tab on" data-view="payroll">급여검증</button>
+  <button class="tab" data-view="pension">퇴직연금 계산기</button>
+</nav>
+
+<!-- ================= STAGE (급여검증) ================= -->
+<main class="stage" id="view-payroll">
 
   <!-- ---------- LEFT: 입력 ---------- -->
   <section class="col left">
@@ -180,12 +186,61 @@
   </section>
 </main>
 
+<!-- ================= 퇴직연금 계산기 ================= -->
+<main class="stage pension hidden" id="view-pension">
+  <section class="col left">
+    <div class="card accent">
+      <div class="head"><span class="num big">P</span><h2>퇴직급여 계산</h2><span class="hint">개별 · 세전~세후</span></div>
+      <div class="body">
+        <div class="pf-row">
+          <label>사번</label>
+          <input type="text" id="pn-sabun" placeholder="사번 입력">
+          <button class="btn btn-ghost btn-sm" id="pn-load" title="폴더 연결 데이터에서 연봉·연차·고정역량 불러오기">불러오기</button>
+        </div>
+        <div class="pf-grid">
+          <div class="pf-f"><label>성명</label><input type="text" id="pn-name"></div>
+          <div class="pf-f"><label>제도</label><select id="pn-type"><option value="DB">DB(확정급여)</option><option value="DC">DC(확정기여)</option></select></div>
+          <div class="pf-f"><label>입사일 <span class="rq">*</span></label><input type="date" id="pn-join"></div>
+          <div class="pf-f"><label>퇴직일 <span class="rq">*</span></label><input type="date" id="pn-leave"></div>
+          <div class="pf-f"><label>평균임금 종료일 <span class="pf-h">기본=퇴직일</span></label><input type="date" id="pn-avgend"></div>
+          <div class="pf-f"><label>중간정산일 <span class="pf-h">선택</span></label><input type="date" id="pn-mid"></div>
+          <div class="pf-f"><label>연차수당 <span class="pf-h">최근1개월</span></label><input type="number" id="pn-annual" placeholder="0"></div>
+          <div class="pf-f"><label>고정역량가급 <span class="pf-h">월</span></label><input type="number" id="pn-duty" placeholder="0"></div>
+        </div>
+
+        <div class="pf-sec">
+          <div class="pf-sec-h">연봉내역 <span class="pf-h">기본급·성과급·성과가급·변동역량1·2 (÷12 반영)</span> <span class="chip-add" id="pn-add-sal">+ 계약 추가</span></div>
+          <div id="pn-sal-list"></div>
+        </div>
+
+        <div class="pf-sec">
+          <div class="pf-sec-h">근속 제외기간 <span class="pf-h">무급휴직·정직 등 (수기)</span> <span class="chip-add" id="pn-add-excl">+ 추가</span></div>
+          <div id="pn-excl-list"></div>
+        </div>
+
+        <button class="btn btn-primary btn-block" id="pn-calc" style="margin-top:14px">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M9 7h6M9 11h6M9 15h3M6 3h12a1 1 0 011 1v16a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+          퇴직급여 계산
+        </button>
+      </div>
+    </div>
+    <div class="tipcard">
+      <b>사용법</b> 사번 입력 후 <b>불러오기</b>(폴더 연결 시 연봉·연차·고정역량 자동) → 입사일·퇴직일 입력 → 제외기간·중간정산 있으면 추가 → <b>퇴직급여 계산</b>. 입사일은 수기 입력.
+    </div>
+  </section>
+
+  <section class="col right">
+    <div id="pn-result"><div class="pn-empty">좌측 정보를 입력하고 <b>퇴직급여 계산</b>을 누르세요.</div></div>
+  </section>
+</main>
+
 <div class="toasts" id="toasts"></div>
 
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="js/recognize.js"></script>
 <script src="js/config.js"></script>
 <script src="js/engine.js"></script>
+<script src="js/pension.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

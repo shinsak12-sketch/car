@@ -1130,4 +1130,139 @@ ${duty}
   }
 
   renderFolder();
+
+  /* ================= 탭 전환 ================= */
+  $$('.tab').forEach(t => t.onclick = () => {
+    $$('.tab').forEach(x => x.classList.toggle('on', x === t));
+    const v = t.dataset.view;
+    $('#view-payroll').classList.toggle('hidden', v !== 'payroll');
+    $('#view-pension').classList.toggle('hidden', v !== 'pension');
+  });
+
+  /* ================= 퇴직연금 계산기 ================= */
+  const pf = { sal: [], excl: [] };
+  const pnum = v => { if (v == null) return 0; const n = Number(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n; };
+  const pwon = n => Math.round(n).toLocaleString('ko-KR');
+
+  function renderSalRows() {
+    const box = $('#pn-sal-list'); box.innerHTML = '';
+    if (!pf.sal.length) box.innerHTML = '<div class="pf-h" style="padding:4px 0">계약 없음 — 불러오기 또는 계약 추가</div>';
+    pf.sal.forEach((s, i) => {
+      const r = el('div', 'pf-line');
+      r.innerHTML = `<input type="date" data-k="연봉일자" style="width:130px" value="${esc(s.연봉일자 || '')}">
+        <input type="number" data-k="기본급" placeholder="기본급" style="width:96px" value="${s.기본급 || ''}">
+        <input type="number" data-k="성과급" placeholder="성과급" style="width:88px" value="${s.성과급 || ''}">
+        <input type="number" data-k="성과가급" placeholder="성과가급" style="width:88px" value="${s.성과가급 || ''}">
+        <input type="number" data-k="변동역량1" placeholder="변동1" style="width:76px" value="${s.변동역량1 || ''}">
+        <input type="number" data-k="변동역량2" placeholder="변동2" style="width:76px" value="${s.변동역량2 || ''}">
+        <button class="pf-del" title="삭제">✕</button>`;
+      r.querySelectorAll('input').forEach(inp => inp.onchange = () => { s[inp.dataset.k] = inp.dataset.k === '연봉일자' ? inp.value : pnum(inp.value); });
+      r.querySelector('.pf-del').onclick = () => { pf.sal.splice(i, 1); renderSalRows(); };
+      box.appendChild(r);
+    });
+  }
+  function renderExclRows() {
+    const box = $('#pn-excl-list'); box.innerHTML = '';
+    if (!pf.excl.length) box.innerHTML = '<div class="pf-h" style="padding:4px 0">제외기간 없음</div>';
+    pf.excl.forEach((e, i) => {
+      const r = el('div', 'pf-line');
+      r.innerHTML = `<input type="date" data-k="시작" style="width:135px" value="${esc(e.시작 || '')}"> ~
+        <input type="date" data-k="종료" style="width:135px" value="${esc(e.종료 || '')}">
+        <button class="pf-del" title="삭제">✕</button>`;
+      r.querySelectorAll('input').forEach(inp => inp.onchange = () => { e[inp.dataset.k] = inp.value; });
+      r.querySelector('.pf-del').onclick = () => { pf.excl.splice(i, 1); renderExclRows(); };
+      box.appendChild(r);
+    });
+  }
+  { const b = $('#pn-add-sal'); if (b) b.onclick = () => { pf.sal.push({ 연봉일자: '', 기본급: 0, 성과급: 0, 성과가급: 0, 변동역량1: 0, 변동역량2: 0 }); renderSalRows(); }; }
+  { const b = $('#pn-add-excl'); if (b) b.onclick = () => { pf.excl.push({ 시작: '', 종료: '' }); renderExclRows(); }; }
+  { const b = $('#pn-load'); if (b) b.onclick = () => {
+    const sabun = $('#pn-sabun').value.trim();
+    if (!sabun) { toast('사번을 입력하세요', 'bad'); return; }
+    const a = PV.pensionAutofill && PV.pensionAutofill(store, sabun);
+    if (!a || !a.연봉계약.length) { toast('연결된 데이터에 해당 사번의 연봉내역이 없습니다', 'bad'); return; }
+    if (a.성명) $('#pn-name').value = a.성명;
+    if (a.연차수당) $('#pn-annual').value = a.연차수당;
+    if (a.고정역량월) $('#pn-duty').value = a.고정역량월;
+    pf.sal = a.연봉계약.map(s => ({ ...s })); renderSalRows();
+    toast(`불러옴 · 연봉계약 ${a.연봉계약.length}건`, 'ok');
+  }; }
+
+  { const b = $('#pn-calc'); if (b) b.onclick = () => {
+    try {
+      const 입사일 = $('#pn-join').value, 퇴직일 = $('#pn-leave').value;
+      if (!입사일 || !퇴직일) { toast('입사일·퇴직일은 필수입니다', 'bad'); return; }
+      if (입사일 >= 퇴직일) { toast('퇴직일이 입사일보다 뒤여야 합니다', 'bad'); return; }
+      if (!pf.sal.length) { toast('연봉내역을 불러오거나 추가하세요', 'bad'); return; }
+      const input = {
+        사번: $('#pn-sabun').value.trim(), 성명: $('#pn-name').value.trim(), 제도: $('#pn-type').value,
+        입사일, 퇴직일, 평균임금종료일: $('#pn-avgend').value || null, 중간정산일: $('#pn-mid').value || null,
+        연차수당: pnum($('#pn-annual').value), 고정역량월: pnum($('#pn-duty').value),
+        연봉계약: pf.sal, 제외기간: pf.excl.filter(e => e.시작 && e.종료),
+      };
+      renderPensionResult(PV.computeSeverance(input));
+    } catch (e) { console.error(e); toast('계산 오류: ' + e.message, 'bad'); }
+  }; }
+
+  function renderPensionResult(r) {
+    const box = $('#pn-result');
+    const i = r.info, sv = r.service, tx = r.tax;
+    const winRows = r.window.rows.map(x => `<tr><td class="l">${x.기간}</td><td>${x.일수}</td><td>${pwon(x.급여)}</td><td>${pwon(x.성과급)}</td><td>${pwon(x.기타)}</td></tr>`).join('');
+    const avgRows = r.avg.rows.map(x => `<tr><td class="l">${x.구분}</td><td>${pwon(x.지급총액)}</td><td>${pwon(x.평균임금)}</td></tr>`).join('');
+    box.innerHTML = `
+      <div class="pn-card">
+        <h3>기본정보 ${i.제도 === 'DC' ? '<span class="pn-badge">DC</span>' : '<span class="pn-badge">DB</span>'}</h3>
+        <div class="pn-kv">
+          <div class="k">사번 · 성명</div><div class="v">${esc(i.사번 || '-')} · ${esc(i.성명 || '-')}</div>
+          <div class="k">입사일 → 퇴직일</div><div class="v">${i.입사일} → ${i.퇴직일}</div>
+          <div class="k">평균임금 산정 종료일</div><div class="v">${i.endISO}</div>
+          ${i.중간정산일 ? `<div class="k">중간정산일</div><div class="v">${i.중간정산일}</div>` : ''}
+        </div>
+      </div>
+
+      <div class="pn-card">
+        <h3>직전 3개월 임금총액</h3>
+        <table class="pn-tbl"><thead><tr><th class="l">기간</th><th>일수</th><th>급여</th><th>성과급</th><th>기타</th></tr></thead>
+        <tbody>${winRows}</tbody>
+        <tfoot><tr><td class="l">합계 ${r.window.totalDays}일</td><td>${r.window.totalDays}</td><td>${pwon(r.avg.rows[0].지급총액)}</td><td>${pwon(r.avg.rows[1].지급총액)}</td><td>${pwon(r.avg.rows[3].지급총액)}</td></tr></tfoot></table>
+        <div class="pn-mut">연봉내역 ÷12 기반 · 부분월 일할 · 성과가급 12분할 · 고정역량가급은 급여대장/수기</div>
+      </div>
+
+      <div class="pn-card">
+        <h3>평균임금 산출내역</h3>
+        <table class="pn-tbl"><thead><tr><th class="l">구분</th><th>지급총액</th><th>평균임금(30일분)</th></tr></thead>
+        <tbody>${avgRows}</tbody>
+        <tfoot><tr><td class="l">합계</td><td>${pwon(r.avg.합계지급총액)}</td><td>${pwon(r.avg.평균임금30)}</td></tr></tfoot></table>
+        <div class="pn-mut">평균임금 = 지급총액 ÷ ${r.window.totalDays}일 × 30 · 연차수당은 3/12 안분</div>
+      </div>
+
+      <div class="pn-card">
+        <h3>재직연수 · 지급계수</h3>
+        <div class="pn-kv">
+          <div class="k">일수법</div><div class="v">${sv.산입일수.toLocaleString()}일 ÷ 365 = ${sv.일수계수}</div>
+          <div class="k">월력법</div><div class="v">${sv.합_Y}년 ${sv.합_M}개월 ${sv.합_D}일 → ${sv.총개월}개월 ÷ 12 = ${sv.월력계수}</div>
+          <div class="k">채택 계수</div><div class="v" style="color:var(--brand)">${sv.계수} <b>(${sv.method})</b></div>
+        </div>
+      </div>
+
+      <div class="pn-card">
+        <h3>퇴직소득세 산출내역</h3>
+        <div class="pn-kv">
+          <div class="k">① 세전 퇴직급여</div><div class="v">${pwon(r.퇴직급여)}</div>
+          <div class="k">② 근속연수</div><div class="v">${tx.근속연수}년</div>
+          <div class="k">③ 근속연수공제</div><div class="v">${pwon(tx.근속연수공제)}</div>
+          <div class="k">④ 환산급여</div><div class="v">${pwon(tx.환산급여)}</div>
+          <div class="k">⑤ 환산급여공제</div><div class="v">${pwon(tx.환산급여공제)}</div>
+          <div class="k">⑥ 과세표준</div><div class="v">${pwon(tx.과세표준)}</div>
+          <div class="k">⑦ 환산산출세액</div><div class="v">${pwon(tx.환산산출세액)}</div>
+          <div class="k">⑧ 산출세액(소득세)</div><div class="v">${pwon(tx.산출세액)}</div>
+          <div class="k">⑨ 지방소득세</div><div class="v">${pwon(tx.지방소득세)}</div>
+          <div class="k">세액 합계</div><div class="v" style="color:var(--bad)">− ${pwon(tx.세액계)}</div>
+        </div>
+        <div class="pn-final"><span>실지급액 (세후)</span><span>${pwon(r.실지급액)} 원</span></div>
+        ${r.dc ? `<div class="pn-mut">DC 제도 — 동일 산식으로 산출. 회사 부담은 미적립 기간분만 지급(미적립금은 별도 확인).</div>` : ''}
+      </div>`;
+  }
+
+  renderSalRows(); renderExclRows();
 })(window.PV);
