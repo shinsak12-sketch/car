@@ -346,9 +346,11 @@
           <div class="cfg-sec"><div class="cfg-h">14명 직무변경 특례</div>
             <div class="cfg-f"><label>추가금액(월)</label>${numI('특례_14명_금액', cfg.특례_14명_금액)}</div>
             <div class="cfg-f"><label>적용 발령일</label>${txtI('특례_14명_적용일', cfg.특례_14명_적용일, 130)}</div>
+            <div class="cfg-f"><label>발령구분 포함어</label>${txtI('특례_14명_발령구분', cfg.특례_14명_발령구분, 130)}</div>
             <div class="cfg-f"><label>전직무 포함어</label>${txtI('특례_14명_전직무', cfg.특례_14명_전직무, 130)}</div>
             <div class="cfg-f"><label>후직무 포함어</label>${txtI('특례_14명_후직무', cfg.특례_14명_후직무, 130)}</div>
             <div class="cfg-f"><label>직급 접두</label>${txtI('특례_14명_직급접두', cfg.특례_14명_직급접두, 80)}</div>
+            <div class="cfg-f"><label>강제적용 사번 <span class="cfg-hint">자동감지 안될때 · 쉼표</span></label>${txtI('_14명사번', (cfg.특례_14명_사번목록 || []).join(','), 300)}</div>
           </div>
         </div>
         <div class="m-foot cfg-foot">
@@ -372,9 +374,11 @@
       const duty = []; ov.querySelectorAll('[data-duty-row]').forEach(r => { const kw = r.querySelector('[data-duty-kw]').value.trim(); const gr = r.querySelector('[data-duty-grade]').value.trim(); const amt = +r.querySelector('[data-duty-amt]').value || 0; if (kw) duty.push({ 키워드: kw, 직급조건: gr, 금액: amt }); }); cfg.직책수당 = duty;
       cfg.특례_14명_금액 = gn('특례_14명_금액') || 0;
       cfg.특례_14명_적용일 = g('특례_14명_적용일').value.trim();
+      cfg.특례_14명_발령구분 = g('특례_14명_발령구분').value.trim();
       cfg.특례_14명_전직무 = g('특례_14명_전직무').value.trim();
       cfg.특례_14명_후직무 = g('특례_14명_후직무').value.trim();
       cfg.특례_14명_직급접두 = g('특례_14명_직급접두').value.trim();
+      cfg.특례_14명_사번목록 = (ov.querySelector('[data-k="_14명사번"]').value || '').split(',').map(s => s.trim()).filter(Boolean);
     }
     function wire() {
       const close = () => ov.remove();
@@ -415,9 +419,11 @@ ${duty}
     ],
     특례_14명_금액: ${+c.특례_14명_금액 || 0},
     특례_14명_적용일: ${j(c.특례_14명_적용일 || '')},
+    특례_14명_발령구분: ${j(c.특례_14명_발령구분 || '직무변경')},
     특례_14명_전직무: ${j(c.특례_14명_전직무 || '')},
     특례_14명_후직무: ${j(c.특례_14명_후직무 || '')},
     특례_14명_직급접두: ${j(c.특례_14명_직급접두 || '')},
+    특례_14명_사번목록: ${JSON.stringify(c.특례_14명_사번목록 || [])},
   };
   const KEY = 'payroll_config_v1';
   const clone = o => JSON.parse(JSON.stringify(o));

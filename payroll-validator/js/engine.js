@@ -125,14 +125,18 @@ window.PV = window.PV || {};
   const isMatVac = t => /출산|유사산/.test(t || '') && !/배우자/.test(t || '');
 
   function is14(ctx, sabun, monthEnd) {
+    const 적용일 = C().특례_14명_적용일 || '2026-07-01';
+    if (cmp(적용일, monthEnd) > 0) return false;                      // 적용일이 속한 달부터
+    const 목록 = (C().특례_14명_사번목록 || []).map(String);
+    if (목록.includes(String(sabun))) return true;                    // 수기 지정 = 강제 적용
     const orders = (ctx.ordersBy.get(sabun) || []).filter(o => o.발령시작일 && cmp(o.발령시작일, monthEnd) <= 0);
-    const jobChanges = orders.filter(o => (o.발령구분 || '').includes('직무변경'));
+    const kw = C().특례_14명_발령구분 || '직무변경';
+    const jobChanges = orders.filter(o => (o.발령구분 || '').includes(kw));
     if (!jobChanges.length) return false;
     const last = jobChanges[jobChanges.length - 1];
     const jaOK = (last.후직급 || last.현재직급 || '').toUpperCase().startsWith((C().특례_14명_직급접두 || 'JA').toUpperCase());
-    const target = last.발령시작일 === (C().특례_14명_적용일 || '2026-07-01') && last.전직무.includes(C().특례_14명_전직무 || '소액전담') && last.후직무.includes(C().특례_14명_후직무 || '대물보상');
-    if (!(target && jaOK)) return false;
-    return last.후직무.includes(C().특례_14명_후직무 || '대물보상');
+    const target = last.발령시작일 === 적용일 && (last.전직무 || '').includes(C().특례_14명_전직무 || '소액전담') && (last.후직무 || '').includes(C().특례_14명_후직무 || '대물보상');
+    return target && jaOK;
   }
 
   const PT_LABEL = { normal: '정상근무', unpaid: '무급휴직', sick: '의병휴직(80%)', short: '육아기단축' };
