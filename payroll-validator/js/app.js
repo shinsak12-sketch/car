@@ -1137,6 +1137,7 @@ ${duty}
     const v = t.dataset.view;
     $('#view-payroll').classList.toggle('hidden', v !== 'payroll');
     $('#view-pension').classList.toggle('hidden', v !== 'pension');
+    if (v === 'pension') populatePensionRetirees();
   });
 
   /* ================= 퇴직연금 계산기 ================= */
@@ -1179,20 +1180,39 @@ ${duty}
   }
   { const b = $('#pn-add-sal'); if (b) b.onclick = () => { pf.sal.push({ 연봉일자: '', 기본급: 0, 실적급: 0, 성과급: 0, 성과가급: 0, 변동역량1: 0, 변동역량2: 0 }); renderSalRows(); }; }
   { const b = $('#pn-add-excl'); if (b) b.onclick = () => { pf.excl.push({ 시작: '', 종료: '' }); renderExclRows(); }; }
-  { const b = $('#pn-load'); if (b) b.onclick = () => {
-    const sabun = $('#pn-sabun').value.trim();
+  function loadBySabun(sabun) {
+    sabun = String(sabun || '').trim();
     if (!sabun) { toast('사번을 입력하세요', 'bad'); return; }
     const a = PV.pensionAutofill && PV.pensionAutofill(store, sabun);
     if (!a || !a.연봉계약.length) { toast('연결된 데이터에 해당 사번의 연봉내역이 없습니다', 'bad'); return; }
+    $('#pn-sabun').value = sabun;
     if (a.성명) $('#pn-name').value = a.성명;
-    if (a.입사일 && !$('#pn-join').value) $('#pn-join').value = a.입사일;
+    if (a.입사일) $('#pn-join').value = a.입사일;
     if (a.연차수당) $('#pn-annual').value = a.연차수당;
     if (a.고정역량월) $('#pn-duty').value = a.고정역량월;
     pf.sal = a.연봉계약.map(s => ({ ...s })); renderSalRows();
     pf.orders = a.발령 || []; pf.vac = a.휴가 || [];
+    // 퇴직일 자동(발령의 퇴직/퇴직일)
+    const ret = (pf.orders).find(o => /(퇴직|퇴사)/.test(o.발령구분 || '') || o.퇴직일);
+    if (ret) { const d = ret.퇴직일 || ret.발령시작일; if (d) $('#pn-leave').value = d; }
     applyAvgEnd();
-    toast(`불러옴 · 연봉 ${a.연봉계약.length}건 · 발령 ${pf.orders.length}건`, 'ok');
-  }; }
+    toast(`불러옴 · ${a.성명 || sabun} · 연봉 ${a.연봉계약.length}건 · 발령 ${pf.orders.length}건`, 'ok');
+  }
+  { const b = $('#pn-load'); if (b) b.onclick = () => loadBySabun($('#pn-sabun').value); }
+  { const sel = $('#pn-retiree'); if (sel) sel.onchange = () => { if (sel.value) loadBySabun(sel.value); }; }
+  function populatePensionRetirees() {
+    const sel = $('#pn-retiree'); if (!sel) return;
+    const seen = new Set(), list = [];
+    (store.order || []).forEach(o => {
+      if (!(/(퇴직|퇴사)/.test(o.발령구분 || '') || o.퇴직일)) return;
+      const sabun = String(o.사번 || ''); if (!sabun || seen.has(sabun)) return; seen.add(sabun);
+      const roster = (store.roster || []).find(r => String(r.사번) === sabun) || {};
+      list.push({ 사번: sabun, 성명: o.성명 || roster.성명 || '', 퇴직일: o.퇴직일 || o.발령시작일 || '' });
+    });
+    list.sort((a, b) => (b.퇴직일 || '').localeCompare(a.퇴직일 || ''));
+    sel.innerHTML = `<option value="">— 발령의 퇴직자 선택 (${list.length}명) —</option>` +
+      list.map(x => `<option value="${esc(x.사번)}">${esc(x.성명)} (${esc(x.사번)})${x.퇴직일 ? ' · 퇴직 ' + esc(x.퇴직일) : ''}</option>`).join('');
+  }
 
   // 퇴직 직전 급여변동(육아휴직 등) 감지 → 평균임금 종료일 자동 이동
   function applyAvgEnd() {
@@ -1271,7 +1291,74 @@ ${duty}
     applyPension(null); pf.slots[pf.active] = null; clearPnResult(); renderSlots();
     toast(`슬롯 ${pf.active + 1} 초기화`, 'ok');
   }; }
+  { const xb = $('#pn-xlsx'); if (xb) xb.onclick = exportPensionSlotsExcel; }
   renderSlots();
+
+  function slotToInput(s) {
+    return {
+      사번: s.사번, 성명: s.성명, 제도: s.제도, 입사일: s.입사, 퇴직일: s.퇴직,
+      평균임금종료일: s.avgend || null, 중간정산일: s.중간 || null,
+      연차수당: pnum(s.연차), 고정역량월: pnum(s.고정),
+      연봉계약: s.sal, 제외기간: (s.excl || []).filter(e => e.시작 && e.종료),
+      발령: s.orders, 휴가: s.vac, shift: s.shift,
+    };
+  }
+  function exportPensionSlotsExcel() {
+    pf.slots[pf.active] = gatherPension();   // 현재 슬롯 반영
+    const nf = n => Math.round(n || 0);
+    const wb = XLSX.utils.book_new();
+    const used = new Set();
+    let count = 0;
+    pf.slots.forEach((s, i) => {
+      if (!s || !s.입사 || !s.퇴직 || !s.sal || !s.sal.length) return;
+      let r; try { r = PV.computeSeverance(slotToInput(s)); } catch (e) { return; }
+      const tx = r.tax, sv = r.service, w = r.window, av = r.avg;
+      const aoa = [];
+      aoa.push(['퇴직급여 계산내역', s.성명 || '', '', '제도', r.info.제도]);
+      aoa.push(['사번', s.사번 || '', '', '입사일', r.info.입사일, '퇴직일', r.info.퇴직일]);
+      aoa.push(['평균임금 산정 종료일', r.info.endISO + (r.back && r.back.shift ? ' (급여변동 이동:' + (r.back.shift.사유 || '') + ')' : '')]);
+      if (r.info.중간정산일) aoa.push(['중간정산일', r.info.중간정산일]);
+      aoa.push([]);
+      aoa.push(['[직전 3개월 임금총액]']);
+      aoa.push(['기간', '일수', '급여', '능력급', '성과급', '기타']);
+      w.rows.forEach(x => aoa.push([x.기간, x.일수, nf(x.급여), nf(x.능력급), nf(x.성과급), nf(x.기타)]));
+      const ws2 = k => w.rows.reduce((a, x) => a + x[k], 0);
+      aoa.push(['합계 ' + w.totalDays + '일', w.totalDays, nf(ws2('급여')), nf(ws2('능력급')), nf(ws2('성과급')), nf(ws2('기타'))]);
+      aoa.push([]);
+      aoa.push(['[평균임금 산출]']);
+      aoa.push(['구분', '지급총액', '평균임금(30일분)']);
+      av.rows.forEach(x => aoa.push([x.구분, nf(x.지급총액), nf(x.평균임금)]));
+      aoa.push(['합계', nf(av.합계지급총액), nf(av.평균임금30)]);
+      aoa.push(['※ 연차수당 표기=전액 ' + nf(av.연차전액) + ', 계산=3개월분 ' + nf(av.연차반영)]);
+      aoa.push([]);
+      aoa.push(['[재직연수·지급계수]']);
+      aoa.push(['일수법', sv.산입일수 + '일 ÷ 365', ptr4(sv.일수계수)]);
+      aoa.push(['월력법', sv.합_Y + '년 ' + sv.합_M + '개월 ' + sv.합_D + '일 → ' + sv.총개월 + '개월 ÷ 12', ptr4(sv.월력계수)]);
+      aoa.push(['채택 계수', ptr4(sv.계수), sv.method + ' (계산은 full)']);
+      aoa.push([]);
+      aoa.push(['[퇴직소득세]']);
+      aoa.push(['세전 퇴직급여', nf(r.퇴직급여)]);
+      aoa.push(['근속연수', tx.근속연수 + '년']);
+      aoa.push(['근속연수공제', nf(tx.근속연수공제)]);
+      aoa.push(['환산급여', nf(tx.환산급여)]);
+      aoa.push(['환산급여공제', nf(tx.환산급여공제)]);
+      aoa.push(['과세표준', nf(tx.과세표준)]);
+      aoa.push(['적용세율', (tx.세율 * 100).toFixed(0) + '%', '누진공제', nf(tx.누진공제)]);
+      aoa.push(['환산산출세액', nf(tx.환산산출세액)]);
+      aoa.push(['산출세액(소득세)', nf(tx.산출세액)]);
+      aoa.push(['지방소득세', nf(tx.지방소득세)]);
+      aoa.push(['세액계', nf(tx.세액계)]);
+      aoa.push(['실지급액(세후)', nf(r.실지급액)]);
+      // 시트명 = 성명(중복/특수문자 처리)
+      let name = String(s.성명 || s.사번 || ('슬롯' + (i + 1))).replace(/[\[\]:*?/\\]/g, '_').slice(0, 28) || ('슬롯' + (i + 1));
+      let base = name, n = 2; while (used.has(name)) { name = (base.slice(0, 25) + '_' + n); n++; } used.add(name);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name);
+      count++;
+    });
+    if (!count) { toast('내보낼 슬롯이 없습니다 (계산 완료된 슬롯 필요)', 'bad'); return; }
+    XLSX.writeFile(wb, `퇴직급여_통합_${count}명.xlsx`);
+    toast(`엑셀 내보냄 · ${count}개 시트`, 'ok');
+  }
 
   function renderPensionResult(r) {
     const box = $('#pn-result');

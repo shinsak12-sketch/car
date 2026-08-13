@@ -193,8 +193,12 @@
       <div class="head"><span class="num big">P</span><h2>퇴직급여 계산</h2><span class="hint">개별 · 세전~세후</span></div>
       <div class="body">
         <div class="pf-row">
+          <label>퇴직자</label>
+          <select id="pn-retiree" style="flex:1"><option value="">— 발령의 퇴직자 선택 —</option></select>
+        </div>
+        <div class="pf-row">
           <label>사번</label>
-          <input type="text" id="pn-sabun" placeholder="사번 입력">
+          <input type="text" id="pn-sabun" placeholder="사번 직접 입력">
           <button class="btn btn-ghost btn-sm" id="pn-load" title="폴더 연결 데이터에서 연봉·연차·고정역량 불러오기">불러오기</button>
         </div>
         <div class="pf-grid">
@@ -234,6 +238,7 @@
     <div class="pn-slots">
       <span class="pn-slots-label">퇴직자</span>
       <div class="pn-slot-btns" id="pn-slot-btns"></div>
+      <button class="btn btn-ghost btn-sm" id="pn-xlsx" title="채워진 슬롯 전체를 성명별 시트로 엑셀 1개 파일 내보내기">⬇ 엑셀(전체)</button>
       <button class="btn btn-ghost btn-sm" id="pn-reset" title="현재 슬롯의 입력·결과만 초기화 (급여검증엔 영향 없음)">↺ 계산기 초기화</button>
     </div>
     <div id="pn-result"><div class="pn-empty">좌측 정보를 입력하고 <b>퇴직급여 계산</b>을 누르세요.</div></div>
