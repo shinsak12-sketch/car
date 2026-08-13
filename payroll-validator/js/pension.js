@@ -128,14 +128,14 @@ window.PV = window.PV || {};
     const 근속공제tbl = cfg.근속연수공제 || [], 환산공제tbl = cfg.환산급여공제 || [], 세율tbl = cfg.기본세율 || [];
     const b1 = pick(근속공제tbl, 근속연수);
     const 근속연수공제 = b1 ? b1.base + b1.per * (근속연수 - b1.from) : 0;
-    const 환산급여 = 근속연수 > 0 ? (퇴직급여 - 근속연수공제) / 근속연수 * 12 : 0;
+    const 환산급여 = 근속연수 > 0 ? floorWon((퇴직급여 - 근속연수공제) / 근속연수 * 12) : 0;   // 원 미만 버림
     const b2 = pick(환산공제tbl, 환산급여);
-    const 환산급여공제 = b2 ? b2.base + b2.rate * (환산급여 - b2.from) : 0;
+    const 환산급여공제 = b2 ? floorWon(b2.base + b2.rate * (환산급여 - b2.from)) : 0;             // 원 미만 버림
     const 과세표준 = Math.max(0, 환산급여 - 환산급여공제);
     const b3 = pick(세율tbl, 과세표준);
-    const 환산산출세액 = b3 ? Math.max(0, 과세표준 * b3.rate - b3.deduct) : 0;
-    const 산출세액 = floorU(환산산출세액 / 12 * 근속연수);
-    const 지방소득세 = floorU(산출세액 * 0.1);
+    const 환산산출세액 = b3 ? Math.max(0, 과세표준 * b3.rate - b3.deduct) : 0;                    // full(표기 반올림)
+    const 산출세액 = floorWon(환산산출세액 / 12 * 근속연수);                                       // 원 미만 버림
+    const 지방소득세 = floorWon(산출세액 * 0.1);                                                  // 원 미만 버림
     return { 근속연수, 근속연수공제, 환산급여, 환산급여공제, 과세표준, 환산산출세액, 산출세액, 지방소득세, 세액계: 산출세액 + 지방소득세, 세율: b3 ? b3.rate : 0, 누진공제: b3 ? b3.deduct : 0 };
   }
 
@@ -167,7 +167,7 @@ window.PV = window.PV || {};
     const 평균임금30 = avg30(반영총액);   // 30일분 평균임금(연차는 3개월 환산 반영)
 
     const sf = serviceFactor(입사일, 퇴직일, input.제외기간, input.중간정산일);
-    const 퇴직급여 = ceilU(평균임금30 * sf.계수);   // 세전, 십원 절상
+    const 퇴직급여 = floorU(평균임금30 * sf.계수);   // 세전, 십원 절사(버림)
 
     const 근속연수 = Math.ceil(sf.총개월 / 12);
     const tax = retirementTax(퇴직급여, 근속연수);
