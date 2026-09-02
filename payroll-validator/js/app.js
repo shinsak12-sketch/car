@@ -1522,7 +1522,7 @@ ${duty}
   const dcState = { sal: [], excl: [] };
   // 성과계수: [1]=L·P·JA1~7 / [2]=그 외
   const DC_COEF = { '1': { 'A': 1.5, 'B+': 1.2, 'B0': 1.0, 'B-': 0.8, 'C': 0.5 }, '2': { 'A': 1.3, 'B+': 1.1, 'B0': 1.0, 'B-': 0.9, 'C': 0.7 } };
-  const floor100 = x => Math.floor((x + 1e-6) / 100) * 100;
+  const floorK = x => Math.floor((x + 1e-6) / 1000) * 1000;   // 백원 단위까지 절사(천원 미만 버림)
 
   function renderDcSal() {
     const box = $('#dc-sal-list'); if (!box) return; box.innerHTML = '';
@@ -1573,7 +1573,7 @@ ${duty}
   }
   { const b = $('#dc-load'); if (b) b.onclick = () => loadDcBySabun($('#dc-sabun').value); }
 
-  // 미래 4/1 인상 연봉 투영: 기본급×(1+율) → 성과급=min(기본/4×계수, 기본/4), 성과가급=초과분. 각 항목 100원 절하.
+  // 미래 4/1 인상 연봉 투영: 기본급×(1+율) → 성과급=min(기본/4×계수, 기본/4), 성과가급=초과분. 각 항목 천원미만(백원단위까지) 절사.
   function dcProjectSalary(sal, toYear, rate, coef) {
     const list = sal.map(s => ({ ...s }));
     if (!list.length) return list;
@@ -1582,12 +1582,30 @@ ${duty}
     let 기본 = pnum(base.기본급);
     const 능력 = pnum(base.실적급), v1 = pnum(base.변동역량1), v2 = pnum(base.변동역량2);
     for (let Y = baseY + 1; Y <= toYear; Y++) {
-      기본 = floor100(기본 * (1 + rate));
+      기본 = floorK(기본 * (1 + rate));
       const q = 기본 / 4, calc = q * coef;
-      const 성과급 = floor100(Math.min(calc, q)), 성과가급 = floor100(Math.max(0, calc - q));
+      const 성과급 = floorK(Math.min(calc, q)), 성과가급 = floorK(Math.max(0, calc - q));
       list.push({ 연봉일자: `${Y}-04-01`, 기본급: 기본, 실적급: 능력, 성과급, 성과가급, 변동역량1: v1, 변동역량2: v2, _proj: true });
     }
     return list;
+  }
+  // 특정 시점 적용 연봉 찾기(가장 최근 연봉일자 ≤ 기준일)
+  const dcContractOn = (list, dISO) => {
+    const eff = (list || []).filter(r => r.연봉일자 && r.연봉일자 <= dISO).sort((a, b) => (a.연봉일자 < b.연봉일자 ? -1 : 1));
+    return eff.length ? eff[eff.length - 1] : ((list || []).slice().sort((a, b) => ((a.연봉일자 || '') < (b.연봉일자 || '') ? -1 : 1))[0] || {});
+  };
+  // 전환월(cy,cm) → 종료월(ty,tm) 사이 DC 추가 적립금(원금).
+  //  DC 부담금 = 연간임금총액/12, 월분할 = /12 → 월 적립 = 연간임금총액/144. 매월 적용 연봉으로 계산 후 합산.
+  function dcAccrual(salP, cy, cm, ty, tm, 고정, 연차) {
+    const isoD = (y, m) => `${y}-${String(m).padStart(2, '0')}-01`;
+    let sum = 0, iy = cy, im = cm;
+    while (iy * 12 + im < ty * 12 + tm) {   // 종료월은 평가시점 → 미포함
+      const k = dcContractOn(salP, isoD(iy, im));
+      const 연간 = pnum(k.기본급) + pnum(k.실적급) + pnum(k.성과급) + pnum(k.성과가급) + pnum(k.변동역량1) + pnum(k.변동역량2) + 고정 * 12 + 연차;
+      sum += Math.round(연간 / 144);
+      im++; if (im > 12) { im = 1; iy++; }
+    }
+    return sum;
   }
   let dcLast = null;   // 최근 시뮬 결과(엑셀 추출용)
   function runDCsim() {
@@ -1611,7 +1629,8 @@ ${duty}
       if (전환일 > 입사일) {
         try {
           const res = PV.computeSeverance({ 입사일, 퇴직일: 전환일, 연봉계약: salP, 연차수당: 연차, 고정역량월: 고정, 제외기간: excl });
-          rows.push({ ym: `${cy}-${String(cm).padStart(2, '0')}`, 전환일, 재직일수: res.service.산입일수, 계수: res.service.계수, days3: res.window.totalDays, avg30: res.avg.평균임금30, 퇴직급여: res.퇴직급여 });
+          const dc적립 = dcAccrual(salP, cy, cm, ty, tm, 고정, 연차);   // 전환 후 ~ 종료월까지 DC 적립금
+          rows.push({ ym: `${cy}-${String(cm).padStart(2, '0')}`, 전환일, 재직일수: res.service.산입일수, 계수: res.service.계수, days3: res.window.totalDays, avg30: res.avg.평균임금30, 퇴직급여: res.퇴직급여, dc적립, 합계: res.퇴직급여 + dc적립 });
         } catch (e) { console.error(e); }
       }
       cm++; if (cm > 12) { cm = 1; cy++; }
@@ -1619,20 +1638,21 @@ ${duty}
     const lastConv = isoD(ty, tm, 1);   // 마지막 전환일까지 유효한 연봉만 표시(검증용)
     const shownSal = salP.filter(s => (s.연봉일자 || '') <= lastConv)
       .sort((a, b) => ((a.연봉일자 || '') < (b.연봉일자 || '') ? -1 : 1));
-    const meta = { coef, grade, jgLabel, rate, name: $('#dc-name').value, sabun: $('#dc-sabun').value, 입사일, from, to, 연차, 고정, salShown: shownSal };
+    const meta = { coef, grade, jgLabel, rate, name: $('#dc-name').value, sabun: $('#dc-sabun').value, 입사일, from, to, 연차, 고정, salShown: shownSal, horizon: `${ty}-${String(tm).padStart(2, '0')}` };
     dcLast = { rows, meta };
     renderDcResult(rows, meta);
   }
   function renderDcResult(rows, meta) {
     const box = $('#dc-result'); if (!box) return;
     if (!rows.length) { box.innerHTML = '<div class="pn-empty">해당 기간에 계산 가능한 월이 없습니다 (그룹입사일·기간 확인)</div>'; return; }
-    const maxPay = Math.max(...rows.map(r => r.퇴직급여)), maxAvg = Math.max(...rows.map(r => r.avg30));
+    const maxTot = Math.max(...rows.map(r => r.합계)), maxAvg = Math.max(...rows.map(r => r.avg30));
     const tr = rows.map(r => {
-      const hi = r.퇴직급여 === maxPay ? ' style="background:var(--brand-soft)"' : '';
+      const hi = r.합계 === maxTot ? ' style="background:var(--brand-soft)"' : '';
       const av = r.avg30 === maxAvg ? '<b style="color:var(--brand)">' + pwon(r.avg30) + ' ★</b>' : pwon(r.avg30);
-      return `<tr${hi}><td class="l">${r.ym}</td><td class="l">${r.전환일}</td><td>${r.재직일수.toLocaleString()}</td><td>${ptr4(r.계수)}</td><td>${r.days3}</td><td>${av}</td><td><b>${pwon(r.퇴직급여)}</b></td></tr>`;
+      const tot = r.합계 === maxTot ? `<b style="color:var(--brand)">${pwon(r.합계)} ◀</b>` : `<b>${pwon(r.합계)}</b>`;
+      return `<tr${hi}><td class="l">${r.ym}</td><td class="l">${r.전환일}</td><td>${r.재직일수.toLocaleString()}</td><td>${ptr4(r.계수)}</td><td>${r.days3}</td><td>${av}</td><td>${pwon(r.퇴직급여)}</td><td>${pwon(r.dc적립)}</td><td>${tot}</td></tr>`;
     }).join('');
-    const best = rows.find(r => r.퇴직급여 === maxPay);
+    const best = rows.find(r => r.합계 === maxTot);
     // 적용 연봉 검증표 — 시뮬에 실제 반영된(투영 포함) 연봉을 종료월까지 표기
     const salRows = (meta.salShown || []).map(s => {
       const tag = s._proj ? ' <span class="pn-badge" style="background:#eef;color:#446">추정</span>' : '';
@@ -1647,16 +1667,19 @@ ${duty}
       <div class="pn-sub" style="margin:8px 0 4px">적용 연봉 (종료월까지 · 검증용)</div>
       <div style="overflow-x:auto"><table class="pn-tbl"><thead><tr><th class="l">연봉일자</th><th>기본급</th><th>능력급</th><th>성과급</th><th>성과가급</th><th>변동1</th><th>변동2</th><th>연봉계</th></tr></thead><tbody>${salRows}</tbody></table></div>
       <div class="pn-mut" style="margin:4px 0 12px">※ '추정' 행 = 매년 4·1 인상 가정으로 산출한 미래 연봉. 실제 확정 연봉과 다르면 좌측에서 계약을 직접 추가/수정하세요.</div>
-      <div class="pn-sub" style="margin:8px 0 4px">월별 전환 비교</div>
-      <div style="overflow-x:auto"><table class="pn-tbl"><thead><tr><th class="l">전환월</th><th class="l">전환일(퇴직가정)</th><th>재직일수</th><th>지급계수</th><th>3개월일수</th><th>평균임금(30일분)</th><th>세전 퇴직급여</th></tr></thead><tbody>${tr}</tbody></table></div>
-      <div class="pn-final"><span>퇴직급여 최고 시점</span><span>${best.ym} · ${pwon(maxPay)} 원</span></div>
-      <div class="pn-mut" style="margin-top:6px">※ 재직일수↑는 매달 늘어 퇴직급여를 키우고, 직전 3개월일수↓(2월 포함 구간)는 평균임금을 키움 — 둘의 조합이 최적 전환시점.</div>
+      <div class="pn-sub" style="margin:8px 0 4px">월별 전환 비교 <span class="pf-h" style="font-weight:600">— 모두 종료월(${esc(meta.horizon)}) 시점 총액으로 비교</span></div>
+      <div style="overflow-x:auto"><table class="pn-tbl"><thead><tr><th class="l">전환월</th><th class="l">전환일(퇴직가정)</th><th>재직일수</th><th>지급계수</th><th>3개월일수</th><th>평균임금(30일분)</th><th>①전환시 퇴직급여</th><th>②전환후 DC적립</th><th>합계(①+②)</th></tr></thead><tbody>${tr}</tbody></table></div>
+      <div class="pn-final"><span>종료월 시점 총액 최고 (최적 전환)</span><span>${best.ym} 전환 · ${pwon(maxTot)} 원</span></div>
+      <div class="pn-mut" style="margin-top:6px">※ 일찍 전환하면 퇴직급여(①)는 작지만 전환 후 DC 적립(②)이 쌓이고, 늦게 전환하면 ①이 크고 ②가 작음 → <b>종료월 시점 합계(①+②)</b>가 가장 큰 달이 실질 최적 전환시점.</div>
       <div class="pn-note" style="margin-top:10px;padding:8px 10px;background:#fff8ec;border:1px solid #f0dca8;border-radius:8px;font-size:12px;line-height:1.6">
         <b>가정 안내</b><br>
+        · 모든 전환월을 <b>종료월(${esc(meta.horizon)}) 동일 시점</b>에서 비교: ①전환 시 확정 퇴직급여 + ②전환 후 종료월까지의 DC 적립금(원금) 합계.<br>
+        · DC 적립금 = 연간임금총액 ÷ 12(법정 부담금)를 월할 적립한 <b>원금 기준</b>이며, <b>운용수익(투자손익)은 미반영</b>입니다.<br>
         · 기본급 인상율 <b>${(meta.rate * 100).toFixed(2)}%/년</b>(기본+평가+승진상실보전 합산, 수기 입력) 기반, 매년 4·1 반영.<br>
         · 성과평가 <b>${esc(meta.grade)}</b> 등급(${esc(meta.jgLabel)}) → 성과계수 <b>${meta.coef}</b> 기반으로 성과급·성과가급 추정.<br>
+        · <b>연차수당은 현재값(최근 1개월) 고정</b> 적용 — 익년 이후 실제 연차수당 변동은 알 수 없어 반영하지 못했으므로 그만큼 차이가 발생할 수 있습니다.<br>
         · 세금은 전환 시 즉시 원천징수하지 않아 <b>세전</b> 기준(퇴직소득세 미반영).<br>
-        · <b>실제 확정 연봉·평가·인상율에 따라 일부 차이가 발생할 수 있습니다.</b>
+        · <b>실제 확정 연봉·평가·인상율·연차수당에 따라 일부 차이가 발생할 수 있습니다.</b>
       </div>
     </div>`;
     { const xb = $('#dc-xlsx'); if (xb) xb.onclick = dcExportExcel; }
@@ -1681,13 +1704,14 @@ ${duty}
       head.push([s.연봉일자 || '', pnum(s.기본급), pnum(s.실적급), pnum(s.성과급), pnum(s.성과가급), pnum(s.변동역량1), pnum(s.변동역량2), 계, s._proj ? '추정' : '실적']);
     });
     head.push([]);
-    head.push(['[월별 전환 비교]']);
-    head.push(['전환월', '전환일(퇴직가정)', '재직일수', '지급계수', '직전3개월일수', '평균임금(30일분)', '세전 퇴직급여']);
-    const maxPay = Math.max(...rows.map(r => r.퇴직급여));
-    rows.forEach(r => head.push([r.ym, r.전환일, r.재직일수, +ptr4(r.계수), r.days3, Math.round(r.avg30), r.퇴직급여, r.퇴직급여 === maxPay ? '◀ 최고' : '']));
-    const best = rows.find(r => r.퇴직급여 === maxPay);
+    head.push([`[월별 전환 비교 · 종료월(${meta.horizon}) 시점 총액 기준]`]);
+    head.push(['전환월', '전환일(퇴직가정)', '재직일수', '지급계수', '직전3개월일수', '평균임금(30일분)', '①전환시 퇴직급여(세전)', '②전환후 DC적립(원금)', '합계(①+②)', '비고']);
+    const maxTot = Math.max(...rows.map(r => r.합계));
+    rows.forEach(r => head.push([r.ym, r.전환일, r.재직일수, +ptr4(r.계수), r.days3, Math.round(r.avg30), r.퇴직급여, r.dc적립, r.합계, r.합계 === maxTot ? '◀ 최고' : '']));
+    const best = rows.find(r => r.합계 === maxTot);
     head.push([]);
-    head.push(['퇴직급여 최고 시점', best.ym, best.전환일, '', '', '', maxPay]);
+    head.push(['종료월 시점 총액 최고(최적 전환)', best.ym, best.전환일, '', '', '', best.퇴직급여, best.dc적립, maxTot]);
+    head.push(['DC적립금 안내', '연간임금총액÷12(법정 부담금) 월할 원금 기준 · 운용수익(투자손익) 미반영. 연차수당은 현재값 고정(익년 변동 미반영).']);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(head), 'DC전환시뮬');
     const fn = `DC전환시뮬_${(meta.name || meta.sabun || '')}_${meta.from}_${meta.to}.xlsx`;
     XLSX.writeFile(wb, fn); toast('DC 전환 시뮬 엑셀 저장', 'ok');
