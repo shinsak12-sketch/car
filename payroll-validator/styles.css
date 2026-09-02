@@ -438,6 +438,7 @@ kbd{font-family:var(--mono);background:var(--surface-inset);border:1px solid var
 .pn-kv .v{text-align:right;font-weight:750;font-variant-numeric:tabular-nums}
 .pn-final{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:12px 15px;border-radius:10px;background:var(--brand-soft);font-weight:850;font-size:15px;color:var(--brand)}
 .pn-mut{font-size:11px;color:var(--text-3);margin-top:6px}
+.pn-sub{font-size:12px;font-weight:800;color:var(--text-2)}
 .pn-badge{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;background:var(--info-soft);color:var(--info);margin-left:6px}
 .pn-shift-note{font-size:11px;color:var(--warn);margin-top:8px;line-height:1.5}
 .pn-shift-note:empty{display:none}

@@ -1561,14 +1561,15 @@ ${duty}
     if (!sabun) { toast('사번을 입력하세요', 'bad'); return; }
     const a = PV.pensionAutofill && PV.pensionAutofill(store, sabun);
     if (!a || !a.연봉계약.length) { toast('연결된 데이터에 해당 사번의 연봉내역이 없습니다', 'bad'); return; }
+    const roster = (store.roster || []).find(r => String(r.사번) === sabun) || {};
+    const 그룹입사 = roster.그룹입사일 || '';   // DC 전환은 그룹입사일 기준(개별 입사일 미사용)
     $('#dc-sabun').value = sabun; $('#dc-name').value = a.성명 || '';
-    if (a.입사일) $('#dc-join').value = a.입사일;
+    if (그룹입사) $('#dc-join').value = 그룹입사;
     if (a.연차수당) $('#dc-annual').value = a.연차수당;
     if (a.고정역량월) $('#dc-duty').value = a.고정역량월;
     dcState.sal = a.연봉계약.map(s => ({ ...s })); renderDcSal();
-    const roster = (store.roster || []).find(r => String(r.사번) === sabun);
-    if (roster && /^\s*(L|P|JA[1-7])/i.test(roster.직급 || '')) $('#dc-jobgrade').value = '1';
-    toast(`불러옴 · ${a.성명 || sabun}` + (a.입사일 ? '' : ' · 입사일 수기필요'), a.입사일 ? 'ok' : 'bad');
+    if (/^\s*(L|P|JA[1-7])/i.test(roster.직급 || '')) $('#dc-jobgrade').value = '1';
+    toast(`불러옴 · ${a.성명 || sabun}` + (그룹입사 ? '' : ' · 그룹입사일 수기필요'), 그룹입사 ? 'ok' : 'bad');
   }
   { const b = $('#dc-load'); if (b) b.onclick = () => loadDcBySabun($('#dc-sabun').value); }
 
@@ -1584,42 +1585,47 @@ ${duty}
       기본 = floor100(기본 * (1 + rate));
       const q = 기본 / 4, calc = q * coef;
       const 성과급 = floor100(Math.min(calc, q)), 성과가급 = floor100(Math.max(0, calc - q));
-      list.push({ 연봉일자: `${Y}-04-01`, 기본급: 기본, 실적급: 능력, 성과급, 성과가급, 변동역량1: v1, 변동역량2: v2 });
+      list.push({ 연봉일자: `${Y}-04-01`, 기본급: 기본, 실적급: 능력, 성과급, 성과가급, 변동역량1: v1, 변동역량2: v2, _proj: true });
     }
     return list;
   }
+  let dcLast = null;   // 최근 시뮬 결과(엑셀 추출용)
   function runDCsim() {
     const 입사일 = $('#dc-join').value, from = $('#dc-from').value, to = $('#dc-to').value;
-    if (!입사일) { toast('입사일은 필수입니다', 'bad'); return; }
+    if (!입사일) { toast('그룹입사일은 필수입니다', 'bad'); return; }
     if (!from || !to) { toast('시작월·종료월은 필수입니다', 'bad'); return; }
     if (!dcState.sal.length) { toast('연봉내역을 불러오거나 추가하세요', 'bad'); return; }
     const [fy, fm] = from.split('-').map(Number), [ty, tm] = to.split('-').map(Number);
     if (fy * 12 + fm > ty * 12 + tm) { toast('종료월이 시작월보다 뒤여야 합니다', 'bad'); return; }
-    const dayIn = $('#dc-day').value.trim();
     const rate = (pnum($('#dc-raise').value) || 0) / 100;
     const grade = $('#dc-grade').value, jg = $('#dc-jobgrade').value;
+    const jgLabel = jg === '1' ? 'L·P·JA1~7' : '그 외';
     const tbl = DC_COEF[jg] || DC_COEF['2']; const coef = tbl[grade] != null ? tbl[grade] : 1.0;
     const salP = dcProjectSalary(dcState.sal, ty, rate, coef);
     const 연차 = pnum($('#dc-annual').value), 고정 = pnum($('#dc-duty').value);
     const excl = dcState.excl.filter(e => e.시작 && e.종료);
-    const dim = (y, m) => new Date(y, m, 0).getDate();
     const isoD = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const rows = []; let cy = fy, cm = fm, guard = 0;
     while ((cy < ty || (cy === ty && cm <= tm)) && guard++ < 240) {
-      const last = dim(cy, cm), day = dayIn ? Math.min(+dayIn, last) : last, 퇴직일 = isoD(cy, cm, day);
-      if (퇴직일 > 입사일) {
+      const 전환일 = isoD(cy, cm, 1);   // 전월 20일까지 신청 → 익월 1일자 전환. 전환일=퇴직일 가정
+      if (전환일 > 입사일) {
         try {
-          const res = PV.computeSeverance({ 입사일, 퇴직일, 연봉계약: salP, 연차수당: 연차, 고정역량월: 고정, 제외기간: excl });
-          rows.push({ ym: `${cy}-${String(cm).padStart(2, '0')}`, 전환일: 퇴직일, 재직일수: res.service.산입일수, 계수: res.service.계수, days3: res.window.totalDays, avg30: res.avg.평균임금30, 퇴직급여: res.퇴직급여 });
+          const res = PV.computeSeverance({ 입사일, 퇴직일: 전환일, 연봉계약: salP, 연차수당: 연차, 고정역량월: 고정, 제외기간: excl });
+          rows.push({ ym: `${cy}-${String(cm).padStart(2, '0')}`, 전환일, 재직일수: res.service.산입일수, 계수: res.service.계수, days3: res.window.totalDays, avg30: res.avg.평균임금30, 퇴직급여: res.퇴직급여 });
         } catch (e) { console.error(e); }
       }
       cm++; if (cm > 12) { cm = 1; cy++; }
     }
-    renderDcResult(rows, { coef, grade, rate });
+    const lastConv = isoD(ty, tm, 1);   // 마지막 전환일까지 유효한 연봉만 표시(검증용)
+    const shownSal = salP.filter(s => (s.연봉일자 || '') <= lastConv)
+      .sort((a, b) => ((a.연봉일자 || '') < (b.연봉일자 || '') ? -1 : 1));
+    const meta = { coef, grade, jgLabel, rate, name: $('#dc-name').value, sabun: $('#dc-sabun').value, 입사일, from, to, 연차, 고정, salShown: shownSal };
+    dcLast = { rows, meta };
+    renderDcResult(rows, meta);
   }
   function renderDcResult(rows, meta) {
     const box = $('#dc-result'); if (!box) return;
-    if (!rows.length) { box.innerHTML = '<div class="pn-empty">해당 기간에 계산 가능한 월이 없습니다 (입사일·기간 확인)</div>'; return; }
+    if (!rows.length) { box.innerHTML = '<div class="pn-empty">해당 기간에 계산 가능한 월이 없습니다 (그룹입사일·기간 확인)</div>'; return; }
     const maxPay = Math.max(...rows.map(r => r.퇴직급여)), maxAvg = Math.max(...rows.map(r => r.avg30));
     const tr = rows.map(r => {
       const hi = r.퇴직급여 === maxPay ? ' style="background:var(--brand-soft)"' : '';
@@ -1627,13 +1633,64 @@ ${duty}
       return `<tr${hi}><td class="l">${r.ym}</td><td class="l">${r.전환일}</td><td>${r.재직일수.toLocaleString()}</td><td>${ptr4(r.계수)}</td><td>${r.days3}</td><td>${av}</td><td><b>${pwon(r.퇴직급여)}</b></td></tr>`;
     }).join('');
     const best = rows.find(r => r.퇴직급여 === maxPay);
+    // 적용 연봉 검증표 — 시뮬에 실제 반영된(투영 포함) 연봉을 종료월까지 표기
+    const salRows = (meta.salShown || []).map(s => {
+      const tag = s._proj ? ' <span class="pn-badge" style="background:#eef;color:#446">추정</span>' : '';
+      const 연봉계 = pnum(s.기본급) + pnum(s.실적급) + pnum(s.성과급) + pnum(s.성과가급) + pnum(s.변동역량1) + pnum(s.변동역량2);
+      return `<tr><td class="l">${esc(s.연봉일자 || '')}${tag}</td><td>${pwon(s.기본급)}</td><td>${pwon(s.실적급)}</td><td>${pwon(s.성과급)}</td><td>${pwon(s.성과가급)}</td><td>${pwon(s.변동역량1)}</td><td>${pwon(s.변동역량2)}</td><td><b>${pwon(연봉계)}</b></td></tr>`;
+    }).join('');
     box.innerHTML = `<div class="pn-card">
-      <h3>DC 전환 월별 시뮬레이션 <span class="pn-badge">세전</span></h3>
-      <div class="pn-mut">성과계수 ${meta.coef} (${esc(meta.grade)}) · 기본급 인상율 ${(meta.rate * 100).toFixed(2)}%/년(4·1) · ★=평균임금 최고월 · 파랑배경=퇴직급여 최고월</div>
-      <div style="overflow-x:auto"><table class="pn-tbl"><thead><tr><th class="l">월</th><th class="l">전환일(퇴직가정)</th><th>재직일수</th><th>지급계수</th><th>3개월일수</th><th>평균임금(30일분)</th><th>세전 퇴직급여</th></tr></thead><tbody>${tr}</tbody></table></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <h3 style="margin:0">DC 전환 월별 시뮬레이션 <span class="pn-badge">세전</span></h3>
+        <button class="btn btn-ghost btn-sm" id="dc-xlsx">엑셀 추출</button>
+      </div>
+      <div class="pn-sub" style="margin:8px 0 4px">적용 연봉 (종료월까지 · 검증용)</div>
+      <div style="overflow-x:auto"><table class="pn-tbl"><thead><tr><th class="l">연봉일자</th><th>기본급</th><th>능력급</th><th>성과급</th><th>성과가급</th><th>변동1</th><th>변동2</th><th>연봉계</th></tr></thead><tbody>${salRows}</tbody></table></div>
+      <div class="pn-mut" style="margin:4px 0 12px">※ '추정' 행 = 매년 4·1 인상 가정으로 산출한 미래 연봉. 실제 확정 연봉과 다르면 좌측에서 계약을 직접 추가/수정하세요.</div>
+      <div class="pn-sub" style="margin:8px 0 4px">월별 전환 비교</div>
+      <div style="overflow-x:auto"><table class="pn-tbl"><thead><tr><th class="l">전환월</th><th class="l">전환일(퇴직가정)</th><th>재직일수</th><th>지급계수</th><th>3개월일수</th><th>평균임금(30일분)</th><th>세전 퇴직급여</th></tr></thead><tbody>${tr}</tbody></table></div>
       <div class="pn-final"><span>퇴직급여 최고 시점</span><span>${best.ym} · ${pwon(maxPay)} 원</span></div>
       <div class="pn-mut" style="margin-top:6px">※ 재직일수↑는 매달 늘어 퇴직급여를 키우고, 직전 3개월일수↓(2월 포함 구간)는 평균임금을 키움 — 둘의 조합이 최적 전환시점.</div>
+      <div class="pn-note" style="margin-top:10px;padding:8px 10px;background:#fff8ec;border:1px solid #f0dca8;border-radius:8px;font-size:12px;line-height:1.6">
+        <b>가정 안내</b><br>
+        · 기본급 인상율 <b>${(meta.rate * 100).toFixed(2)}%/년</b>(기본+평가+승진상실보전 합산, 수기 입력) 기반, 매년 4·1 반영.<br>
+        · 성과평가 <b>${esc(meta.grade)}</b> 등급(${esc(meta.jgLabel)}) → 성과계수 <b>${meta.coef}</b> 기반으로 성과급·성과가급 추정.<br>
+        · 세금은 전환 시 즉시 원천징수하지 않아 <b>세전</b> 기준(퇴직소득세 미반영).<br>
+        · <b>실제 확정 연봉·평가·인상율에 따라 일부 차이가 발생할 수 있습니다.</b>
+      </div>
     </div>`;
+    { const xb = $('#dc-xlsx'); if (xb) xb.onclick = dcExportExcel; }
+  }
+  function dcExportExcel() {
+    if (!dcLast || !dcLast.rows.length) { toast('먼저 시뮬레이션을 실행하세요', 'bad'); return; }
+    const { rows, meta } = dcLast;
+    const wb = XLSX.utils.book_new();
+    const head = [
+      ['DC 전환 월별 시뮬레이션 (세전)'],
+      ['사번', meta.sabun || '', '성명', meta.name || ''],
+      ['그룹입사일', meta.입사일 || '', '기간', `${meta.from} ~ ${meta.to}`],
+      ['기본급 인상율(%/년)', +(meta.rate * 100).toFixed(2), '성과평가', `${meta.grade} (${meta.jgLabel}) · 계수 ${meta.coef}`],
+      ['연차수당(최근1개월)', meta.연차 || 0, '고정역량가급(월)', meta.고정 || 0],
+      ['안내', '기본급 인상율=기본+평가+승진상실보전 합산(수기). 매년 4·1 반영. 세전(퇴직소득세 미반영). 실제 확정 연봉·평가·인상율에 따라 일부 차이가 발생할 수 있습니다.'],
+      [],
+      ['[적용 연봉 · 종료월까지]'],
+      ['연봉일자', '기본급', '능력급', '성과급', '성과가급', '변동역량1', '변동역량2', '연봉계', '비고'],
+    ];
+    (meta.salShown || []).forEach(s => {
+      const 계 = pnum(s.기본급) + pnum(s.실적급) + pnum(s.성과급) + pnum(s.성과가급) + pnum(s.변동역량1) + pnum(s.변동역량2);
+      head.push([s.연봉일자 || '', pnum(s.기본급), pnum(s.실적급), pnum(s.성과급), pnum(s.성과가급), pnum(s.변동역량1), pnum(s.변동역량2), 계, s._proj ? '추정' : '실적']);
+    });
+    head.push([]);
+    head.push(['[월별 전환 비교]']);
+    head.push(['전환월', '전환일(퇴직가정)', '재직일수', '지급계수', '직전3개월일수', '평균임금(30일분)', '세전 퇴직급여']);
+    const maxPay = Math.max(...rows.map(r => r.퇴직급여));
+    rows.forEach(r => head.push([r.ym, r.전환일, r.재직일수, +ptr4(r.계수), r.days3, Math.round(r.avg30), r.퇴직급여, r.퇴직급여 === maxPay ? '◀ 최고' : '']));
+    const best = rows.find(r => r.퇴직급여 === maxPay);
+    head.push([]);
+    head.push(['퇴직급여 최고 시점', best.ym, best.전환일, '', '', '', maxPay]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(head), 'DC전환시뮬');
+    const fn = `DC전환시뮬_${(meta.name || meta.sabun || '')}_${meta.from}_${meta.to}.xlsx`;
+    XLSX.writeFile(wb, fn); toast('DC 전환 시뮬 엑셀 저장', 'ok');
   }
   { const b = $('#dc-run'); if (b) b.onclick = () => { try { runDCsim(); } catch (e) { console.error(e); toast('시뮬 오류: ' + e.message, 'bad'); } }; }
   renderDcSal(); renderDcExcl();

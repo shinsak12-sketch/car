@@ -259,14 +259,14 @@
         </div>
         <div class="pf-grid">
           <div class="pf-f"><label>성명</label><input type="text" id="dc-name"></div>
-          <div class="pf-f"><label>입사일 <span class="rq">*</span></label><input type="date" id="dc-join"></div>
+          <div class="pf-f"><label>그룹입사일 <span class="rq">*</span></label><input type="date" id="dc-join"></div>
           <div class="pf-f"><label>연차수당 <span class="pf-h">최근1개월</span></label><input type="number" id="dc-annual" placeholder="0"></div>
           <div class="pf-f"><label>고정역량가급 <span class="pf-h">월</span></label><input type="number" id="dc-duty" placeholder="0"></div>
         </div>
         <div class="pf-grid" style="margin-top:10px">
           <div class="pf-f"><label>시작월 <span class="rq">*</span></label><input type="month" id="dc-from"></div>
           <div class="pf-f"><label>종료월 <span class="rq">*</span></label><input type="month" id="dc-to"></div>
-          <div class="pf-f"><label>전환 기준일 <span class="pf-h">비우면 말일</span></label><input type="number" id="dc-day" min="1" max="31" placeholder="말일"></div>
+          <div class="pf-f"><label>전환일 <span class="pf-h">매월 1일 고정</span></label><input type="text" value="매월 1일" disabled></div>
         </div>
         <div class="pf-sec">
           <div class="pf-sec-h">연봉 인상 가정 <span class="pf-h">매년 4/1 · 기본급→성과급→성과가급 재산정, 100원 절하</span></div>
@@ -293,7 +293,7 @@
       </div>
     </div>
     <div class="tipcard">
-      <b>원리</b> 각 달의 전환일을 <b>퇴직일로 가정</b>해 세전 퇴직급여를 산출. 직전 3개월 합산일수(89~92일)가 달라 <b>평균임금</b>이 월마다 다르고, 재직일수(계수)는 매달 늘어남 → 언제 넘기는 게 유리한지 비교. (세금은 전환 시 즉시 원천징수 없어 제외)
+      <b>원리</b> 전월 20일까지 신청 시 <b>익월 1일자</b> 전환. 각 달 <b>1일을 퇴직일로 가정</b>해 세전 퇴직급여를 산출. 직전 3개월 합산일수(89~92일)가 달라 <b>평균임금</b>이 월마다 다르고, 재직일수(계수)는 매달 늘어남 → 언제 넘기는 게 유리한지 비교. (세금은 전환 시 즉시 원천징수 없어 제외)
     </div>
   </section>
   <section class="col right">
