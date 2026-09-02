@@ -267,7 +267,14 @@
           <div class="pf-f"><label>시작월 <span class="rq">*</span></label><input type="month" id="dc-from"></div>
           <div class="pf-f"><label>종료월 <span class="rq">*</span></label><input type="month" id="dc-to"></div>
           <div class="pf-f"><label>전환 기준일 <span class="pf-h">비우면 말일</span></label><input type="number" id="dc-day" min="1" max="31" placeholder="말일"></div>
-          <div class="pf-f"><label>연봉인상률 <span class="pf-h">매년 4/1 반영</span></label><select id="dc-raise"><option value="0">미반영</option><option value="1">1%</option><option value="2">2%</option><option value="3">3%</option><option value="4">4%</option><option value="5">5%</option></select></div>
+        </div>
+        <div class="pf-sec">
+          <div class="pf-sec-h">연봉 인상 가정 <span class="pf-h">매년 4/1 · 기본급→성과급→성과가급 재산정, 100원 절하</span></div>
+          <div class="pf-grid">
+            <div class="pf-f"><label>기본급 인상율(%) <span class="pf-h">기본+평가+승진상실보전</span></label><input type="number" id="dc-raise" step="0.01" placeholder="예: 3.5 (0=미반영)"></div>
+            <div class="pf-f"><label>성과평가 등급</label><select id="dc-grade"><option>A</option><option>B+</option><option selected>B0</option><option>B-</option><option>C</option></select></div>
+            <div class="pf-f"><label>직급군 <span class="pf-h">성과계수 표</span></label><select id="dc-jobgrade"><option value="1">L·P·JA1~7</option><option value="2">그 외</option></select></div>
+          </div>
         </div>
 
         <div class="pf-sec">

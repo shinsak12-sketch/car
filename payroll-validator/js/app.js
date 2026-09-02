@@ -1163,6 +1163,7 @@ ${duty}
     const v = t.dataset.view;
     $('#view-payroll').classList.toggle('hidden', v !== 'payroll');
     $('#view-pension').classList.toggle('hidden', v !== 'pension');
+    const dv = $('#view-dcsim'); if (dv) dv.classList.toggle('hidden', v !== 'dcsim');
     if (v === 'pension') populatePensionRetirees();
   });
 
@@ -1516,4 +1517,124 @@ ${duty}
   }
 
   renderSalRows(); renderExclRows();
+
+  /* ================= DC 전환 시뮬레이터 ================= */
+  const dcState = { sal: [], excl: [] };
+  // 성과계수: [1]=L·P·JA1~7 / [2]=그 외
+  const DC_COEF = { '1': { 'A': 1.5, 'B+': 1.2, 'B0': 1.0, 'B-': 0.8, 'C': 0.5 }, '2': { 'A': 1.3, 'B+': 1.1, 'B0': 1.0, 'B-': 0.9, 'C': 0.7 } };
+  const floor100 = x => Math.floor((x + 1e-6) / 100) * 100;
+
+  function renderDcSal() {
+    const box = $('#dc-sal-list'); if (!box) return; box.innerHTML = '';
+    if (!dcState.sal.length) box.innerHTML = '<div class="pf-h" style="padding:4px 0">계약 없음 — 불러오기 또는 계약 추가</div>';
+    dcState.sal.forEach((s, i) => {
+      const r = el('div', 'pf-line');
+      r.innerHTML = `<input type="date" data-k="연봉일자" style="width:130px" value="${esc(s.연봉일자 || '')}">
+        <input type="number" data-k="기본급" placeholder="기본급" style="width:92px" value="${s.기본급 || ''}">
+        <input type="number" data-k="실적급" placeholder="능력급" style="width:82px" value="${s.실적급 || ''}">
+        <input type="number" data-k="성과급" placeholder="성과급" style="width:82px" value="${s.성과급 || ''}">
+        <input type="number" data-k="성과가급" placeholder="성과가급" style="width:82px" value="${s.성과가급 || ''}">
+        <input type="number" data-k="변동역량1" placeholder="변동1" style="width:74px" value="${s.변동역량1 || ''}">
+        <input type="number" data-k="변동역량2" placeholder="변동2" style="width:74px" value="${s.변동역량2 || ''}">
+        <button class="pf-del" title="삭제">✕</button>`;
+      r.querySelectorAll('input').forEach(inp => inp.onchange = () => { s[inp.dataset.k] = inp.dataset.k === '연봉일자' ? inp.value : pnum(inp.value); });
+      r.querySelector('.pf-del').onclick = () => { dcState.sal.splice(i, 1); renderDcSal(); };
+      box.appendChild(r);
+    });
+  }
+  function renderDcExcl() {
+    const box = $('#dc-excl-list'); if (!box) return; box.innerHTML = '';
+    if (!dcState.excl.length) box.innerHTML = '<div class="pf-h" style="padding:4px 0">제외기간 없음</div>';
+    dcState.excl.forEach((e, i) => {
+      const r = el('div', 'pf-line');
+      r.innerHTML = `<input type="date" data-k="시작" style="width:135px" value="${esc(e.시작 || '')}"> ~
+        <input type="date" data-k="종료" style="width:135px" value="${esc(e.종료 || '')}"> <button class="pf-del" title="삭제">✕</button>`;
+      r.querySelectorAll('input').forEach(inp => inp.onchange = () => { e[inp.dataset.k] = inp.value; });
+      r.querySelector('.pf-del').onclick = () => { dcState.excl.splice(i, 1); renderDcExcl(); };
+      box.appendChild(r);
+    });
+  }
+  { const b = $('#dc-add-sal'); if (b) b.onclick = () => { dcState.sal.push({ 연봉일자: '', 기본급: 0, 실적급: 0, 성과급: 0, 성과가급: 0, 변동역량1: 0, 변동역량2: 0 }); renderDcSal(); }; }
+  { const b = $('#dc-add-excl'); if (b) b.onclick = () => { dcState.excl.push({ 시작: '', 종료: '' }); renderDcExcl(); }; }
+  function loadDcBySabun(sabun) {
+    sabun = String(sabun || '').trim();
+    if (!sabun) { toast('사번을 입력하세요', 'bad'); return; }
+    const a = PV.pensionAutofill && PV.pensionAutofill(store, sabun);
+    if (!a || !a.연봉계약.length) { toast('연결된 데이터에 해당 사번의 연봉내역이 없습니다', 'bad'); return; }
+    $('#dc-sabun').value = sabun; $('#dc-name').value = a.성명 || '';
+    if (a.입사일) $('#dc-join').value = a.입사일;
+    if (a.연차수당) $('#dc-annual').value = a.연차수당;
+    if (a.고정역량월) $('#dc-duty').value = a.고정역량월;
+    dcState.sal = a.연봉계약.map(s => ({ ...s })); renderDcSal();
+    const roster = (store.roster || []).find(r => String(r.사번) === sabun);
+    if (roster && /^\s*(L|P|JA[1-7])/i.test(roster.직급 || '')) $('#dc-jobgrade').value = '1';
+    toast(`불러옴 · ${a.성명 || sabun}` + (a.입사일 ? '' : ' · 입사일 수기필요'), a.입사일 ? 'ok' : 'bad');
+  }
+  { const b = $('#dc-load'); if (b) b.onclick = () => loadDcBySabun($('#dc-sabun').value); }
+
+  // 미래 4/1 인상 연봉 투영: 기본급×(1+율) → 성과급=min(기본/4×계수, 기본/4), 성과가급=초과분. 각 항목 100원 절하.
+  function dcProjectSalary(sal, toYear, rate, coef) {
+    const list = sal.map(s => ({ ...s }));
+    if (!list.length) return list;
+    const base = list.slice().sort((a, b) => ((a.연봉일자 || '') < (b.연봉일자 || '') ? -1 : 1)).pop();
+    const baseY = +String(base.연봉일자 || '').slice(0, 4) || new Date().getFullYear();
+    let 기본 = pnum(base.기본급);
+    const 능력 = pnum(base.실적급), v1 = pnum(base.변동역량1), v2 = pnum(base.변동역량2);
+    for (let Y = baseY + 1; Y <= toYear; Y++) {
+      기본 = floor100(기본 * (1 + rate));
+      const q = 기본 / 4, calc = q * coef;
+      const 성과급 = floor100(Math.min(calc, q)), 성과가급 = floor100(Math.max(0, calc - q));
+      list.push({ 연봉일자: `${Y}-04-01`, 기본급: 기본, 실적급: 능력, 성과급, 성과가급, 변동역량1: v1, 변동역량2: v2 });
+    }
+    return list;
+  }
+  function runDCsim() {
+    const 입사일 = $('#dc-join').value, from = $('#dc-from').value, to = $('#dc-to').value;
+    if (!입사일) { toast('입사일은 필수입니다', 'bad'); return; }
+    if (!from || !to) { toast('시작월·종료월은 필수입니다', 'bad'); return; }
+    if (!dcState.sal.length) { toast('연봉내역을 불러오거나 추가하세요', 'bad'); return; }
+    const [fy, fm] = from.split('-').map(Number), [ty, tm] = to.split('-').map(Number);
+    if (fy * 12 + fm > ty * 12 + tm) { toast('종료월이 시작월보다 뒤여야 합니다', 'bad'); return; }
+    const dayIn = $('#dc-day').value.trim();
+    const rate = (pnum($('#dc-raise').value) || 0) / 100;
+    const grade = $('#dc-grade').value, jg = $('#dc-jobgrade').value;
+    const tbl = DC_COEF[jg] || DC_COEF['2']; const coef = tbl[grade] != null ? tbl[grade] : 1.0;
+    const salP = dcProjectSalary(dcState.sal, ty, rate, coef);
+    const 연차 = pnum($('#dc-annual').value), 고정 = pnum($('#dc-duty').value);
+    const excl = dcState.excl.filter(e => e.시작 && e.종료);
+    const dim = (y, m) => new Date(y, m, 0).getDate();
+    const isoD = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const rows = []; let cy = fy, cm = fm, guard = 0;
+    while ((cy < ty || (cy === ty && cm <= tm)) && guard++ < 240) {
+      const last = dim(cy, cm), day = dayIn ? Math.min(+dayIn, last) : last, 퇴직일 = isoD(cy, cm, day);
+      if (퇴직일 > 입사일) {
+        try {
+          const res = PV.computeSeverance({ 입사일, 퇴직일, 연봉계약: salP, 연차수당: 연차, 고정역량월: 고정, 제외기간: excl });
+          rows.push({ ym: `${cy}-${String(cm).padStart(2, '0')}`, 전환일: 퇴직일, 재직일수: res.service.산입일수, 계수: res.service.계수, days3: res.window.totalDays, avg30: res.avg.평균임금30, 퇴직급여: res.퇴직급여 });
+        } catch (e) { console.error(e); }
+      }
+      cm++; if (cm > 12) { cm = 1; cy++; }
+    }
+    renderDcResult(rows, { coef, grade, rate });
+  }
+  function renderDcResult(rows, meta) {
+    const box = $('#dc-result'); if (!box) return;
+    if (!rows.length) { box.innerHTML = '<div class="pn-empty">해당 기간에 계산 가능한 월이 없습니다 (입사일·기간 확인)</div>'; return; }
+    const maxPay = Math.max(...rows.map(r => r.퇴직급여)), maxAvg = Math.max(...rows.map(r => r.avg30));
+    const tr = rows.map(r => {
+      const hi = r.퇴직급여 === maxPay ? ' style="background:var(--brand-soft)"' : '';
+      const av = r.avg30 === maxAvg ? '<b style="color:var(--brand)">' + pwon(r.avg30) + ' ★</b>' : pwon(r.avg30);
+      return `<tr${hi}><td class="l">${r.ym}</td><td class="l">${r.전환일}</td><td>${r.재직일수.toLocaleString()}</td><td>${ptr4(r.계수)}</td><td>${r.days3}</td><td>${av}</td><td><b>${pwon(r.퇴직급여)}</b></td></tr>`;
+    }).join('');
+    const best = rows.find(r => r.퇴직급여 === maxPay);
+    box.innerHTML = `<div class="pn-card">
+      <h3>DC 전환 월별 시뮬레이션 <span class="pn-badge">세전</span></h3>
+      <div class="pn-mut">성과계수 ${meta.coef} (${esc(meta.grade)}) · 기본급 인상율 ${(meta.rate * 100).toFixed(2)}%/년(4·1) · ★=평균임금 최고월 · 파랑배경=퇴직급여 최고월</div>
+      <div style="overflow-x:auto"><table class="pn-tbl"><thead><tr><th class="l">월</th><th class="l">전환일(퇴직가정)</th><th>재직일수</th><th>지급계수</th><th>3개월일수</th><th>평균임금(30일분)</th><th>세전 퇴직급여</th></tr></thead><tbody>${tr}</tbody></table></div>
+      <div class="pn-final"><span>퇴직급여 최고 시점</span><span>${best.ym} · ${pwon(maxPay)} 원</span></div>
+      <div class="pn-mut" style="margin-top:6px">※ 재직일수↑는 매달 늘어 퇴직급여를 키우고, 직전 3개월일수↓(2월 포함 구간)는 평균임금을 키움 — 둘의 조합이 최적 전환시점.</div>
+    </div>`;
+  }
+  { const b = $('#dc-run'); if (b) b.onclick = () => { try { runDCsim(); } catch (e) { console.error(e); toast('시뮬 오류: ' + e.message, 'bad'); } }; }
+  renderDcSal(); renderDcExcl();
 })(window.PV);
