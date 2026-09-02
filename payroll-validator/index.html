@@ -50,6 +50,7 @@
 <nav class="tabs">
   <button class="tab on" data-view="payroll">급여검증</button>
   <button class="tab" data-view="pension">퇴직연금 계산기</button>
+  <button class="tab" data-view="dcsim">DC전환 시뮬레이터</button>
 </nav>
 
 <!-- ================= STAGE (급여검증) ================= -->
@@ -242,6 +243,54 @@
       <button class="btn btn-ghost btn-sm" id="pn-reset" title="현재 슬롯의 입력·결과만 초기화 (급여검증엔 영향 없음)">↺ 계산기 초기화</button>
     </div>
     <div id="pn-result"><div class="pn-empty">좌측 정보를 입력하고 <b>퇴직급여 계산</b>을 누르세요.</div></div>
+  </section>
+</main>
+
+<!-- ================= DC 전환 시뮬레이터 ================= -->
+<main class="stage pension hidden" id="view-dcsim">
+  <section class="col left">
+    <div class="card accent">
+      <div class="head"><span class="num big">D</span><h2>DC 전환 시뮬레이션</h2><span class="hint">월별 세전 퇴직급여 비교</span></div>
+      <div class="body">
+        <div class="pf-row">
+          <label>사번</label>
+          <input type="text" id="dc-sabun" placeholder="사번 직접 입력">
+          <button class="btn btn-ghost btn-sm" id="dc-load" title="폴더 연결 데이터에서 연봉·연차·고정역량 불러오기">불러오기</button>
+        </div>
+        <div class="pf-grid">
+          <div class="pf-f"><label>성명</label><input type="text" id="dc-name"></div>
+          <div class="pf-f"><label>입사일 <span class="rq">*</span></label><input type="date" id="dc-join"></div>
+          <div class="pf-f"><label>연차수당 <span class="pf-h">최근1개월</span></label><input type="number" id="dc-annual" placeholder="0"></div>
+          <div class="pf-f"><label>고정역량가급 <span class="pf-h">월</span></label><input type="number" id="dc-duty" placeholder="0"></div>
+        </div>
+        <div class="pf-grid" style="margin-top:10px">
+          <div class="pf-f"><label>시작월 <span class="rq">*</span></label><input type="month" id="dc-from"></div>
+          <div class="pf-f"><label>종료월 <span class="rq">*</span></label><input type="month" id="dc-to"></div>
+          <div class="pf-f"><label>전환 기준일 <span class="pf-h">비우면 말일</span></label><input type="number" id="dc-day" min="1" max="31" placeholder="말일"></div>
+          <div class="pf-f"><label>연봉인상률 <span class="pf-h">매년 4/1 반영</span></label><select id="dc-raise"><option value="0">미반영</option><option value="1">1%</option><option value="2">2%</option><option value="3">3%</option><option value="4">4%</option><option value="5">5%</option></select></div>
+        </div>
+
+        <div class="pf-sec">
+          <div class="pf-sec-h">연봉내역 <span class="pf-h">기본급·능력급·성과급·성과가급·변동역량1·2 (÷12)</span> <span class="chip-add" id="dc-add-sal">+ 계약 추가</span></div>
+          <div id="dc-sal-list"></div>
+        </div>
+        <div class="pf-sec">
+          <div class="pf-sec-h">근속 제외기간 <span class="pf-h">무급휴직·정직 등 (수기)</span> <span class="chip-add" id="dc-add-excl">+ 추가</span></div>
+          <div id="dc-excl-list"></div>
+        </div>
+
+        <button class="btn btn-primary btn-block" id="dc-run" style="margin-top:14px">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 19V5m0 14h16M8 15l4-6 3 3 4-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          월별 시뮬레이션 실행
+        </button>
+      </div>
+    </div>
+    <div class="tipcard">
+      <b>원리</b> 각 달의 전환일을 <b>퇴직일로 가정</b>해 세전 퇴직급여를 산출. 직전 3개월 합산일수(89~92일)가 달라 <b>평균임금</b>이 월마다 다르고, 재직일수(계수)는 매달 늘어남 → 언제 넘기는 게 유리한지 비교. (세금은 전환 시 즉시 원천징수 없어 제외)
+    </div>
+  </section>
+  <section class="col right">
+    <div id="dc-result"><div class="pn-empty">좌측 정보·기간을 입력하고 <b>월별 시뮬레이션</b>을 누르세요.</div></div>
   </section>
 </main>
 
