@@ -1681,7 +1681,7 @@ ${duty}
     box.innerHTML = `<div class="pn-card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
         <h3 style="margin:0">DC 전환 월별 시뮬레이션 <span class="pn-badge">세전</span></h3>
-        <button class="btn btn-ghost btn-sm" id="dc-xlsx">엑셀 추출</button>
+        <button class="btn btn-ghost btn-sm" id="dc-print" title="새 창에 리포트를 열고 인쇄(또는 PDF로 저장)">🖶 인쇄 / PDF 저장</button>
       </div>
       <div class="pn-sub" style="margin:8px 0 4px">적용 연봉 (종료월까지 · 검증용)</div>
       <div style="overflow-x:auto"><table class="pn-tbl"><thead><tr><th class="l">연봉일자</th><th>기본급</th><th>능력급</th><th>성과급</th><th>성과가급</th><th>변동1</th><th>변동2</th><th>연봉계</th></tr></thead><tbody>${salRows}</tbody></table></div>
@@ -1707,41 +1707,113 @@ ${duty}
         · <b>실제 확정 연봉·평가·인상율·연차수당에 따라 일부 차이가 발생할 수 있습니다.</b>
       </div>
     </div>`;
-    { const xb = $('#dc-xlsx'); if (xb) xb.onclick = dcExportExcel; }
+    { const xb = $('#dc-print'); if (xb) xb.onclick = dcExportPrint; }
   }
-  function dcExportExcel() {
+  // 새 창에 인쇄용 리포트를 열고 인쇄 대화상자 호출(→ 브라우저 'PDF로 저장'). 오프라인·무의존.
+  function dcExportPrint() {
     if (!dcLast || !dcLast.rows.length) { toast('먼저 시뮬레이션을 실행하세요', 'bad'); return; }
     const { rows, meta } = dcLast;
-    const wb = XLSX.utils.book_new();
-    const head = [
-      ['DC 전환 월별 시뮬레이션 (세전)'],
-      ['사번', meta.sabun || '', '성명', meta.name || ''],
-      ['그룹입사일', meta.입사일 || '', '기간', `${meta.from} ~ ${meta.to}`],
-      ['기본급 인상율(%/년)', +(meta.rate * 100).toFixed(2), '성과평가', `${meta.grade} (${meta.jgLabel}) · 계수 ${meta.coef}`],
-      ['연차수당(최근1개월)', meta.연차 || 0, '고정역량가급(월)', meta.고정 || 0],
-      ['안내', '기본급 인상율=기본+평가+승진상실보전 합산(수기). 매년 4·1 반영. 세전(퇴직소득세 미반영). 실제 확정 연봉·평가·인상율에 따라 일부 차이가 발생할 수 있습니다.'],
-      [],
-      ['[적용 연봉 · 종료월까지]'],
-      ['연봉일자', '기본급', '능력급', '성과급', '성과가급', '변동역량1', '변동역량2', '연봉계', '비고'],
-    ];
-    (meta.salShown || []).forEach(s => {
-      const 계 = pnum(s.기본급) + pnum(s.실적급) + pnum(s.성과급) + pnum(s.성과가급) + pnum(s.변동역량1) + pnum(s.변동역량2);
-      head.push([s.연봉일자 || '', pnum(s.기본급), pnum(s.실적급), pnum(s.성과급), pnum(s.성과가급), pnum(s.변동역량1), pnum(s.변동역량2), 계, s._proj ? '추정' : '실적']);
-    });
-    head.push([]);
-    head.push([`[월별 전환 비교 · 종료월(${meta.horizon}) 시점 가치 기준]`]);
-    head.push(['전환일', '정산기준일(퇴직가정)', '재직일수', '지급계수', '직전3개월일수', '평균임금(30일분)', '①전환시 퇴직급여(세전)', '②전환후 DC적립(원금)', '합계(①+②·원금)', ...DC_RATES.map(p => `수익률 ${p}%`), '비고']);
-    const maxTot = Math.max(...rows.map(r => r.합계));
-    rows.forEach(r => head.push([r.전환일, r.정산일, r.재직일수, +ptr4(r.계수), r.days3, Math.round(r.avg30), r.퇴직급여, r.dc적립, r.합계, ...DC_RATES.map(p => r.fv[p]), r.합계 === maxTot ? '◀ 원금최고' : '']));
+    const money = n => Math.round(n).toLocaleString('ko-KR');
+    const eh = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const maxTot = Math.max(...rows.map(r => r.합계)), maxAvg = Math.max(...rows.map(r => r.avg30));
+    const colMax = { 0: maxTot }; DC_RATES.forEach(p => { colMax[p] = Math.max(...rows.map(r => r.fv[p])); });
+    const bestOf = v => rows.find(r => (v === 0 ? r.합계 : r.fv[v]) === colMax[v]);
     const best = rows.find(r => r.합계 === maxTot);
-    head.push([]);
-    head.push(['원금 기준 최적 전환', best.전환일, best.정산일, '', '', '', best.퇴직급여, best.dc적립, maxTot]);
-    head.push(['수익률별 최적 전환월', ...[0, ...DC_RATES].map(p => `${p === 0 ? '원금' : p + '%'}:${(rows.find(r => (p === 0 ? r.합계 : r.fv[p]) === (p === 0 ? maxTot : Math.max(...rows.map(x => x.fv[p])))) || {}).전환일 || ''}`)]);
-    head.push(['정산기준일 안내', '재직일수·지급계수·평균임금은 정산기준일(전환 전일=전월 말일)까지 기준 — 퇴직연금계산기에서 같은 날짜로 조회한 값과 일치.']);
-    head.push(['수익률 안내', '수익률 1~7% = ①퇴직급여·②월적립을 종료월까지 연 복리 운용 가정한 참고값(실제 수익률은 상품·시장에 따라 다름). 연차수당은 현재값 고정(익년 변동 미반영).']);
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(head), 'DC전환시뮬');
-    const fn = `DC전환시뮬_${(meta.name || meta.sabun || '')}_${meta.from}_${meta.to}.xlsx`;
-    XLSX.writeFile(wb, fn); toast('DC 전환 시뮬 엑셀 저장', 'ok');
+    // 적용 연봉 표
+    const salRows = (meta.salShown || []).map(s => {
+      const 계 = pnum(s.기본급) + pnum(s.실적급) + pnum(s.성과급) + pnum(s.성과가급) + pnum(s.변동역량1) + pnum(s.변동역량2);
+      const tag = s._proj ? ' <span class="tag">추정</span>' : '';
+      return `<tr><td class="l">${eh(s.연봉일자)}${tag}</td><td>${money(s.기본급)}</td><td>${money(s.실적급)}</td><td>${money(s.성과급)}</td><td>${money(s.성과가급)}</td><td>${money(s.변동역량1)}</td><td>${money(s.변동역량2)}</td><td class="b">${money(계)}</td></tr>`;
+    }).join('');
+    // 비교 표
+    const cell = (val, isMax) => `<td class="${isMax ? 'hi' : ''}">${money(val)}</td>`;
+    const compRows = rows.map(r => {
+      const rowHi = r.합계 === maxTot ? ' class="best"' : '';
+      const av = r.avg30 === maxAvg ? `<td class="star">${money(r.avg30)} ★</td>` : `<td>${money(r.avg30)}</td>`;
+      const fvCells = DC_RATES.map(p => cell(r.fv[p], r.fv[p] === colMax[p])).join('');
+      return `<tr${rowHi}><td class="l">${eh(r.전환일)}</td><td class="l">${eh(r.정산일)}</td><td>${r.재직일수.toLocaleString()}</td><td>${ptr4(r.계수)}</td><td>${r.days3}</td>${av}<td>${money(r.퇴직급여)}</td><td>${money(r.dc적립)}</td>${cell(r.합계, r.합계 === maxTot)}${fvCells}</tr>`;
+    }).join('');
+    const rateHdr = DC_RATES.map(p => `<th>${p}%</th>`).join('');
+    const bestByRate = [0, ...DC_RATES].map(p => `<span class="chip">${p === 0 ? '원금' : p + '%'} → <b>${eh(bestOf(p).전환일.slice(0, 7))}</b></span>`).join('');
+    const today = new Date().toISOString().slice(0, 10);
+    const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<title>DC전환시뮬_${eh(meta.name || meta.sabun || '')}</title>
+<style>
+  @page { size: A4 landscape; margin: 11mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", sans-serif; color: #1a1a2e; margin: 0; font-size: 11px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .wrap { padding: 4px 2px 20px; }
+  .top { display:flex; justify-content:space-between; align-items:flex-end; border-bottom:3px solid #5b4bdb; padding-bottom:8px; margin-bottom:12px; }
+  .top h1 { margin:0; font-size:20px; color:#5b4bdb; letter-spacing:-.3px; }
+  .top .sub { font-size:11px; color:#666; margin-top:3px; }
+  .top .date { font-size:11px; color:#888; text-align:right; }
+  .meta { display:grid; grid-template-columns:repeat(4,1fr); gap:6px 14px; background:#f6f5ff; border:1px solid #e2ddff; border-radius:8px; padding:10px 14px; margin-bottom:12px; }
+  .meta .k { font-size:10px; color:#8a86b8; font-weight:700; }
+  .meta .v { font-size:13px; font-weight:700; }
+  h2 { font-size:13px; margin:14px 0 5px; color:#33306a; border-left:4px solid #5b4bdb; padding-left:7px; }
+  table { border-collapse:collapse; width:100%; }
+  th, td { border:1px solid #d8d5ec; padding:3px 5px; text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  thead th { background:#efedfb; color:#33306a; font-size:9.5px; font-weight:800; text-align:center; }
+  td.l { text-align:left; }
+  td.b, td.star, td.hi { font-weight:800; }
+  td.hi { background:#e9e6ff; color:#4a3fc2; }
+  td.star { color:#5b4bdb; }
+  tr.best td { background:#eee9ff; }
+  tr.best td.hi { background:#ddd6ff; }
+  .tag { font-size:8px; background:#eef; color:#557; padding:1px 5px; border-radius:8px; }
+  .final { margin:10px 0; padding:10px 14px; background:#5b4bdb; color:#fff; border-radius:8px; font-size:14px; font-weight:800; display:flex; justify-content:space-between; }
+  .rateline { margin:8px 0; font-size:11px; }
+  .rateline .chip { display:inline-block; background:#f0eeff; border:1px solid #ded8ff; border-radius:20px; padding:2px 9px; margin:2px 4px 2px 0; }
+  .note { margin-top:12px; padding:9px 12px; background:#fff8ec; border:1px solid #f0dca8; border-radius:8px; font-size:10px; line-height:1.7; }
+  .mut { font-size:10px; color:#777; margin:4px 0; }
+  @media print { .noprint { display:none; } }
+</style></head>
+<body onload="setTimeout(function(){window.focus();window.print();},250)">
+<div class="wrap">
+  <div class="top">
+    <div><h1>DC 전환 시뮬레이션</h1><div class="sub">전환 시점별 종료월 시점 가치 비교 · 세전 기준</div></div>
+    <div class="date">출력일 ${today}<br><span class="noprint" style="color:#5b4bdb">※ 인쇄 대화상자에서 'PDF로 저장' 선택</span></div>
+  </div>
+  <div class="meta">
+    <div><div class="k">사번</div><div class="v">${eh(meta.sabun || '-')}</div></div>
+    <div><div class="k">성명</div><div class="v">${eh(meta.name || '-')}</div></div>
+    <div><div class="k">그룹입사일</div><div class="v">${eh(meta.입사일 || '-')}</div></div>
+    <div><div class="k">비교 기간</div><div class="v">${eh(meta.from)} ~ ${eh(meta.to)}</div></div>
+    <div><div class="k">기본급 인상율</div><div class="v">${(meta.rate * 100).toFixed(2)}%/년</div></div>
+    <div><div class="k">성과평가</div><div class="v">${eh(meta.grade)} · 계수 ${meta.coef}</div></div>
+    <div><div class="k">연차수당(최근1개월)</div><div class="v">${money(meta.연차 || 0)}</div></div>
+    <div><div class="k">고정역량가급(월)</div><div class="v">${money(meta.고정 || 0)}</div></div>
+  </div>
+
+  <h2>적용 연봉 (종료월까지 · 검증용)</h2>
+  <table><thead><tr><th>연봉일자</th><th>기본급</th><th>능력급</th><th>성과급</th><th>성과가급</th><th>변동1</th><th>변동2</th><th>연봉계</th></tr></thead><tbody>${salRows}</tbody></table>
+  <div class="mut">※ '추정' = 매년 4·1 인상 가정으로 산출한 미래 연봉 (기본+평가+승진상실보전 ${(meta.rate * 100).toFixed(2)}%).</div>
+
+  <h2>월별 전환 비교 — 모두 종료월(${eh(meta.horizon)}) 시점 가치로 비교</h2>
+  <table><thead>
+    <tr><th rowspan="2">전환일</th><th rowspan="2">정산기준일<br>(퇴직가정)</th><th rowspan="2">재직<br>일수</th><th rowspan="2">지급<br>계수</th><th rowspan="2">3개월<br>일수</th><th rowspan="2">평균임금<br>(30일분)</th><th rowspan="2">①전환시<br>퇴직급여</th><th rowspan="2">②전환후<br>DC적립</th><th rowspan="2">합계<br>(원금)</th><th colspan="${DC_RATES.length}">종료월 시점 가치 · 연 수익률 가정</th></tr>
+    <tr>${rateHdr}</tr>
+  </thead><tbody>${compRows}</tbody></table>
+  <div class="mut">셀 음영 = 각 열의 최고값. 연보라 행 = 원금(수익률 0%) 기준 최적 전환월. ★ = 평균임금 최고월.</div>
+
+  <div class="final"><span>원금 기준 최적 전환</span><span>${eh(best.전환일.slice(0, 7))} 전환 · ${money(maxTot)} 원</span></div>
+  <div class="rateline"><b>수익률별 최적 전환월</b>&nbsp; ${bestByRate}<br><span class="mut">수익률이 높을수록 일찍 전환해 오래 운용하는 편이 유리 → 최적 전환월이 앞당겨집니다.</span></div>
+
+  <div class="note">
+    <b>가정 안내</b><br>
+    · 모든 전환월을 <b>종료월(${eh(meta.horizon)}) 동일 시점</b>에서 비교: ①전환 시 확정 퇴직급여 + ②전환 후 종료월까지 DC 적립금.<br>
+    · 재직일수·지급계수·평균임금은 <b>정산기준일(전환 전일=전월 말일)</b> 기준 — 퇴직연금계산기에서 같은 날짜로 조회한 값과 일치.<br>
+    · '합계(원금)' = DC 적립금(연간임금총액÷12 법정 부담금)을 월할 적립한 원금(수익률 0%).<br>
+    · <b>수익률 1~7%</b> = ①퇴직급여·②월적립을 종료월까지 연 복리 운용 가정한 <b>참고값</b> — 실제 수익률은 상품·시장에 따라 다릅니다.<br>
+    · 연차수당은 현재값(최근 1개월) 고정 — 익년 이후 변동 미반영. 세금은 전환 시 원천징수하지 않아 <b>세전</b> 기준.<br>
+    · <b>실제 확정 연봉·평가·인상율·연차수당·수익률에 따라 차이가 발생할 수 있습니다.</b>
+  </div>
+</div>
+</body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { toast('팝업이 차단됐습니다. 팝업 허용 후 다시 시도하세요', 'bad'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+    toast('리포트 창을 열었습니다 · 인쇄에서 PDF 저장', 'ok');
   }
   { const b = $('#dc-run'); if (b) b.onclick = () => { try { runDCsim(); } catch (e) { console.error(e); toast('시뮬 오류: ' + e.message, 'bad'); } }; }
   renderDcSal(); renderDcExcl();
