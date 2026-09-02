@@ -151,6 +151,7 @@ body{
   padding:16px 22px 50px;max-width:1760px;margin:0 auto;align-items:start;
 }
 @media(max-width:1080px){.stage{grid-template-columns:1fr}}
+#view-dcsim{grid-template-columns:1fr}   /* DC 시뮬: 1분할 · 결과 표를 좌우 넓게 */
 .col{display:flex;flex-direction:column;gap:14px;min-width:0}
 
 /* new-flow components */

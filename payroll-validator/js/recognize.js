@@ -113,6 +113,8 @@ window.PV = window.PV || {};
     const hr = anyRowWith(rows, ['임금피크제적용여부', '사번']);
     const H = headerMap(rows[hr]);
     const g = (row, name) => row[H[name]];
+    // 컬럼명이 파일마다 조금씩 달라 여러 후보 중 값이 있는 첫 컬럼을 사용
+    const gAny = (row, ...names) => { for (const n of names) { const v = g(row, n); if (v != null && txt(v) !== '') return v; } return ''; };
     const out = [];
     for (let r = hr + 1; r < rows.length; r++) {
       const row = rows[r]; if (!row) continue;
@@ -123,9 +125,9 @@ window.PV = window.PV || {};
         직위: txt(g(row, '직위')), 직책: txt(g(row, '직책')), 직무: txt(g(row, '직무')),
         피크적용: txt(g(row, '임금피크제적용여부')),
         피크예상일: toISO(g(row, '임금피크제예상일')),
-        입사일: toISO(g(row, '입사일')),
-        그룹입사일: toISO(g(row, '그룹입사일')),
-        생년월일: toISO(g(row, '생년월일')),
+        입사일: toISO(gAny(row, '입사일', '입사일자', '입사년월일')),
+        그룹입사일: toISO(gAny(row, '그룹입사일자', '그룹입사일', '그룹 입사일', '그룹 입사일자', '그룹입사년월일')),
+        생년월일: toISO(gAny(row, '생년월일', '생년월일자')),
       });
     }
     return out;
