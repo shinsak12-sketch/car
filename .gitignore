@@ -16,3 +16,6 @@
 .DS_Store
 *.log
 .vercel
+
+# build artifact (delivered via chat, not versioned)
+payroll-validator.zip
